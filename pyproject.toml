@@ -1,0 +1,49 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "freegraph"
+version = "0.0.1"
+description = "Zero-dependency, zero-account, zero-egress graph runtime kernel — a drop-in replacement for the LangGraph Graph API."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "杨家成" }]
+keywords = [
+    "langgraph",
+    "graph",
+    "state-graph",
+    "agent",
+    "workflow",
+    "otel",
+    "opentelemetry",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+    "Typing :: Typed",
+]
+
+# 立项书 §5.5：基础安装的唯一必装依赖。
+dependencies = ["typing-extensions>=4.7.0"]
+
+[project.urls]
+Homepage = "https://github.com/yangjiacheng1996/freegraph"
+Repository = "https://github.com/yangjiacheng1996/freegraph"
+Issues = "https://github.com/yangjiacheng1996/freegraph/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/freegraph"]
+
+[tool.hatch.build.targets.sdist]
+only-include = ["src/freegraph", "README.md", "LICENSE"]
+exclude = ["/.opencode", "/.specify", "/harness", "/dist"]

@@ -1,0 +1,47 @@
+name: publish
+
+# 用 PyPI 的 Trusted Publishing（OIDC）发布：**不需要 API token，也不需要密码**。
+#
+# 前置条件（在 PyPI 网页端一次性配置）：
+#   账号侧边栏 → "Publishing" → Add GitHub Actions publisher
+#     PyPI project name : freegraph        （项目不存在时这里注册的是 "pending" publisher）
+#     Repository owner  : yangjiacheng1996
+#     Repository name    : freegraph
+#     Workflow filename  : publish.yml
+#     Environment name   : pypi              （与下面 job 的 environment 对应）
+#
+# 首次运行成功后，pending publisher 会自动转成正式 publisher，项目随之创建。
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/freegraph
+    permissions:
+      # 注意：job 级 permissions 会**完全覆盖**顶层同名键，
+      # 未列出的 scope 一律变成 none —— 所以 contents: read 必须在这里重复声明，
+      # 否则 actions/checkout 拿不到仓库内容（403）。
+      contents: read   # actions/checkout 需要
+      id-token: write # Trusted Publishing 必需
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+
+      - name: Build
+        run: uv build
+
+      - name: Publish to PyPI
+        run: uv publish --trusted-publishing always
