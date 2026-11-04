@@ -44,6 +44,23 @@ Issues = "https://github.com/yangjiacheng1996/freegraph/issues"
 [tool.hatch.build.targets.wheel]
 packages = ["src/freegraph"]
 
+# sdist 只含包代码与必要元数据。
+# 仓库里的 harness/（调研报告 / 提示词 / 立项书 / 验收脚本）、.specify/（宪法与
+# spec 模板）、.opencode/（speckit 命令）是**开发辅助材料**——它们留在 GitHub 上供
+# 读者学习全部原理，但绝不能进入 PyPI 发行包（否则会被别人 import 引入）。
+# only-include 已限定范围，exclude 再兜一层；最终由 harness/scripts/check_dist_purity.py
+# 在发布流水线里断言（见 .github/workflows/publish.yml）。
 [tool.hatch.build.targets.sdist]
 only-include = ["src/freegraph", "README.md", "LICENSE"]
-exclude = ["/.opencode", "/.specify", "/harness", "/dist"]
+exclude = [
+    "/.opencode",
+    "/.specify",
+    "/.harness",
+    "/harness",
+    "/.github",
+    "/specs",
+    "/dist",
+    "/tests",
+    "**/node_modules",
+    "**/__pycache__",
+]

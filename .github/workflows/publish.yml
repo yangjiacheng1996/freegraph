@@ -43,5 +43,13 @@ jobs:
       - name: Build
         run: uv build
 
+      # 发行产物纯度门禁：PyPI 上的包必须只有 src/ 下的包代码与必要元数据。
+      # 仓库里的 harness/（调研报告 / 提示词 / 立项书 / 验收脚本）、.specify/（宪法）、
+      # .opencode/（speckit 命令）是开发辅助材料——它们留在 GitHub 上供读者学习全部原理，
+      # 但绝不能进入发行包（否则会被别人 import 引入）。
+      # 这一步失败即中止发布：PyPI 上的版本一旦发布**不可删除**，只能 yank。
+      - name: Verify artifact purity
+        run: python harness/scripts/check_dist_purity.py dist/
+
       - name: Publish to PyPI
         run: uv publish --trusted-publishing always
