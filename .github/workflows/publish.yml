@@ -49,10 +49,25 @@ jobs:
       # 但绝不能进入发行包（否则会被别人 import 引入）。
       # 这一步失败即中止发布：PyPI 上的版本一旦发布**不可删除**，只能 yank。
       - name: Verify artifact purity
-        # 用 python3 而非 python：runner 镜像不保证提供 `python` 这个名字
-        # （本机就没有），未跑 actions/setup-python 时 `python` 可能 command not found。
-        # 脚本只用标准库，无版本要求。
-        run: python3 harness/scripts/check_dist_purity.py dist/
+        # 解释器按可用性三级回退：python3 → python → uv。
+        #   · runner 镜像不保证提供 `python` 这个名字（未跑 actions/setup-python 时尤其如此），
+        #     单押一种都有 command not found 的风险；
+        #   · 而这道门禁一旦挂掉就会**阻断发布**，宁可多写两行；
+        #   · uv 是上一个步骤装的，它保证能解析出可用的 Python，作为最后兜底。
+        # 脚本只用标准库，无版本要求。exec 让门禁的退出码直通给 job。
+        run: |
+          set -euo pipefail
+          if command -v python3 >/dev/null 2>&1; then
+            exec python3 harness/scripts/check_dist_purity.py dist/
+          elif command -v python >/dev/null 2>&1; then
+            exec python harness/scripts/check_dist_purity.py dist/
+          else
+            # 最后兜底：uv（上个步骤刚装好，且 `uv build` 已解析出可用 Python）。
+            # 加 --offline：万一 uv 也找不到解释器，**快速失败**而不是联网下载挂死
+            # ——门禁挂死比门禁快速失败更糟（会白烧 CI 时间且难以定位）。
+            echo "::notice::未找到 python3 / python，改用 uv 运行（--offline）"
+            exec uv run --offline --no-project python harness/scripts/check_dist_purity.py dist/
+          fi
 
       - name: Publish to PyPI
         run: uv publish --trusted-publishing always
