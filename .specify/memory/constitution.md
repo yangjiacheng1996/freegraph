@@ -435,6 +435,26 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
 6. **证据门禁**：新增结论均有来源标记，术语准确（原则 VIII）。
 7. **文档合规门禁**：`THIRD_PARTY_NOTICES` 已登记、API 兼容矩阵已更新（原则 X）。
 
+### 发布门禁（Release Gate）
+
+**发布 / 分发发行包时**（而非逐特性合入时）**MUST** 通过下列门禁；它与上面的
+「质量门禁」相互独立，**MUST NOT** 互相替代：
+
+1. **发行产物纯度门禁**：构建产物的内容 **MUST** 仅含**包代码**（`src/<pkg>/`）与
+   **必要元数据**（README / LICENSE / pyproject.toml / PKG-INFO）。
+   **MUST NOT** 含任何**仓库内容**——`harness/`（调研报告 / 提示词 / 立项书 / 验收脚本）、
+   `.specify/`（宪法与 spec 模板）、`.opencode/`（speckit 命令）、`node_modules/` 等
+   均属**开发辅助材料**：它们**留在 GitHub 上供读者学习本项目的全部原理**，
+   但**不得**进入发行包（否则会被他人 `import` 引入）。
+   **MUST** 以可自动执行的断言落地，并在发布流水线中于**上传之前**强制执行
+   （`harness/scripts/check_dist_purity.py`）；断言不通过时 **MUST** 中止发布——
+   PyPI 上的版本一旦发布**不可删除**（只能 yank），故**MUST** 在上传前拦截。
+
+> **为什么单列为发布门禁而非质量门禁**：质量门禁是「逐特性合入前」的检查，
+> 作用于源码；发布门禁是「产物出厂前」的检查，作用于**打包结果**——
+> 后者无法由源码审查替代（同一份源码在不同打包配置下产出的内容不同）。
+> 「GitHub 上看全部原理」与「PyPI 上的包是干净的」**必须同时成立**，本门禁是后者的兜底。
+
 ## Governance
 
 - 本宪法**优先于**其他一切实践与文档约定；与本文件冲突的既有做法，以本文件为准。
@@ -468,6 +488,24 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
     （socket 夹具改为「只观测不阻断 + 按发起方归因」，零出站证据改为「框架自身出站数 = 0」，
     不阻断用户代码出网）。**原则 I–X 的实质要求均未改变**，仅 API 名与方法措辞变化；
     迁移方案与受影响特性见文件头 SYNC IMPACT REPORT 与 `harness/proposals/更名与迁移说明.md`。
+  - **v0.0.2（2026-11-04）**｜**新增「发布门禁（Release Gate）」章节**（新增章节，
+    按 0.x 预发布语义记为 **0.0.2**；MAJOR/MINOR 策略下本应记 MINOR，但项目未开工、
+    宪法未批准，故按 0.x 语义记 0.0.2，待批准时统一定版）。
+    - **变更了什么**：新增「发行产物纯度门禁」一条——构建产物 **MUST** 仅含包代码
+      （`src/<pkg>/`）与必要元数据，**MUST NOT** 含任何仓库内容
+      （`harness/` / `.specify/` / `.opencode/` / `node_modules/` 等）；
+      **MUST** 以可自动执行的断言落地，并在发布流水线中于上传之前强制执行。
+    - **为什么**：本仓库把**全部项目内容**放在 GitHub 上供读者学习原理，
+      而 PyPI 上的发行包必须保持干净——仓库内容属开发辅助材料，
+      不应被他人 `import` 引入。且 **PyPI 上的版本一旦发布不可删除**（只能 yank），
+      必须在上传前拦截；仅靠打包配置（`only-include`）不足以保证——那是「配置」而非「机制」。
+    - **受影响的原则与特性**：**原则 I–X 的实质要求均未改变**，原则 IX（许可证与商标红线）
+      与原则 X（文档合规义务）亦未受影响；本条为**独立的新增门禁**，只约束**发布环节**。
+      已在 §9.1（质量门禁）与 §5.2 F24P1（打包分发）同步引用。
+    - **迁移方案**：无既有特性受影响（项目未开工）。落地物已就位：
+      `harness/scripts/check_dist_purity.py`（断言，已用 `force-include` 做过负向验证）
+      + `.github/workflows/publish.yml` 在 `uv publish` 之前插入该门禁
+      + `pyproject.toml` 的 `only-include` / `exclude` 作为前置双保险。
 
 > **2026-11-04 补充（不影响版本号）**：`freegraph` 已在 PyPI 上占位发布 **v0.0.1**
 > （owner = PyPI 账号 `yangjiacheng1996`，发行名 = 导入名 = `freegraph`；
@@ -476,4 +514,4 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
 > 仅用于锁定名称；`freechain` 亦已于同日占位发布 v0.0.1。**规范性正文与原则 I–X 全部未改动**，
 > 故**不 bump 版本号**（Version 仍为 0.0.1，Last Amended 仍为 2026-11-03）。
 
-**Version**: 0.0.1 | **Ratified**: TODO(RATIFICATION_DATE): 宪法待发起者批准，批准日填实（ISO YYYY-MM-DD）并定版为 1.0.0 | **Last Amended**: 2026-11-03
+**Version**: 0.0.2 | **Ratified**: TODO(RATIFICATION_DATE): 宪法待发起者批准，批准日填实（ISO YYYY-MM-DD）并定版为 1.0.0 | **Last Amended**: 2026-11-04
