@@ -218,3 +218,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ── harness/docs：第三方官方文档镜像（7MB），由 harness/scripts/fetch_docs.py 重新拉取 ──
+# 不是本项目的内容，不入库；需要时执行：python harness/scripts/fetch_docs.py
+harness/docs/
+
