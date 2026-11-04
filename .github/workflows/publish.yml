@@ -49,7 +49,10 @@ jobs:
       # 但绝不能进入发行包（否则会被别人 import 引入）。
       # 这一步失败即中止发布：PyPI 上的版本一旦发布**不可删除**，只能 yank。
       - name: Verify artifact purity
-        run: python harness/scripts/check_dist_purity.py dist/
+        # 用 python3 而非 python：runner 镜像不保证提供 `python` 这个名字
+        # （本机就没有），未跑 actions/setup-python 时 `python` 可能 command not found。
+        # 脚本只用标准库，无版本要求。
+        run: python3 harness/scripts/check_dist_purity.py dist/
 
       - name: Publish to PyPI
         run: uv publish --trusted-publishing always
