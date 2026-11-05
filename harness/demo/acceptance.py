@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 杨家成 · MIT License · https://github.com/yangjiacheng1996/freegraph
+
 """freegraph 人工验收编排器（**验收脚本之一**，自身也 import 并使用 freegraph）。
 
 定位

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 杨家成 · MIT License · https://github.com/yangjiacheng1996/freegraph
+
 """发行产物纯度门禁：断言 ``dist/`` 里只有**包代码与必要元数据**。
 
 为什么需要它

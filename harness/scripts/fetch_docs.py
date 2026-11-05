@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 杨家成 · MIT License · https://github.com/yangjiacheng1996/freegraph
+
 """Sync the official LangChain / LangGraph / Deep Agents / LangSmith docs into ``harness/docs``.
 
 The public docs site (docs.langchain.com, Mintlify) exposes every page as plain

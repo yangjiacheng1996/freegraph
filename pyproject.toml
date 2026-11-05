@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "freegraph"
-version = "0.0.1"
+version = "0.0.2"
 description = "Zero-dependency, zero-account, zero-egress graph runtime kernel — a drop-in replacement for the LangGraph Graph API."
 readme = "README.md"
 requires-python = ">=3.10"

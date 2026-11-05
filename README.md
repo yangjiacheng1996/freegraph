@@ -1,6 +1,8 @@
 # freegraph
 
-> **⚠️ 状态：v0.0.1 是「占位版」（name-reservation placeholder），内核尚未实现。**
+> **⚠️ 状态：v0.0.x 是「占位版」（name-reservation placeholder），内核尚未实现。**
+> **v0.0.2 起**：每个源文件带署名头（Copyright + MIT + 项目地址）——MIT 允许文件被单独
+> 复制，而复制不会带走 `LICENSE`，因此署名必须随每个文件流动。
 >
 > 本次发布**只为在 PyPI 上锁定 `freegraph` 这个发行名**（发行名 = 导入名）。
 > 目前 `import freegraph` 只会返回一个版本号，**没有任何图运行时能力**——
