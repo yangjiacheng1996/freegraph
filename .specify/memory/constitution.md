@@ -604,5 +604,14 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
 > `Copyright (c) 2026 杨家成 · MIT License · https://github.com/yangjiacheng1996/freegraph`。
 > 该版本**仍不含任何内核实现**，仅用于锁定名称 + 验证发布链路。**原则 I–X 全部未改动**
 > （版本号属发行元数据，非规范性正文）。
+>
+> **发布结果（2026-11-05，已验证）**：`freegraph 0.0.2` 发布成功；**发行产物纯度门禁在真实
+> 发布链路上首次执行并通过**（此前只做过本地验证）。远端产物独立复核：
+> wheel 仅含 `freegraph/__init__.py` + `freegraph/py.typed` + dist-info；sdist 仅含
+> `src/freegraph/` + README + LICENSE + pyproject + PKG-INFO；**无 `harness/` / `.specify/` /
+> `.opencode/` 等任何仓库内容**；元数据 `License: MIT`、`Requires-Dist: typing-extensions>=4.7.0`
+> （**仅一个必装依赖**）、`Requires-Python: >=3.10`；**源文件署名头已随包发布**
+> （`freegraph/__init__.py` 第 1 行即 `Copyright (c) 2026 杨家成 · MIT License · <仓库地址>`）。
+> → **发布门禁（Release Gate）自此从「机制」变为「已验证生效的机制」。**
 
 **Version**: 1.1.0 | **Ratified**: 2026-11-05（发起者批准；首次批准即定版为 1.0.0） | **Last Amended**: 2026-11-05
