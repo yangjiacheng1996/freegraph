@@ -30,7 +30,7 @@ semconv；未注入 tracer 时零副作用、零开销**。
 - **路线已选定**：Q6 裁定**路线 B —— OTel 兼容追踪协议 + 轻量 UI**；
   路线 A（自研整套 Studio / 追踪后端，245–415 人日）**MUST NOT** 采用。
 - **v1 的零依赖口径**（立项书 §5.4 DF4）：**v1 不依赖 OTel SDK**——基础安装只有
-  `typing-extensions`，因此 **span 由 freegraph 自有的 `Span` 数据类产出**，
+  **零**第三方依赖，因此 **span 由 freegraph 自有的 `Span` 数据类产出**，
   **属性命名**对齐 OTel GenAI semconv，但**不引入 `opentelemetry-*` 运行时**；
   与 OTel SDK 的互操作在 **F21P1 的可选 extra** 内完成。
 - **「符合 semconv」的 v1 可判定形式**：是「**span 属性命名**符合 semconv」，
@@ -88,7 +88,7 @@ semconv；未注入 tracer 时零副作用、零开销**。
   （可由「属性名清单 vs semconv 清单」逐项比对判定）。
 - **SC-002**：节点 / 工具 / 模型三级 span 各有一例产生，且层级关系正确。
 - **SC-003**：未注入 tracer 时创建的 span 对象数 == 0（计数夹具）。
-- **SC-004**：freegraph 的运行时依赖闭包仍只含 `typing-extensions`（无 OTel SDK）。
+- **SC-004**：freegraph 的运行时依赖闭包**仍为空集**（无 OTel SDK）。
 - **SC-005**：span 的起止时间差 > 0（耗时被记录）。
 
 ### 6. 验收判据（= 立项书 §5.2 F18P1 小目标，逐条可判定）
@@ -128,7 +128,7 @@ semconv；未注入 tracer 时零副作用、零开销**。
 
 ### 9. 红线与质量门禁
 
-- **依赖门禁（阻断，红线）**：v1 基础安装依赖闭包**只含 `typing-extensions`**；
+- **依赖门禁（阻断，红线）**：v1 基础安装依赖闭包**为空集**；
   `opentelemetry-*` 只允许出现在 **F21P1 的可选 extra** 中。
 - **零出站 / 零环境变量**：span 生产不得触发任何出站。
 - **ARCH-1 / ARCH-3**：L5 只依赖 L1 协议；跨层只传纯数据。

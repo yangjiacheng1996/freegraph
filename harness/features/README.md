@@ -25,7 +25,7 @@
 
 | 步 | Phase | 文件 | 层 | 里程碑 | 依赖 | 行数 | 小目标（可判定验收判据） | ★ |
 |---|---|---|---|---|---|---|---|---|
-| 1 | **F1P1** | [F1P1_契约层骨架.md](F1P1_契约层骨架.md) | L1 | M0 | — | 900 | `import freegraph.contracts` 成功；依赖仅 `typing-extensions`；C1/C11/C16/C22 类型冻结；契约层不 import 任何内部模块 | |
+| 1 | **F1P1** | [F1P1_契约层骨架.md](F1P1_契约层骨架.md) | L1 | M0 | — | 900 | `import freegraph.contracts` 成功；**依赖零（闭包为空集）**；C1/C11/C16/C22 类型冻结；契约层不 import 任何内部模块 | |
 | 2 | **F2P1** | [F2P1_四类协议与图数据类.md](F2P1_四类协议与图数据类.md) | L1 | M0 | F1P1 | 820 | 协议齐全；契约层可被单独消费；ARCH-2 通过；**冻结前置：D11 已批准** | |
 | 3 | **F2P2** | [F2P2_公开API门面与快照测试.md](F2P2_公开API门面与快照测试.md) | L1 | M0 | F1P1,F2P1 | 560 | `from freegraph.graph import StateGraph, START, END` 可用；签名快照入库 | |
 | 4 | **F3P1** | [F3P1_项目脚手架与CI门禁.md](F3P1_项目脚手架与CI门禁.md) | — | M0 | F1P1,F2P1 | 1,100 | 门禁生效：故意引入 `langchain` 依赖 → CI 必须失败 | |
@@ -91,7 +91,7 @@
 
 | 决策 | 内容 | 阻塞谁 | 状态 / 决议 |
 |---|---|---|---|
-| **D1** | 契约层是否物理拆成独立发行包 | `pyproject.toml` 布局（F1P1/F2P1） | ✅ **已拍板（2026-11-04）：v1 同包子模块，不拆独立发行包**。理由：① 拓扑与 LangChain-land 的 `langchain-core` 同构（契约层是底座，L2–L5 全坐其上），但 `langchain-core` 必须独立是因为**被 5+ 个包共享**；freegraph v1 下游只有 **1 个**（freechain），全包**强制依赖仅 `typing-extensions`** → 无依赖需隔离；② LangGraph 自身的拆包序列解的是**可选能力 / 后端 / 许可证**，核心契约类型（`Command` / `Send` / `interrupt` / `START` / `END`）**就在主包内**；③ 拆包代价 = 两套版本号 / 兼容矩阵 / 发布流水线，与 R9 单点依赖冲突；④ 「freechain 只想要契约」已被 ARCH-2 解决（装 `freegraph` 只拉 `typing-extensions`，`from freegraph.contracts import ...` 不加载内部层）。**附加约束**：`freegraph/__init__.py` MUST 保持惰性 / 空壳（见 F1P1 / F2P2）。**重开信号**：freechain 需单独依赖契约 / 出现非可选的重量级依赖 / 出现第 3 个消费契约层的包 |
+| **D1** | 契约层是否物理拆成独立发行包 | `pyproject.toml` 布局（F1P1/F2P1） | ✅ **已拍板（2026-11-04）：v1 同包子模块，不拆独立发行包**。理由：① 拓扑与 LangChain-land 的 `langchain-core` 同构（契约层是底座，L2–L5 全坐其上），但 `langchain-core` 必须独立是因为**被 5+ 个包共享**；freegraph v1 下游只有 **1 个**（freechain），全包**强制依赖为零** → 无依赖需隔离；② LangGraph 自身的拆包序列解的是**可选能力 / 后端 / 许可证**，核心契约类型（`Command` / `Send` / `interrupt` / `START` / `END`）**就在主包内**；③ 拆包代价 = 两套版本号 / 兼容矩阵 / 发布流水线，与 R9 单点依赖冲突；④ 「freechain 只想要契约」已被 ARCH-2 解决（装 `freegraph` **一个第三方包都不拉**，`from freegraph.contracts import ...` 不加载内部层）。**附加约束**：`freegraph/__init__.py` MUST 保持惰性 / 空壳（见 F1P1 / F2P2）。**重开信号**：freechain 需单独依赖契约 / 出现非可选的重量级依赖 / 出现第 3 个消费契约层的包 |
 | **D11** | 契约增补（C27）+ C22/C23 字段约定修订 + 宪法原则 VII MINOR 修订 | **F2P1 冻结契约** / F20P1 / F20P2 / F21P1 | ✅ **已批准（2026-11-05）并落地**：Q8 §3.4.1（增补 **C27** + C22/C23 字段约定）· 立项书 §5.3 / §5.3.1 · 宪法原则 VII MINOR 修订 + 宪法定版 **1.0.0**。**契约清单权威范围 = C1–C27**；**F2P1 的冻结前置已解除** |
 | **D12** | 零出站与依赖门禁的**作用域定义**（只观测不阻断 + 按发起方归因） | **F3P1 CI 门禁** / F2P1 依赖断言口径 | ✅ **已批准（2026-11-05）**：宪法原则 V 门禁 4 措辞 PATCH 生效——socket 夹具**只观测不阻断 + 按发起方归因**，只对「框架出站」断言 = 0（用户出站记录在案不判失败；人工轮允许「模型厂商端点」一条） |
 
@@ -105,7 +105,7 @@
 
 | # | 红线 | 检查方式 |
 |---|---|---|
-| 1 | freegraph 自身依赖闭包无 `langsmith` / `langchain*` / `langgraph*`；基础安装只有 `typing-extensions` | CI 依赖门禁（隔离 venv + 运行时反向断言） |
+| 1 | freegraph 自身依赖闭包无 `langsmith` / `langchain*` / `langgraph*`；基础安装**零**第三方依赖 | CI 依赖门禁（隔离 venv + 运行时反向断言） |
 | 2 | 依赖许可证 ∈ {MIT, Apache-2.0, BSD-2/3, PSF}；禁 `langgraph-api` / `langgraph-runtime-inmem` / Phoenix（ELv2） | CI 许可证白名单 |
 | 3 | 内核**不读任何环境变量**（`LANGSMITH_*` / `LANGCHAIN_*` / `OTEL_*` 一律不读） | CI 静态扫描 |
 | 4 | **freegraph 自身零出站**（用户代码出网**不受限制、不被阻断**；只观测不阻断 + 按发起方归因） | socket 监测夹具 + 静态扫描 + 断网等价性任务 |

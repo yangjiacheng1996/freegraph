@@ -4,6 +4,12 @@
 > 调研日期：2026-11-01｜定价页 as-of：2026-11-01｜本地文档同步：2026-10-31T15:40:12Z（303 篇）
 > 本文件是**汇总**，不复制各报告全文；细节见 `Q1-*.md` … `Q8-*.md`。
 > **联网抓取方式**：本轮调研通过本机代理 `http://127.0.0.1:10808`（xray / v2rayN 系统代理端口）出网抓取官方页面；`docs.langchain.com` 支持在 URL 后加 `.md` 直接获得 Markdown 源文。**定价页的功能勾选矩阵必须做 DOM 级解析**（Markdown 文本化会丢失 SVG 勾选状态），方法见 [Q1 §2.3](Q1-LangSmith的功能全景与卖点.md)。
+>
+> **【后续决议 2026-11-05】** 本汇总的**「白名单（运行时必装）」**（`typing-extensions`）
+> 已被 **《项目宪法》修订记录 v1.2.0** 取代 —— 基础安装**零**第三方运行时依赖，
+> 最低 Python 版本抬至 **3.11**。**本汇总的事实取证与黑名单全部仍然有效**；
+> 被取代的只是那一条「建议」。详见 **§8.1 的后续决议**与
+> `specs/001-p01-contracts-core/research.md` **D-21**。
 
 ---
 
@@ -132,6 +138,9 @@
 ## 5. 对 freegraph 的直接启示（可执行结论，8 条）
 
 1. **内核依赖必须收紧到「零第三方运行时依赖（最多 `typing-extensions`）」**，并把这条做成 CI 断言：递归展开 `importlib.metadata.requires('freegraph')`，若出现 `langsmith` / `langchain*` / `langgraph*` 任一即失败。**理由**：`langchain-core` 是 `langsmith` 的唯一入口，而 §2.6 约束 2 要求依赖树中无 `langsmith`。同时加**许可证白名单断言**（仅允许 MIT / Apache-2.0 / BSD / PSF；出现 Elastic / AGPL / SSPL 即失败）——这条同时守住"可私有化部署、商用友好"。
+   > ⚠️ **【后续决议 2026-11-05】**「最多 `typing-extensions`」→ **现为零第三方包**
+   > （`typing-extensions` 已剥离，最低 Python 抬至 3.11，宪法 v1.2.0）；
+   > **CI 断言照做不误**，且判据由「无 langsmith 家族」**加强**为「**基础安装闭包为空集**」。
 2. **tracing 层直接产出 OTel span，属性对齐 OTel GenAI semconv**（`gen_ai.*`），**不发明格式**。理由：LangSmith 官方文档自己就把 run 类比为 span；Langfuse / Phoenix / OpenLIT / Grafana 全是 OTel 原生，接上零转换成本；"不源于 LangSmith"反而保证了**可与任意 OTel 后端组合**。
 3. **【Q9 补充，2026-11-03】** 「不亚于 LangSmith」改写为「不亚于 LangSmith **Studio** 的本地图运行时可诊断性」**，并把 MVP 的可视化严格限定为三件套：**① 图视图（mermaid，零出站）② trace 时间线/详情（本地存储）③ 状态快照 + checkpoint 历史 + 回放入口**。**明确不做**：Insights / Tuned Evaluators / Bulk export / Engine / Deployment 托管（付费墙内）；Evaluation / Datasets / Annotation Queue / Prompt Hub（虽在免费档，但属"评测平台"，会把工作量推向 1–2 人年的 SaaS）；Fleet / Sandboxes / LLM Gateway（虽免费档开放，但必然引入真实出站）。
 4. **§2.6 约束 6（可视化不阻断执行）必须专门处理**：`draw_mermaid_png()` 在离线环境必然抛异常（实测 `ValueError: Failed to reach https://mermaid.ink API`），而 `target.py:144` 位于 `agent.invoke` 之前 → **一旦失败，脚本无法跑到验收点**。freegraph 必须做到：① `draw_mermaid()` 纯本地必然成功；② `draw_mermaid_png()` 作为**可选插件、默认关闭**，离线时返回占位图或抛可捕获异常；③ 在迁移说明中给出 mermaid-cli 本地渲染的替代路径。
@@ -149,7 +158,7 @@
 
 | # | 模块 | v1 必做 | 依赖 | 风险 | 工作量档位 | 依据 |
 |---|---|---|---|---|---|---|
-| M1 | **图运行时内核**：state schema + channels + reducer + Pregel 调度 | ✅ | 无（仅 stdlib + `typing-extensions`） | 🟡 中——语义细节多（稀疏状态、fresh 读、超步并发写） | **XL** | Q8 C1–C8 |
+| M1 | **图运行时内核**：state schema + channels + reducer + Pregel 调度 | ✅ | 无（~~仅 stdlib + `typing-extensions`~~ → **现为零第三方包**，宪法 v1.2.0） | 🟡 中——语义细节多（稀疏状态、fresh 读、超步并发写） | **XL** | Q8 C1–C8 |
 | M2 | **节点 / 边 / 路由 API**：`StateGraph`、`add_node`、`add_edge`、`add_conditional_edges`、`compile`、`START`/`END` | ✅ | M1 | 🟢 低（API 明确） | **M** | Q3 §3.4 #1–#6 |
 | M3 | **执行 API**：`invoke`（返回完整状态）、`stream`（`values`/`updates`） | ✅ | M1, M2 | 🟡 中（`invoke` 必须返回完整状态） | **M** | Q8 C11–C12 |
 | M4 | **图结构导出**：`get_graph(xray=)` + 自有 `Graph` 类型 + `draw_mermaid()` | ✅ | M2 | 🟡 中（**必须独立重写**，不能依赖 `langchain-core`） | **M** | Q3 §5.2, Q8 C13–C14 |
@@ -210,9 +219,26 @@
 
 | 类别 | 内容 |
 |---|---|
-| ✅ **白名单（运行时必装）** | `typing-extensions`（**唯一建议的必装依赖**） |
+| ⚠️ **白名单（运行时必装）** | ~~`typing-extensions`（唯一建议的必装依赖）~~ → **已改为「无」**（宪法 v1.2.0，2026-11-05） |
 | 🟡 **白名单（可选 extra）** | `pydantic`（`[pydantic]`，用于 pydantic 状态 schema）；`ormsgpack`（`[checkpoint]`，序列化）；`opentelemetry-api` / `opentelemetry-sdk`（`[otel]`，Q6 路线 B）；`mermaid` 相关（`[png]`，**默认关闭**） |
 | 🔴 **黑名单（硬禁止，含可选 extra 也不允许）** | `langsmith`（含 `langsmith[otel]`、`langsmith[sandbox]`）、`langchain`、`langchain-core`、`langchain-classic`、`langchain-protocol`、`langgraph`、`langgraph-prebuilt`、`langgraph-checkpoint`、`langgraph-checkpoint-sqlite`、`langgraph-checkpoint-postgres`、`langgraph-store*`、`langgraph-sdk`、`langgraph-api`、`langgraph-cli`、`langgraph-runtime-inmem`、`deepagents`、`langchain-anthropic` / `langchain-openai` / `langchain-google-genai` 等全部 provider 包（它们会把 `langchain-core` 拉回来） |
+
+> **【后续决议 2026-11-05 · 宪法修订记录 v1.2.0】「必装 `typing-extensions`」已被取代。**
+>
+> **变更**：必装运行时依赖由 `typing-extensions` 改为 **「无」** —— 基础安装的依赖闭包
+> **MUST 为空集**（`dependencies = []`），最低 Python 版本抬至 **3.11**。
+> **黑名单与可选 extra 全部不变**；**本报告其余事实取证全部仍然有效**。
+>
+> **为什么**：`typing.Annotated`（3.9 起）/ `typing.TypedDict`（3.8 起）本就是标准库成员，
+> 让 `typing_extensions` 真正有价值的是 `typing.Self`（**3.11** 才进标准库）——
+> 最低版本抬至 3.11 后，`Self` / `NotRequired` / `Required` / `TypeVarTuple` / `Unpack` /
+> `LiteralString` / `dataclass_transform` 全部在标准库内，故该依赖**不再需要**。
+>
+> **依据**：宪法 Governance · 修订记录 **v1.2.0** ·
+> `specs/001-p01-contracts-core/research.md` **D-21** ·
+> `specs/001-p01-contracts-core/spec.md` Clarifications「Session 2026-11-05（实现阶段 ·
+> 依赖剥离与最低版本上调）」。
+
 
 ### 8.2 配置层
 

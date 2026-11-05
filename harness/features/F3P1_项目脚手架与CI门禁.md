@@ -35,7 +35,7 @@
 
   | 环境 | 装什么 | 断言 |
   |---|---|---|
-  | ① 依赖断言环境（隔离 venv） | 只装 freegraph 基础包（唯一必装依赖 `typing-extensions`） | 递归展开 freegraph 自身 `Requires-Dist`（含全部 extras 变体）无 `langsmith` / `langchain*` / `langgraph*`；`import freegraph` 后 `sys.modules` 中无 `langsmith` / `langchain_core` / `langgraph` |
+  | ① 依赖断言环境（隔离 venv） | 只装 freegraph 基础包（**零**必装依赖） | 递归展开 freegraph 自身 `Requires-Dist`（含全部 extras 变体）无 `langsmith` / `langchain*` / `langgraph*`；`import freegraph` 后 `sys.modules` 中无 `langsmith` / `langchain_core` / `langgraph` |
   | ② 验收环境 | freegraph + **脚本自带的** `langchain` 系 | **反向断言**：freegraph 运行期从不 import `langchain` / `langchain_core`；freegraph 自身零出站 |
 
 - **「零出站」的实现口径**（立项书 §9.2 + 风险 R11）：**只观测、不阻断 + 按发起方归因**。
@@ -63,14 +63,14 @@
 
 **P3 — 基础安装足够轻**
 作为内网/离线环境的用户，我希望能 `pip install freegraph` 只装上一个包
-（`typing-extensions`），其余全部是可选 extra，需要时再装。
+（**零**第三方依赖），其余全部是可选 extra，需要时再装。
 
 - **独立验收**：隔离 venv 中 `pip install freegraph` 后 `pip freeze` 只列出
-  `typing-extensions` 与 `freegraph`。
+  **只有** `freegraph` 自身（零第三方依赖）。
 
 ### 4. 功能需求
 
-- **FR-001**：系统 MUST 提供完整 `pyproject.toml`：基础依赖仅 `typing-extensions`；
+- **FR-001**：系统 MUST 提供完整 `pyproject.toml`：基础依赖**为空**（零第三方运行时依赖）；
   可选 extra 至少包含 `[pydantic]` / `[checkpoint]`（`ormsgpack`）/ `[otel]`
   （`opentelemetry-exporter-otlp`）/ `[png]`（本地渲染，默认关闭）。
 - **FR-002**：系统 MUST 发布 `py.typed`（PEP 561）并使用 `src/` 布局。
@@ -109,7 +109,7 @@
 
 - **SC-001**：负向验证通过——依赖声明中加入 `langchain-core` 时，CI 的依赖门禁**必须
   失败**并输出违规条目；撤销后恢复通过。
-- **SC-002**：隔离 venv 中 `pip install freegraph` 后，依赖闭包仅含 `typing-extensions`；
+- **SC-002**：隔离 venv 中 `pip install freegraph` 后，依赖闭包为**空集**；
   `import freegraph` 后 `sys.modules` 中无 `langsmith` / `langchain_core`。
 - **SC-003**：全部 7 项质量门禁在 CI 中有**可自动执行的断言**落地（不是人工 checklist）。
 - **SC-004**：核心用例在「全部网络接口不可用」的任务中仍然全绿。

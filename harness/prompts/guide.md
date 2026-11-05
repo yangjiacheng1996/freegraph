@@ -68,7 +68,7 @@
   也不能"复制粘贴 `langgraph` 的源码进 freegraph"——那会让 freegraph 与 `langgraph` 的版本演进永久纠缠，
   且 `langgraph` 虽 MIT，但**复制会引入 `langchain_core` 的 API 形状**（如 `RunnableConfig`），
   直接违反"内核只依赖鸭子类型"（宪法原则 II）。
-- **唯一建议的必装运行时依赖是 `typing-extensions`** [来源: Q3 §3.6]。
+- **必装运行时依赖 = 无**（基础安装零第三方依赖）[来源: Q3 §3.6 + 宪法修订记录 v1.2.0 · 2026-11-05]。
   `pydantic`（可选 extra）、`ormsgpack`（可选 extra）、`opentelemetry-*`（可选 extra）可作为**可选 extra**，
   但**不得进入基础安装**。
 - 内核**不读任何环境变量**（宪法「配置层黑名单」）。
@@ -199,7 +199,7 @@ LangGraph 对 `langchain_core` 的 135 处引用，按符号统计**只集中在
 **依赖方向铁律（可由 CI 断言）**：
 
 1. **只能向下依赖**。L5 可以 import L4，L4 可以 import L3……**反向 import 一律禁止**。
-2. **L1 不 import 任何内部层**（L1 只依赖 stdlib + `typing-extensions`）。
+2. **L1 不 import 任何内部层**（L1 **只依赖 stdlib**）。
    → 保证契约层可以被 freechain **单独**安装与消费。
 3. **L2–L5 之间不横向依赖**。例如持久化层**不得** import 可观测层；
    两者的关联只经由 L1 的协议。
@@ -215,7 +215,7 @@ freechain 想复用契约就必须装上整个内核。**把契约层独立成�
 | # | 约束 | 判定方式 |
 |---|---|---|
 | **ARCH-1** | 依赖方向单向；L1 不依赖内部层 | CI 静态检查 import 图（AST 扫描 `freegraph/**`） |
-| **ARCH-2** | 契约层可独立安装：仅依赖 `typing-extensions` | `pip install freegraph-contracts` 后 `import freegraph.contracts` 无副作用 |
+| **ARCH-2** | 契约层可独立安装：**零**第三方依赖 | `pip install freegraph` 后 `import freegraph.contracts` 无副作用 |
 | **ARCH-3** | 跨层只经由 `Protocol` + 纯数据类；**禁止**跨层 import 具体实现类 | CI 静态检查：L2+ 的模块不得 import 另一层实现模块（白名单除外） |
 | **ARCH-4** | 公开 API 面只经由 L1 导出；`freegraph.graph` 是 `target.py` 的稳定入口 | API 快照测试（对 L1 导出符号做签名快照） |
 
@@ -587,7 +587,7 @@ freegraph 要实现的是 LangGraph 的**一个子集**，且**必须重写而�
 | Phase | 名称 | 实现 | 测试 | 合计 | 依赖 | 交付物 |
 |---|---|---|---|---|---|---|
 | **F21P1** | OTLP 导出插件（可选 extra）+ 文档化 OpenLIT / Langfuse / Phoenix 对接（**仅外部连接，绝不内嵌 Phoenix**） | 380 | 320 | **700** | F20P2 | 可选导出到任一 OTel 后端 |
-| **F24P1** | 打包分发（extras 划分：基础仅 `typing-extensions`）+ API 兼容矩阵 + `THIRD_PARTY_NOTICES` | 520 | 380 | **900** | F23P1,F16P1 | 发行包就绪；兼容矩阵与归属清单齐备 |
+| **F24P1** | 打包分发（extras 划分：基础**零**依赖）+ API 兼容矩阵 + `THIRD_PARTY_NOTICES` | 520 | 380 | **900** | F23P1,F16P1 | 发行包就绪；兼容矩阵与归属清单齐备 |
 | **F25P1** | `target.py` 双跑验收（fake 模型 CI + 真实模型人工）+ 迁移说明 + README/快速上手 | 380 | 240 | **620** | F24P1 | **MVP 完成**：`target.py` 双跑通过，零出站断言通过 |
 
 ### 4.4 Phase 规模汇总（对 5000 行上限的验证）
@@ -751,7 +751,7 @@ F1P1 → F2P1 → F2P2 → F4P1 → F5P1 → F5P2 → F7P1 → F9P1 → F12P1 �
 | 4 类协议（P1–P4） | Q8 §3.4 的 C1–C26（C19 checkpointer / C23 tracer / C24 current_span / C20 store） | ❌ 不冲突（C24 被提升为必需） |
 | 3 种数据格式（D1–D3） | Q8 §3.4 C4/C5/C6/C11/C16 | ❌ 不冲突 |
 | `draw_mermaid_png` 离线不阻断 | 宪法原则 III 硬约束、Q3 §3.5 风险 1、Q3 §5 建议 3 | ❌ 不冲突 |
-| 契约层零依赖 | 宪法「包层白名单」（`typing-extensions` 唯一必装） | ❌ 不冲突 |
+| 契约层零依赖 | 宪法「包层白名单」（**必装依赖 = 无**，宪法 v1.2.0） | ❌ 不冲突 |
 | 32 个 Phase | 5000 行上限（`architecture.md` 任务书）+ §4.1 LOC 标定 + §4.4 逐行求和 | ❌ 不冲突 |
 | v2 内容（Studio UI / Store / Postgres）标为 v2 | 宪法原则 VII 三类"不做"清单、Q6 §3.3 路线 B | ❌ 不冲突 |
 
@@ -792,7 +792,7 @@ F1P1 → F2P1 → F2P2 → F4P1 → F5P1 → F5P2 → F7P1 → F9P1 → F12P1 �
 ```
 
 **F1P1 的验收判据（可自动判定）**：
-- `import freegraph.contracts` 成功，且 `pip show freegraph` 的依赖只有 `typing-extensions`；
+- `import freegraph.contracts` 成功，且 `pip show freegraph` **无任何必装依赖**（零第三方运行时依赖）；
 - `StateDict` / `Command` / `StateSnapshot` / `RunConfig` 四个类型存在且有类型注解；
 - 契约层不 import 任何 `freegraph` 内部模块（CI 断言）。
 

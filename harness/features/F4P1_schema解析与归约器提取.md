@@ -121,7 +121,7 @@
 ### 9. 红线与质量门禁
 
 - **依赖门禁（阻断，红线）**：无 `langsmith` / `langchain*` / `langgraph*`；
-  本层只允许 `typing-extensions`（Pydantic 若支持则走可选 extra）。
+  本层**只允许标准库**（Pydantic 若支持则走可选 extra）。
 - **零出站 / 零环境变量**。
 - **ARCH-1**：L2 只向下依赖 L1 契约层；MUST NOT import L3/L4/L5。
 - **人工门禁**：`harness/features/<feature>/manual-verification.md`。

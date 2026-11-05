@@ -359,7 +359,8 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
 每个特性**MUST** 复核依赖清单。白 / 黑名单以 `harness/reports/Q3-LangGraph的开源边界.md` §3.6
 与 `harness/reports/Q7-开源边界地图与许可证合规.md` §3.1 的结论为准：
 
-- **包层白名单**：`typing-extensions`（唯一建议的**必装**运行时依赖）。
+- **包层白名单**：**必装运行时依赖 = 无**（基础安装零第三方依赖；原「`typing-extensions` 唯一必装」
+  已于宪法 v1.2.0 · 2026-11-05 剥离——最低 Python 抬至 3.11 后 `Self` / `NotRequired` 等均在标准库内）。
   可选 extra：`pydantic`（`[pydantic]`）、`ormsgpack`（`[checkpoint]`）、
   `opentelemetry-api` / `opentelemetry-sdk`（`[otel]`）、mermaid 相关（`[png]`，**默认关闭**）。
 - **包层黑名单**：`langsmith`（含 `langsmith[otel]` / `langsmith[sandbox]`）、`langchain`、

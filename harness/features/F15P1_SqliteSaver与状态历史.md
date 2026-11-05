@@ -94,7 +94,7 @@
   `metadata` / `created_at` / `tasks` / `interrupts`）。
 - **SC-003**：跨进程 / 跨实例持久化生效（新实例可取回旧快照）。
 - **SC-004**：Windows CI 上的并发写用例通过（无 `database is locked` 异常泄漏）。
-- **SC-005**：freegraph 运行时依赖闭包仍只含 `typing-extensions`。
+- **SC-005**：freegraph 运行时依赖闭包**仍为空集**（零第三方运行时依赖）。
 
 ### 6. 验收判据（= 立项书 §5.2 F15P1 小目标，逐条可判定）
 

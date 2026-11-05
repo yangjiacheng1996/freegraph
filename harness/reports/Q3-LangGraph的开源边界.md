@@ -3,6 +3,12 @@
 > 调研问题：LangGraph 的包级清单、运行时能力矩阵、付费墙触发点，以及 `harness/demo/target.py` 的逐项耦合裁定。
 > 调研日期：2026-11-01｜本地实跑环境：`langgraph 1.2.11` / `langchain 1.4.1` / `langchain-core 1.6.3` / `langsmith 0.12.6` / `langgraph-cli 0.4.40` / `langgraph-api 0.17.0` / `langgraph-runtime-inmem 0.37.0`
 > **联网抓取方式**：本轮调研通过本机代理 `http://127.0.0.1:10808`（xray / v2rayN 系统代理端口）出网抓取官方页面；`docs.langchain.com` 支持在 URL 后加 `.md` 直接获得 Markdown 源文。**定价页的功能勾选矩阵必须做 DOM 级解析**（Markdown 文本化会丢失 SVG 勾选状态），方法见 [Q1 §2.3](Q1-LangSmith的功能全景与卖点.md)。
+>
+> **【后续决议 2026-11-05】** 本报告 §3.6 的「白名单（运行时必装）」已被
+> **《项目宪法》修订记录 v1.2.0** 取代 —— 基础安装**零**第三方运行时依赖，
+> `typing-extensions` 已**剥离**，最低 Python 版本抬至 **3.11**。
+> **本报告的事实取证全部仍然有效**；被取代的只是那一条「建议」。
+> 详见 **§3.6 的后续决议**与 `specs/001-p01-contracts-core/research.md` **D-21**。
 
 ---
 
@@ -16,6 +22,8 @@
 6. 对 freegraph 的判断 ①：**`target.py` 的 14 个 API 元素全部可在 OSS 内提供**，且**都不必须触及 LangSmith**；freegraph 必须同名同签名对齐其中 12 项（`StateGraph`/`START`/`END`/`add_node`/`add_edge`/`add_conditional_edges`/`compile`/`invoke`/`get_graph`/`draw_mermaid`/`draw_mermaid_png`），但 **`Annotated` 归约器机制与 `state.get()` 语义可以自由设计**（只要行为等价）。
 7. 对 freegraph 的判断 ②：**`harness/demo/target.py` 有一个必须处理的隐性缺口**——脚本第 144 行 `display(Image(agent.get_graph(xray=True).draw_mermaid_png()))` 在**离线环境必然抛异常**，会阻断脚本执行。freegraph 必须提供"PNG 失败不阻断"或"提供等价替代"的迁移说明。
 8. 对 freegraph 的判断 ③：freegraph 的白名单应严格到 **仅 `typing-extensions` + `pydantic`（可选）**，黑名单必须包含 `langsmith`/`langchain`/`langchain-core`/`langgraph*` 全部变体 + 所有 `LANGSMITH_*`/`LANGCHAIN_*` 环境变量 + `smith.langchain.com`/`mermaid.ink` 等域名。
+   > ⚠️ **【后续决议 2026-11-05】**「必装 `typing-extensions`」已被**宪法 v1.2.0** 取代
+   > （必装 = **无**）；**黑名单各条完全不变**。详见 §3.6 后续决议。
 
 ---
 
@@ -115,7 +123,7 @@ langchain 1.4.1 ─┬─ langchain-core 1.6.3 ─── langsmith 0.12.6  ★
 | freegraph 依赖 `langgraph` | ✅ 含 | ✗ 不满足 §2.6 约束 2 |
 | freegraph 依赖 `langchain-core` | ✅ 含 | ✗ 不满足 |
 | freegraph 依赖 `langchain` | ✅ 含 | ✗ 不满足 |
-| **freegraph 零第三方运行时依赖**（仅 stdlib + `typing-extensions`） | ❌ 不含 | ✓ **唯一可行路径** |
+| **freegraph 零第三方运行时依赖**（~~仅 stdlib + `typing-extensions`~~ → **现为仅 stdlib，零第三方包**） | ❌ 不含 | ✓ **唯一可行路径** |
 
 ### 3.1.1 【Q9 补充，2026-11-03】前端资产与「本地 server ≠ Studio」边界
 
@@ -173,6 +181,13 @@ langchain 1.4.1 ─┬─ langchain-core 1.6.3 ─── langsmith 0.12.6  ★
 
 - 判定：`pip show freegraph` / `pipdeptree` 输出中**不得出现** `langsmith`、`langchain`、`langchain-core`、`langchain-classic`、`langgraph*`。
 - freegraph 应做到：**运行时依赖仅 `typing-extensions`**（`Annotated` 支持，`TypedDict` 在 3.12 已入 stdlib 但 `typing_extensions` 更稳）；`pydantic` 仅在需要 pydantic 状态 schema 时作为**可选 extra**。
+  > ⚠️ **【后续决议 2026-11-05 · 宪法修订记录 v1.2.0】本条建议已被取代**：
+  > 必装依赖改为 **「无」**（基础安装零第三方包），最低 Python 版本抬至 **3.11**。
+  > **同时勘误本条的事实部分**：`typing.Annotated` 自 **3.9** 起、
+  > `typing.TypedDict` 自 **3.8** 起即为标准库成员（**都不是 3.12**）；
+  > 让 `typing_extensions` 真正有价值的是 `typing.Self`（**3.11** 才进标准库）——
+  > 原文「`TypedDict` 在 3.12 已入 stdlib」的表述**不准确**。
+  > 依据见 `specs/001-p01-contracts-core/research.md` **D-21**。
 - **绝对禁止**：依赖 `langchain-core`——它是 `langsmith` 的唯一入口。
 
 **配置层（哪些环境变量会触发外呼）**
@@ -246,11 +261,38 @@ langchain 1.4.1 ─┬─ langchain-core 1.6.3 ─── langsmith 0.12.6  ★
 
 | 类别 | 包 |
 |---|---|
-| ✅ **白名单（运行时必装）** | `typing-extensions`（唯一建议的必装依赖） |
+| ⚠️ **白名单（运行时必装）** | ~~`typing-extensions`（唯一建议的必装依赖）~~ → **已改为「无」**（见下方后续决议） |
 | 🟡 **白名单（可选 extra）** | `pydantic`（`[pydantic]` extra，用于 pydantic 状态 schema）；`ormsgpack`（`[checkpoint]` extra，序列化） |
 | 🔴 **黑名单（硬禁止）** | `langsmith`、`langchain`、`langchain-core`、`langchain-classic`、`langchain-protocol`、`langgraph`、`langgraph-prebuilt`、`langgraph-checkpoint*`、`langgraph-store*`、`langgraph-sdk`、`langgraph-api`、`langgraph-cli`、`langgraph-runtime-inmem`、`deepagents` |
 | 🔴 **黑名单（可选 extra 也不允许）** | `langsmith[otel]`、`langchain-anthropic`、`langchain-openai` 等 provider 包 —— 这些会把 `langchain-core` 拉回来 |
+>
 
+> **【后续决议 2026-11-05 · 宪法修订记录 v1.2.0】上表「白名单（运行时必装）」已失效。**
+>
+> **变更**：必装运行时依赖由 `typing-extensions` 改为 **「无」** —— 基础安装的依赖闭包
+> **MUST 为空集**（`dependencies = []`）。可选 extra（`pydantic` / `ormsgpack` /
+> `opentelemetry-*` / mermaid 相关）**不变**；**黑名单各行完全不变**。
+>
+> **为什么**：把 `typing_extensions` 列为必装的原始理由（见 §3.3.1）是
+> 「`Annotated` 支持，`TypedDict` 在 3.12 已入 stdlib 但 `typing_extensions` 更稳」——
+> **该理由经实测不成立**：`typing.Annotated` 自 **3.9** 起、`typing.TypedDict` 自 **3.8** 起
+> 均为标准库成员（**都不是 3.12**）。真正让 `typing_extensions` 有价值的是
+> `typing.Self`（**3.11** 才进标准库）。故最低 Python 版本抬至 **3.11** 后，
+> `Self` / `NotRequired` / `Required` / `TypeVarTuple` / `Unpack` / `LiteralString` /
+> `dataclass_transform` 全部在标准库内，`typing_extensions` **不再需要**。
+>
+> **依据**：《项目宪法》Governance · 修订记录 **v1.2.0** ·
+> `specs/001-p01-contracts-core/research.md` **D-21** ·
+> `specs/001-p01-contracts-core/spec.md` Clarifications「Session 2026-11-05（实现阶段 ·
+> 依赖剥离与最低版本上调）」· 实测证据：CPython 3.10.21 的 `typing` 构件清单
+> （`Self` / `NotRequired` / `Required` / `TypeVarTuple` / `Unpack` / `LiteralString` /
+> `dataclass_transform` / `assert_never` / `TypeAliasType` / `override` / `ReadOnly` /
+> `TypeIs` **全部不存在**；`TypeAlias` / `Protocol` / `TypeGuard` / `ParamSpec` /
+> `Annotated` / `Final` / `TypeVar` / `Concatenate` / `Generic` / `NamedTuple` **存在**）。
+>
+> **本报告其余内容（上游实跑取证、包级清单、运行时能力矩阵、付费墙触发点、
+> `target.py` 逐项裁定、黑名单、配置层与网络层）全部仍然有效** ——
+> 本次只推翻「必装依赖清单」这一条建议，不推翻任何事实取证。
 #### 配置层
 
 | 类别 | 环境变量 |
@@ -293,7 +335,10 @@ langchain 1.4.1 ─┬─ langchain-core 1.6.3 ─── langsmith 0.12.6  ★
 
 ## 5. 对 freegraph 的直接启示（可执行）
 
-1. **freegraph 内核必须零第三方运行时依赖（最多 `typing-extensions`）**，并把「依赖树无 `langsmith`/`langchain*`」做成 CI 断言（用 `importlib.metadata.requires('freegraph')` 递归展开检查）。这是 §2.6 约束 2 唯一可自动验证的形式。
+1. **freegraph 内核必须零第三方运行时依赖（最多 `typing-extensions`）**，并把「依赖树无 `langsmith`/`langchain*`」做成 CI 断言（用 `importlib.metadata.requires('freegraph')` 递归展开检查）。
+   > ⚠️ **【后续决议 2026-11-05】**「最多 `typing-extensions`」→ **现为零第三方包**
+   > （`typing-extensions` 已剥离，最低 Python 抬至 3.11，宪法 v1.2.0）；
+   > **CI 断言照做不误**，且判据由「无 langsmith 家族」**加强**为「**基础安装闭包为空集**」。这是 §2.6 约束 2 唯一可自动验证的形式。
 2. **freegraph 必须自己实现图结构导出**：`get_graph()` 需返回自有 `Graph` 对象，提供 `nodes` / `edges` / `draw_mermaid()`。参照实现规模：`langchain_core/runnables/graph.py` 的 `draw_mermaid` + `graph_mermaid.py` 约 300 行——**必须独立重写而非复制**（MIT 允许复制，但会带来 `langchain-core` 的风格与依赖包袱；且 Q7 商标/版权议题）。
 3. **`draw_mermaid_png()` 必须是可选插件且默认关闭**：内核只保证 `draw_mermaid()` 纯本地成功。给 `target.py` 的迁移说明写清两选一：`draw_mermaid_png()` 在离线环境返回占位 PNG（不抛错），或改用 `draw_mermaid()` 写入 `.mmd` 文件后用 mermaid-cli 渲染。
 4. **状态 schema 必须以「字典 + `Annotated` 归约器」为契约**，节点入参是 `dict`（不是对象），节点返回**部分** dict，合并规则 = 逐键调用 reducer（无 reducer 则覆盖）。这条是 freegraph 与 freechain 之间的核心语义契约（详见 Q8）。
