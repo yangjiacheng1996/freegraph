@@ -1,64 +1,12 @@
 <!--
-=== SYNC IMPACT REPORT (temporary scratch material — remove before committing) ===
+本文件是 freegraph 的**项目宪法（生效副本）**。
 
-Constitution update: 0.0.0（未发布草案）-> 0.0.1（项目更名 + 原则 III 验收 API 名同步 + 原则 V 门禁 4 方法措辞修正）
+版本历史，以及每次修订的「变更了什么 / 为什么 / 受影响的原则与特性 / 迁移方案」，
+见文末 **Governance · 修订记录**；待决与已决事项见 `harness/proposals/立项书.md` §12。
 
-- Version change: 0.0.0（未发布草案）-> 0.0.1
-- 版本号口径：**项目尚未开工（32 个 Phase 全部未开始），宪法未经发起者批准**
-  （Ratified 仍为 TODO），因此保持 **`0.0.x` 预发布编号**，不标 1.x —— 1.x 会误导读者
-  认为「已批准且已定版」。首次经发起者批准时定版为 **1.0.0**。
-- Bump type: **PRE-1.0 修订（0.0.0 -> 0.0.1）**。本次改动含「对既有原则的实质性扩充」
-  （原则 III 的具体验收 API 名随项目更名而变），按 MAJOR/MINOR/PATCH 策略本应记 MINOR；
-  但因**尚无任何已实现特性、宪法亦未批准**，故按 0.x 预发布语义记为 0.0.1，
-  待批准时统一定版。**原则 III 的实质要求不变** —— 仍为「只换包名、不改脚本」的机械替换验收。
-- 变更了什么：
-  1. 项目名 PROJECT_NAME：opengraph -> freegraph；姊妹项目 openchain -> freechain
-     （全文 token 同步替换：opengraph×45 / openchain×13 处）。
-  2. 原则 III 的具体 API 名：`from opengraph.graph import ...` ->
-     `from freegraph.graph import ...`；验收基准路径不变（`harness/demo/target.py`）。
-  3. 原则 VII / 项目定位 / 质量门禁 / 目录约定中的项目名同步。
-  4. 原则 V 门禁 4 的方法性措辞：socket 夹具「拦截」->「只观测不阻断 + 按发起方归因」
-     （零出站证据改为「由框架自身发起的出站数 = 0」，不阻断用户代码出网）。
-- 为什么：
-  - `opengraph`（Erik Rivera，"A module to parse the Open Graph Protocol" 0.5）与
-    `openchain`（"Openchain Library" 0.1.0rc3）在 PyPI 上均已被**永久占用**，
-    不可转让、不可复用（实测 2026-11-03，`https://pypi.org/pypi/opengraph/json`、
-    `https://pypi.org/pypi/openchain/json`）。
-  - `freegraph` **已于 2026-11-04 由本项目在 PyPI 占位发布 v0.0.1**
-    （owner = PyPI 账号 `yangjiacheng1996`，发行名 = 导入名 = `freegraph`；
-    发布通道 = GitHub Actions Trusted Publishing（OIDC），无需 API token / 密码）；
-  - `freechain` **亦已于 2026-11-04 由同一账号占位发布 v0.0.1**
-    （依赖 `freegraph>=0.0.1`；两个 PyPI 名称均已锁定）；
-    `github.com/freegraph` 与 `github.com/freechain` 已由发起者注册。
-  - 原则 V 的方法性措辞修正理由：opengraph/freegraph 是**函数胶水 / 工作流框架**，
-    承诺「自己不会偷偷联网」而非「你的程序不许联网」；拦截式守卫会阻断用户节点的
-    正常出网，属反直觉设计（见立项书 §10 的 R11）。
-- 受影响的原则与特性：
-  - 原则 III（验收契约优先）：仅具体 API 名变化，实质要求不变。
-  - 原则 V（人工验收是最终验收标准）：门禁 4 的**方法**变化，「MUST 有零出站的可判定
-    证据」这一 Requirement 不变；原则 I 的实质要求（自身零出站、断网可用）不变。
-  - 原则 VII（职责边界与内核契约）：项目名与姊妹项目名变化；C1-C26 契约清单本身不变。
-  - 原则 I / II / IV / VI / VIII / IX / X：不变（红线与实现无关）。
-  - 特性：**32 个 Phase 均未开工**，无已实现特性需要迁移。
-- 迁移方案：
-  1. `harness/demo/target.py` 第 103 行 import 机械替换（本次唯一的脚本改动，
-     属「只换包名」性质的**平移**，非削弱）；文件头新增来源与更名记录说明。
-  2. 全部调研报告 / 提案 / 指南 / 笔记中的项目名 token 同步替换；**原始结论、事实、
-     证据、数字一律未改动**（仅项目标识 token）。
-  3. 立项书新增 §12.1「已关闭事项」，记录 D10（发行名 / 导入名 / 项目名）决议。
-  4. `harness/proposals/更名与迁移说明.md` 记录完整迁移清单与取证。
-- Deferred items / follow-up TODOs:
-  - TODO(RATIFICATION_DATE): 初始宪法尚未由发起者批准；批准日填实（ISO YYYY-MM-DD）。
-  - 原则 VII 的三项契约缺口（本地 trace 存储与查询 / span 关联键 / 事件通道标识）
-    仍待按 Governance 修订流程增补（立项书 §5.8.3）。
-  - 立项书评审 1 的 H / M / L 级条目尚未逐条处置。
-- Notes:
-  - No bracket tokens of the form ALL_CAPS_IDENTIFIER remain.
-  - Cited research artefacts verified present: harness/reports/ Q1-Q9 + 00 overview (10 份)；
-    Q8 C1-C26 契约表与立项书 §5.3 已对齐（评审 1 的 C1 已处置）。
-  - `harness/docs/`（官方文档镜像，318 篇）保持只读，未做任何改动。
-
-=== END SYNC IMPACT REPORT -->
+**2026-11-05 定版为 1.0.0**：经发起者批准，原则 V 门禁 4 的措辞（零出站的观测口径）
+与原则 VII 的 MINOR 修订（契约清单权威范围由 C1–C26 扩为 **C1–C27** + 标识与关联键约定）
+一并生效。
 -->
 
 # freegraph Constitution
@@ -153,7 +101,11 @@ LangGraph 对 `langchain_core` 的 135 处引用只集中在 4 个接缝（`Runn
 **必须可见、可查、可回溯**。
 
 - 图运行时的每一次节点执行都必须产生可观测记录，**MUST** 包含：节点名、输入状态、输出状态、耗时、错误。
-- 中断与恢复（interrupt / resume）、状态回溯（time-travel）**MUST** 可用。
+- 中断与恢复（interrupt / resume）、状态回溯（time-travel）**MUST** 可用；
+  **恢复 MUST 挂 checkpointer**——**MUST NOT** 提供「不挂 checkpointer 也能恢复」的内存态
+  旁路（内存态恢复不可靠；`interrupt` 的主场景是 time travel，须跨长时间 / 跨重启可恢复；
+  SQLite 是智能体开发的事实标准，故必须采用 checkpointer）。未挂 checkpointer 时调用恢复
+  **MUST** 抛明确异常。
 - 可观测协议**MUST** 采用 OpenTelemetry 兼容的追踪协议与语义约定（semantic conventions），
   以便复用现成面板，而不是自造私有格式。属性命名**SHOULD** 对齐 OTel GenAI semconv（`gen_ai.*`）。
 - 可视化层**MUST NOT** 阻断执行；可视化不可用时，核心执行**MUST** 继续。
@@ -188,8 +140,15 @@ LangGraph 对 `langchain_core` 的 135 处引用只集中在 4 个接缝（`Runn
   1. **fake / 伪模型**跑一遍（CI 可自动化，用于回归）；
   2. **真实模型**再跑一遍（人工验收，用于确认端到端真实行为）。
 - 上述两次验证**MUST** 在**不设任何 `LANGSMITH_*` 环境变量**的干净环境下进行，
-  **并且 MUST** 有「零出站」的可判定证据：**SHOULD** 采用 socket guard 夹具
-  （拦截所有非 localhost 的 `socket.connect`，断言拦截列表为空）——Q3 调研已验证该方法可行且可复用为 CI 断言。
+  **并且 MUST** 有「零出站」的可判定证据：**SHOULD** 采用 **socket 监测夹具**——
+  **只观测、不阻断**（记录目标与调用栈后**放行**所有连接），**按调用栈归因**区分
+  「**框架出站**」（调用栈出现 `freegraph/` 包路径）与「**用户出站**」（模型调用、节点自建
+  HTTP 客户端等），**只对前者断言 = 0**；**用户出站记录在案但不判失败**，人工轮允许出现
+  「模型厂商端点」一条并**在验证记录中写明**——Q3 调研已验证该方法可行且可复用为 CI 断言。
+  > **口径来源**：立项书 §12 **D12**（2026-11-05 批准）+ §9.2「框架零出站的验证方法」。
+  > **理由**：freegraph 是**函数胶水 / 工作流框架**，承诺的是「自己不会偷偷联网」，
+  > **不是**「你的程序不许联网」；拦截式守卫会阻断用户节点的正常出网，属反直觉设计
+  > （立项书 §10 的 R11）。原则 I「自身零出站、断网可用」的实质要求**不变**。
 
 **Rationale**：本项目要替代的是「跑起来对不对」这件事，自动断言无法覆盖语义正确性；
 而 LangSmith 式的诊断能力恰恰依赖真实运行轨迹，只测不跑等于自欺。
@@ -226,14 +185,34 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
 
 - freegraph **MUST NOT** 实现 `init_chat_model`、`@tool` 装饰器、消息体系、`create_agent` 等
   LangChain 层能力；只需**能承载**它们（鸭子类型）。
+- freegraph v1 **MUST NOT** 提供**跨会话 / 跨图**的长期记忆能力（`Store`）——
+  **图 = 一个进程**（定位推导，见「项目定位与范围 · 定位补充」）。契约 **C20** 仍**冻结**
+  （它是 freechain 的设计输入），**实现后补**（v2）；`compile(store=...)` 关键字仍被接受，
+  但 v1 **背后无实现**——文档 **MUST** 显式写明，不得让用户误以为传入即生效。
 - freegraph **MUST NOT** 做多语言 / 多模型 provider 矩阵。
 - freegraph **MUST NOT** 以「与 LangChain 共存」为验收目标。
 - 跨仓库接口**MUST** 对齐「内核最小契约」，freegraph 对上（freechain）承诺接口、
-  对下（用户 / 脚本）承诺语义。**契约清单以 `harness/reports/Q8-图运行时最小契约.md` 的 C1–C26 为唯一权威**
+  对下（用户 / 脚本）承诺语义。**契约清单以 `harness/reports/Q8-图运行时最小契约.md` 的 C1–C27 为唯一权威**
   （含：状态 schema 与归约器机制、稀疏状态、节点签名与部分状态合并、路由函数与 `path_map` 双形态、
   起止标记、编译与执行、streaming mode、图结构导出、mermaid 导出与 PNG 渲染、`Command` / `interrupt` /
-  `Send`、checkpointer 与 store 接口、`context` 通道、运行配置、可观测挂钩、当前 span 上下文、节点命名别名、子图）。
+  `Send`、checkpointer 与 store 接口、`context` 通道、运行配置、可观测挂钩、当前 span 上下文、节点命名别名、
+  子图、**本地 trace 存储与查询**）。
   **MUST** 在 freechain 开工前冻结该清单，并**MUST NOT** 擅自增删条目。
+- **标识与关联键约定（2026-11-05 修订，与 C1–C27 一并冻结）**：
+  - `thread_id` = **会话**标识，由 `RunConfig` 承载；`run_id` = **单次运行**标识，
+    由运行时在每次 `invoke` / `stream` 开始时生成，**MUST NOT 可由用户指定或覆盖**
+    （**用户不设置**；`run_id` **不进** `RunConfig`——它是运行期产物而非配置项；
+    用户自带标识需求用 `thread_id` / `metadata` / `tags` 承担）；
+  - **一次运行一个 `run_id`**：该次运行的所有节点、工具、模型调用与事件共享它
+    （把每个节点视作一个微服务，则 `run_id` 是**链路监控的唯一通行证**，
+    等价于分布式追踪的 trace id）；
+  - **`run_id` MUST 可查**：它是本地 trace 查询 API（C27）的过滤器之一，
+    使「精确回查某一次运行」成为可能；
+  - **每个 span MUST 带** `thread_id` / `run_id` / 节点名 / `checkpoint_id`
+    （挂接 checkpointer 时有值，否则为空）；**缺 `run_id` 的 span 视为实现缺陷**；
+  - `stream()` 产出的事件与 `TraceSink` 收到的 span **共享同一 `run_id` / `thread_id`**，
+    MAY 按 id 合并为一条时间线。
+  → **违反上述任一条的 PR 不得合入**（这是 C27 与将来的 Studio 子包得以「不改内核」实现的前提）。
 - **freegraph 明确不做的 LangSmith 能力（Q1 / Q2 逐档裁定后固化，理由分三类）**：
   - **① 付费墙内（Plus / Enterprise）**：Deployment 的托管与水平扩缩（1-Click Deploy、Dedicated、
     Scale-to-Zero、Assistants API、Cron、鉴权）、**Engine**、Tuned Evaluators、Insights、Bulk data export
@@ -317,6 +296,16 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
   「行为等价 / 部分等价 / 不支持」的**兼容矩阵**，并注明「兼容意图为互操作，**不构成 affiliation**」。
 - **第三方归属**：任何引入的第三方代码**MUST** 进入 `THIRD_PARTY_NOTICES`（或同类清单），
   保留其原始版权与许可声明。
+- **源文件署名头**：**每一个源文件**（`src/` 下的包代码，以及仓库内的脚本）**MUST** 在文件
+  顶部携带署名头，形如：
+  `# Copyright (c) 2026 杨家成 · MIT License · https://github.com/yangjiacheng1996/freegraph`
+  （有 shebang 的脚本放在 shebang **之后**；模块 docstring 仍**MUST** 是首个语句）。
+  例外：`py.typed`（PEP 561 要求为空）与 `harness/demo/target.py`（**只读基准**，
+  宪法原则 III 禁止修改）。
+  **Rationale**：本项目是**个人作品集 / 名片**（见「项目定位与范围 · 项目性质」），
+  许可证为 **MIT**——MIT 允许**整份或单个文件被复制**（这正是采纳面最大的原因），
+  而**复制不会带走 `LICENSE`**。因此署名必须**随每个文件一起流动**，
+  否则被单独 copy 的那一段代码就与作者无关了——**署名头就是 MIT 的「名片」兑现机制**。
 
 **Rationale**：API 名称兼容在著作权上通常不侵权（版权保护的是表达，不保护接口与方法论），
 这是开源生态互操作的通行做法。但**「宣称兼容」与「暗示 affiliation」是两回事**——
@@ -324,7 +313,8 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
 这一义务的落地载体。
 
 **Requirement**：**MUST** 在每个引入新依赖、或扩展 API 兼容面的特性中更新上述两份清单；
-**MUST NOT** 在清单缺项的情况下宣布该特性完成。
+**MUST NOT** 在清单缺项的情况下宣布该特性完成；**MUST** 为新增的每一个源文件加上署名头
+（静态检查由 F3P1 的 CI 门禁落地，见 `harness/features/F3P1_项目脚手架与CI门禁.md`）。
 
 ## 项目定位与范围（Additional Context）
 
@@ -354,6 +344,30 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
 |---|---|---|
 | **freegraph**（本仓库） | 图运行内核：状态模型 / 节点 / 边与路由 / 运行时 / 可观测 | 零 LangChain、零 LangSmith 依赖 |
 | **freechain**（后续项目） | 替代 LangChain 的上层：模型抽象、工具、消息、agent 构造 | 基于 freegraph 构建 |
+
+### 定位补充：freegraph 是**通用图框架**，不止于智能体开发（2026-11-05 决议）
+
+> freegraph 的初衷是把它建成一个**通用图框架**——目标场景除**智能体开发**外，还包括
+> **RPA 自动化**、**脚本编排**（在一定程度上**替代 `main` 函数**）、
+> **可视化工作流编排**。
+>
+> **由此得出的一条范围边界（决定性）**：这类场景的共同前提是「**图 = 一个进程**」——
+> 因此**跨会话 / 跨图**的能力（如长期记忆 `Store`）**不属于 v1**，属 v2 预备。
+> 该边界不是「先不做再说」的临时取舍，而是**定位推导出的硬边界**：
+> 违反它会引入进程间的状态语义（谁持有、怎么过期、如何跨进程可见），复杂度陡增且
+> **违背「通用图框架 / 单进程」的初衷**。
+>
+> **注**：本条是**定位补充**，**不改变**两条验收目标（G1 固定脚本可跑 / G2 本地可诊断）。
+>
+> **项目性质（2026-11-05 补充）**：本项目是**个人开源项目**——同时是**作品集 / 名片 /
+> 能力证明**（个人项目在求职与商务合作中的展示物），**非以盈利为直接目的**。
+> 该性质直接决定了**许可证选择**：**MIT**（D3 已决，2026-11-05）——MIT 的**单向兼容性**
+> 使本项目的代码可被嵌入**任意**许可族的下游项目，最大化采纳面；而 Apache-2.0 的
+> 额外条款（专利授权 / 商标隔离 / 贡献者再授权 / NOTICE / §9 收费承接支持）**对本项目
+> 均属空条款**（无专利组合、无自有商标资产、无外部贡献者、原则 X 已用
+> `THIRD_PARTY_NOTICES` 覆盖归属义务、明确不做 SaaS 变现）。
+> 由此也意味着：**本仓库本身（宪法 / 调研报告 / 验收脚本 / Phase 规格）就是作品集主体**——
+> 「可审计的契约」与「充分的人工验证」既是质量底线，也是能力证明。
 
 ### 非目标
 
@@ -389,7 +403,7 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
 | `harness/prompts/` | 提示词（调研任务书、宪法等） |
 | `harness/reports/` | 调研报告（每题一份 + 汇总报告） |
 | `harness/proposals/` | 设计提案（调研结论转化的规格来源） |
-| `harness/features/<feature>/` | 每个特性的人工验证记录 |
+| `harness/features/` | **Phase 提示词初稿**（`F<n>P<m>_*.md`，每 Phase 一份 `/speckit.specify` 提示词）+ 导航文件 `README.md`（开发顺序）；其下 `<feature>/manual-verification.md` = 每个特性的人工验证记录 |
 | `harness/demo/target.py` | MVP 验收契约（**只读**） |
 | `harness/docs/` | 同步下来的官方文档快照（**只读**） |
 | `THIRD_PARTY_NOTICES` | 第三方代码归属与许可声明清单（原则 X） |
@@ -430,7 +444,8 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
 3. **契约门禁**：`harness/demo/target.py` 原样可跑（原则 III），
    **MUST** 包含 C4（稀疏状态）与 C8（条件边 fresh 状态）两条独立回归测试（原则 II）。
 4. **自动门禁**：CI 全绿，且包含 fake 模型跑通验收基线的一轮（原则 V），
-   **SHOULD** 附带 socket guard 的零出站断言（原则 V）。
+   **SHOULD** 附带 socket 监测夹具的零出站断言（**只观测不阻断 + 按发起方归因**，
+   断言「框架出站 = 0」，原则 V + 立项书 §9.2）。
 5. **人工门禁**：`harness/features/<feature>/` 下有完整人工验证记录，含真实模型一轮（原则 V）。
 6. **证据门禁**：新增结论均有来源标记，术语准确（原则 VIII）。
 7. **文档合规门禁**：`THIRD_PARTY_NOTICES` 已登记、API 兼容矩阵已更新（原则 X）。
@@ -476,18 +491,20 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
   - 新增原则 IX（许可证与商标红线，NON-NEGOTIABLE）与原则 X（文档合规义务，门禁项）
     ——两者按严重度拆分：只有不可逆的法律红线（依赖许可证白名单 / Elastic-2.0 组件 / 第三方商标）
     标 NON-NEGOTIABLE；可补正的文档登记义务（归属清单 / 兼容矩阵）单列为门禁项；
-  - 原则 IV 选定路线 B；原则 VII 冻结 C1–C26 并固化「不做」清单；
+  - 原则 IV 选定路线 B；原则 VII 冻结 C1–C27 并固化「不做」清单（2026-11-05 由 C1–C26 扩为 C1–C27）；
   - 原则 III 补入 PNG 离线路径与 7 项同名清单；原则 VIII 补入 DOM 级解析纪律。
 - **新调研的效力**：后续新增调研结论若与本宪法冲突，**MUST** 先走修订流程，
   **MUST NOT** 以「调研报告更新了」为由绕过宪法。
 - **修订记录**：
   - **v0.0.1（2026-11-03）**｜项目更名 `opengraph` → **`freegraph`**、姊妹项目
     `openchain` → **`freechain`**（起因：两个名称在 PyPI 上均被永久占用，不可转让复用；
-    实测取证见文件头 SYNC IMPACT REPORT）。同时修订：① 原则 III 的具体验收 API 名
+    实测取证见 `harness/proposals/更名与迁移说明.md`）。同时修订：① 原则 III 的具体验收 API 名
     （`from freegraph.graph import ...`）；② 原则 V 门禁 4 的方法性措辞
     （socket 夹具改为「只观测不阻断 + 按发起方归因」，零出站证据改为「框架自身出站数 = 0」，
     不阻断用户代码出网）。**原则 I–X 的实质要求均未改变**，仅 API 名与方法措辞变化；
-    迁移方案与受影响特性见文件头 SYNC IMPACT REPORT 与 `harness/proposals/更名与迁移说明.md`。
+    迁移方案与受影响特性见 `harness/proposals/更名与迁移说明.md`。
+    （说明：原「文件头 SYNC IMPACT REPORT」临时块已随 **v1.0.0** 移除——它属未提交前的草稿材料，
+    且含已失效的描述（「立项书 §12.1 已关闭事项」「评审 1 未处置」）；修订记录以本节为准。）
   - **v0.0.2（2026-11-04）**｜**新增「发布门禁（Release Gate）」章节**（新增章节，
     按 0.x 预发布语义记为 **0.0.2**；MAJOR/MINOR 策略下本应记 MINOR，但项目未开工、
     宪法未批准，故按 0.x 语义记 0.0.2，待批准时统一定版）。
@@ -507,11 +524,85 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
       + `.github/workflows/publish.yml` 在 `uv publish` 之前插入该门禁
       + `pyproject.toml` 的 `only-include` / `exclude` 作为前置双保险。
 
+  - **v1.0.0（2026-11-05）｜首次批准并定版**——本版由**立项书 §12 的 D11 与 D12** 触发，
+    两项均为「M0 前置」（不阻塞 F1P1 的编码，但阻塞 F2P1 契约冻结与 F3P1 CI 门禁生效），
+    现已由发起者**批准并落地**。
+    - **变更了什么**（两处原则修订 + 一处 housekeeping）：
+      1. **原则 VII 的 MINOR 修订**：契约清单的权威范围由 **C1–C26 扩为 C1–C27**
+         （新增 **C27 = 本地 trace 存储与查询**：写入 / 查询（按 `thread_id` / 时间 / 节点名，
+         可组合）/ **请求与返回结构 MUST JSON 可序列化** / 存储与查询同一协议且后端可替换 /
+         表结构与文件格式属内部实现细节）；并**补齐标识与关联键约定**——
+         `thread_id`（会话，`RunConfig` 承载）与 `run_id`（单次运行，运行时生成，用户不设置）
+         的职责划分、**每个 span MUST 带** `thread_id` / `run_id` / 节点名 / `checkpoint_id`
+         （缺 `run_id` 即为实现缺陷）、`stream()` 事件与 `TraceSink` 的 span **共享同一
+         `run_id` / `thread_id`**。
+      2. **原则 V 的方法性措辞（PATCH，= D12）**：零出站证据的实现口径由
+         「socket guard **拦截**所有非 localhost 的 `socket.connect`，断言拦截列表为空」
+         改为「socket **监测**夹具**只观测不阻断 + 按发起方归因**」——记录目标与调用栈后
+         **放行**全部连接；调用栈含 `freegraph/` 包路径判为「框架出站」，否则判为「用户出站」；
+         **只对前者断言 = 0**，用户出站**记录在案但不判失败**（人工轮允许「模型厂商端点」一条
+         并须写明）。质量门禁第 4 项同步。
+      3. **housekeeping**：移除文件头的临时「SYNC IMPACT REPORT」草稿块（其内容含已失效描述）；
+         「演进触发」条目的契约范围同步为 C1–C27；目录约定补入 `harness/features/`
+         （Phase 提示词初稿 + 人工验证记录）。
+    - **为什么**：① **C27 缺位**会让本地 trace 的存储与查询**无契约可依**，
+      而它是 v1「三件套」之第 ② 件（trace 时间线 / 详情）的能力载体，且是将来 Studio 子包
+      「只通过查询 API 取数、不直连 SQLite 表」这一边界的前提；**span 缺关联键**与
+      **两条事件通道无共享标识**会让 trace 树无法与图结构 / checkpoint 历史对齐，
+      届时 Studio 子包必须**改内核**才能补——三条缺口因此合并为 **D11** 一次修订。
+      ② 零出站的「拦截式守卫」与 freegraph 的产品定位冲突（它是函数胶水 / 工作流框架，
+      承诺「自己不会偷偷联网」，而非「你的程序不许联网」）；拦截式实现会阻断用户节点里的
+      正常外网访问，属反直觉设计（立项书 §10 的 **R11**），故改为只观测 + 归因。
+    - **受影响的原则与特性**：**原则 I–X 的实质要求均未改变**——
+      原则 I「自身零出站、断网可用」不变；原则 V「MUST 有零出站的可判定证据」不变，
+      仅**方法**由「拦截」改为「只观测 + 按发起方归因」；原则 VII「契约清单以 Q8 为唯一权威、
+      MUST NOT 擅自增删条目」不变，本次是**经批准**的增补（Q8 §3.4.1 + 立项书 §5.3.1）。
+      受影响特性：M0 的 **F2P1**（契约冻结前置解除）、**F3P1**（CI 门禁口径确定）、
+      M3 的 **F8P2 / F18P1 / F19P1 / F20P1 / F20P2**（须实现 C22 / C23 字段约定与 C27）。
+    - **迁移方案**：**无破坏性变更**——v1 尚未开工，**无已实现特性需要迁移**；
+      C1–C26 的语义与编号**未变**（仅增补 C27 + 补齐字段约定）；已冻结的类型形状
+      （`RunConfig` 四字段、`StateSnapshot` 七字段等）**不变**（`run_id` **不进** `RunConfig`，
+      由运行时生成）。落地物：Q8 §3.4.1 · 立项书 §5.3 / §5.3.1 / §5.8.3 · 立项书 §12 的
+      D11 / D12 状态与 §13.3 签署 · 本宪法原则 V / 原则 VII 正文与本条记录。
+
+  - **v1.1.0（2026-11-05）｜MINOR —— 砍掉 `Store`（F17P1），并补入「通用图框架」定位**
+    - **变更了什么**：① **项目定位**新增「定位补充」小节——freegraph 是**通用图框架**
+      （不止智能体开发，还包括 **RPA 自动化**、**脚本编排**、在一定程度上**替代 `main` 函数**、
+      **可视化工作流编排**），并据此确立「**图 = 一个进程**」这条范围边界；
+      ② **原则 VII** 新增一条：`v1` **MUST NOT** 提供**跨会话 / 跨图**的长期记忆（`Store`）
+      ——**F17 / F17P1 已从 v1 移除**（合计口径由 25 Feature / 32 Phase / 31,520 行 / 96 人日
+      变为 **24 Feature / 31 Phase / 30,600 行 / 93 人日**），契约 **C20 仍冻结**（实现后补）；
+      ③ `compile(store=...)` 关键字仍被接受但 v1 **背后无实现**，文档 MUST 显式写明；
+      ④ **项目性质补充**：明确本项目是**个人开源项目**（作品集 / 名片 / 能力证明，
+      非以盈利为直接目的），并据此锁定**许可证 = MIT**（D3，2026-11-05）——
+      MIT 的**单向兼容性**最大化下游采纳面；Apache-2.0 的额外条款对本项目均为空条款。
+    - **为什么**：发起者 2026-11-05 决议——Store 是**跨会话 / 跨图**能力，而 freegraph 的初衷
+      是做成**通用图框架**（智能体 / RPA / 脚本 / 可视化工作流编排），这类场景的共同前提是
+      「**图 = 一个进程**」；跨图能力**太复杂，且违背初衷** → 砍掉。这是一条**定位推导出的
+      硬边界**，不是「先不做再说」的临时取舍。附带收益：省 3 人日 / 920 行。
+    - **受影响的原则与特性**：**原则 I–X 的实质要求均未改变**——原则 VII 原本就要求
+      「MUST NOT 擅自增删契约条目」，本次是**经批准的**范围收缩（C20 保留、不删不改）；
+      原则 IV（四类诊断能力）不受影响（Store 不在其依赖链上）；原则 IX / X 不受影响。
+      受影响特性：立项书 §12 **D5**（Store 与 Studio UI 一并归 v2）、§4.6、§5.2（删 F17P1 行）、
+      §6 / §7（totals：94 天 / 93,000 元 / 186,000 元）。
+    - **迁移方案**：**无破坏性变更**——v1 尚未开工，**无已实现特性需要迁移**；C1–C27 的
+      语义与编号**未变**（仅 C20 的 v1 归属标为「已砍 / 实现后补」）；
+      `harness/features/F17P1_*.md` 初稿已删除，`harness/features/README.md` 的行序表
+      与里程碑 / 关键路径视图已同步为 31 Phase。
+
 > **2026-11-04 补充（不影响版本号）**：`freegraph` 已在 PyPI 上占位发布 **v0.0.1**
 > （owner = PyPI 账号 `yangjiacheng1996`，发行名 = 导入名 = `freegraph`；
 > 发布通道 = GitHub Actions Trusted Publishing（OIDC），工作流
 > `.github/workflows/publish.yml`，无需 API token / 密码）。该版本**不含任何内核实现**，
 > 仅用于锁定名称；`freechain` 亦已于同日占位发布 v0.0.1。**规范性正文与原则 I–X 全部未改动**，
 > 故**不 bump 版本号**（Version 仍为 0.0.1，Last Amended 仍为 2026-11-03）。
+>
+> **2026-11-05 补充（仍为占位版，bump 到 v0.0.2）**：`freegraph` 发布 **v0.0.2**——
+> 目的有二：① **实测「发行产物纯度门禁」**（发布门禁 Release Gate 自 v0.0.2 起首次在真实
+> 发布链路上执行；本地已双向验证：污染产物 → 门禁失败并拒绝发布；干净产物 → 通过）；
+> ② **落实原则 X 的「源文件署名头」义务**——每个源文件带
+> `Copyright (c) 2026 杨家成 · MIT License · https://github.com/yangjiacheng1996/freegraph`。
+> 该版本**仍不含任何内核实现**，仅用于锁定名称 + 验证发布链路。**原则 I–X 全部未改动**
+> （版本号属发行元数据，非规范性正文）。
 
-**Version**: 0.0.2 | **Ratified**: TODO(RATIFICATION_DATE): 宪法待发起者批准，批准日填实（ISO YYYY-MM-DD）并定版为 1.0.0 | **Last Amended**: 2026-11-04
+**Version**: 1.1.0 | **Ratified**: 2026-11-05（发起者批准；首次批准即定版为 1.0.0） | **Last Amended**: 2026-11-05
