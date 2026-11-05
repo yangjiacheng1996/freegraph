@@ -22,7 +22,7 @@
 
 | 脚本 | 验证什么 | 覆盖契约 | 对应 Phase |
 |---|---|---|---|
-| `graph_core.py` | **图运行时内核**（前置用例） | C1–C25 | F4P1–F13P1、M1+M2 |
+| `graph_core.py` | **图运行时内核**（前置用例） | C1–C25（**C20 = `Store` 契约已冻结、v1 不实现**——F17 已砍） | F4P1–F13P1、M1+M2 |
 | `agent_loop.py` | **Agent 工具循环**——`target.py` 的零依赖等价物 | C4·C7·C8·C11·C16·C17 | F7P3·F8P1·F8P2·F9P1·F10P1 |
 | `visualization.py` | **图导出与可视化**（mermaid / PNG / 流式） | C12–C15·C26 | F8P2·F22P1·F23P1 |
 | `acceptance.py` | **人工验收编排器**（自身也 import 并执行 freegraph）：前置自检 + 最小图可执行 + **零出站断言** + 串跑上述三组 + 生成《人工验收记录》 | —— | F25P1 |
@@ -63,15 +63,23 @@ python harness/demo/acceptance.py --record harness/features/freegraph/manual-ver
   C16 的 `Command(goto=, update=, resume=)`、C17 的 `__interrupt__`、C18 的 `Send`、
   C22 的 `RunConfig` 四字段、C7 的 list/dict 两种 `path_map`。
 * **◌ 软断言** —— **语义由章程规定、但调用形态尚未拍板**的检查，**不判失败**，
-  只标注「待锁定」。当前三处：
+  只标注「待锁定」。当前两处：
 
   | 检查 | 待锁定的东西 | 由谁拍板 |
   |---|---|---|
   | C25 节点别名的调用形态 | `add_node(..., alias=)` 还是别的 | F8P3 |
   | `recursion_limit` 的载体 | dict / `RunConfig` / 其他 | F13P1 |
-  | `interrupt` 恢复是否依赖 checkpointer | 运行时内存态 vs C19 持久化 | F14P1 |
 
   **形态一旦拍板，这里的软断言就该升级为硬断言。**
+
+* ✅ **已拍板（2026-11-05）——第三处软断言已关闭**：`interrupt` 恢复**必须依赖
+  checkpointer**（内存态恢复不可靠；`interrupt` 的主场景是 time travel，须跨长时间 /
+  跨重启可恢复；SQLite 是智能体开发的事实标准，故必须采用 checkpointer）。
+  → **恢复路径 MUST NOT 有「不挂 checkpointer 也能恢复」的内存态旁路**；未挂
+  checkpointer 时调用恢复 MUST 抛明确异常。
+  → 该项的**形态已锁定**，待 **F14P1** 落地（`MemorySaver` 模块路径随之锁定）时，
+  在 `graph_core.py` 的 `case_interrupt_resume` 中挂上真实 saver，并把
+  `soft(...)` 改为 `check(...)`。**在此之前仍按软断言处理**（不判失败）。
 
 ## 断言框架是刻意内联的
 
