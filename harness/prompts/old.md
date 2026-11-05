@@ -44,3 +44,21 @@
 > 评审文件 `harness/proposals/立项书-评审1.md` 已随之删除；各条变更的落点与评审编号（如「评审 1 的 C5 / H8」）
 > 保留在立项书的「决策变更记录」与 §12 待决事项中，可据此回溯。
 注意：立项书由人工撰写底稿，最终读者也是人类，所以不允许你直接修改 立项书.md。我会根据你的评审意见，人工修改 立项书.md。你可以仿照speckit的分析法`.opencode/commands/speckit.analyze.md` ，对问题严重程度进行评级。
+
+
+# Phase初稿提示词生成
+## 项目背景
+本项目freegraph是我的个人项目，我启动这个项目的原因，以及我的一些想法都写到了 `harness/prompts/why_this_project.md` 。
+
+## 可参考文档
+1. LangChain、LangGraph、DeepAgents、MDA官方文档我放到了 `harness/docs` 中，可以通过 `harness/docs/MANIFEST.json`进行快速导航。
+2. 关于why_this_project.md中Q1-Q8的问题调研报告，我写到了 `harness/reports` 文件名以Q开头。为了节约上下文，你可以只看报告开头的摘要部分。
+3. 关于项目架构、排期的讨论，我写到了 `harness/prompts/guide.md` 。
+4. 立项书（必读）。`harness/proposals/立项书.md` 。
+5. 人工验收脚本，harness/demo/*.py
+
+
+现在，请你阅读参考文档，根据立项书中的layer-feature-phase设计，为每一个phase编写一个提示词初稿，放到 `harness/features`目录中。每个提示词初稿将作为 /speckit.specify 子命令的提示词。
+初稿文件名以 Phase编号_Phase小目标.md 的格式来命名。并且需要一个导航文件 `harness/features/README.md` ，这是给人看的导航文件，内容是对Phase进行排序，作为开发顺序，第一步开发哪个Phase、第二步开发哪个Phase......
+
+
