@@ -4,10 +4,10 @@ build-backend = "hatchling.build"
 
 [project]
 name = "freegraph"
-version = "0.0.2"
+version = "0.0.3"
 description = "Zero-dependency, zero-account, zero-egress graph runtime kernel — a drop-in replacement for the LangGraph Graph API."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "杨家成" }]
@@ -25,16 +25,22 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Software Development :: Libraries :: Application Frameworks",
     "Typing :: Typed",
 ]
 
-# 立项书 §5.5：基础安装的唯一必装依赖。
-dependencies = ["typing-extensions>=4.7.0"]
+# 立项书 §5.5：基础安装**零第三方运行时依赖**。
+# 2026-11-05（宪法 v1.2.0）：原为 ["typing-extensions>=4.7.0"]——
+# 该依赖的存在理由（"`typing.Self` 在 3.10 起可用"）经实测**不成立**
+# （`typing.Self` 是 3.11 才有的），且实测 3.10/3.11 的标准库足以支撑
+# v1 全部 31 个 Phase 的 typing 需求（详见宪法修订记录 v1.2.0 与
+# specs/001-p01-contracts-core/research.md 的 D-21）。基础安装依赖闭包 MUST 为空集
+# （由 tests/contracts/test_architecture.py 的 G3 门禁断言）。
+dependencies = []
 
 [project.urls]
 Homepage = "https://github.com/yangjiacheng1996/freegraph"

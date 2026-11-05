@@ -412,11 +412,17 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
 ### 依赖白名单 / 黑名单
 
 每个特性**MUST** 复核依赖清单。白 / 黑名单以 `harness/reports/Q3-LangGraph的开源边界.md` §3.6
-与 `harness/reports/Q7-开源边界地图与许可证合规.md` §3.1 的结论为准：
+与 `harness/reports/Q7-开源边界地图与许可证合规.md` §3.1 的结论为准——
+**但必装依赖一项以本宪法正文为准**（Q3 §3.6 原建议「必装 `typing-extensions`」
+已被本宪法修订记录 **v1.2.0** 取代：必装依赖 = **无**；
+该报告 §3.6 的其余部分——**黑名单、配置层、网络层**——仍然有效）：
 
-- **包层白名单**：`typing-extensions`（唯一建议的**必装**运行时依赖）。
+- **包层白名单**：**必装运行时依赖 = 无**（基础安装**零第三方依赖**，`dependencies = []`）。
   可选 extra：`pydantic`（`[pydantic]`）、`ormsgpack`（`[checkpoint]`）、
   `opentelemetry-api` / `opentelemetry-sdk`（`[otel]`）、mermaid 相关（`[png]`，**默认关闭**）。
+  > **2026-11-05 修订**：原为「`typing-extensions`（唯一建议的**必装**运行时依赖）」，
+  > 现改为**必装依赖为空**——`typing-extensions` 已从基础安装剥离（见修订记录 v1.2.0）。
+  > 基础安装的依赖闭包 **MUST 为空集**（由 G3 门禁断言）。
 - **包层黑名单**：`langsmith`（含 `langsmith[otel]` / `langsmith[sandbox]`）、`langchain`、
   `langchain-core`、`langchain-classic`、`langchain-protocol`、`langgraph*` 全系列、
   `deepagents`，以及全部 provider 包（`langchain-anthropic` / `langchain-openai` /
@@ -441,6 +447,8 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
    无 `LANGSMITH_*` / `LANGCHAIN_*` 读取，无 `*.langchain.com` / `mermaid.ink` 出站，
    无第三方商标资产（原则 I / II / IX）。
    **MUST** 以可自动执行的断言落地（递归展开 `importlib.metadata.requires()` + 许可证白名单校验）。
+   **基础安装（不含 extras）的依赖闭包 MUST 为空集**——零第三方运行时依赖是本项目的
+   对外承诺之一（README「零第三方运行时依赖」），**MUST** 可被断言判定。
 3. **契约门禁**：`harness/demo/target.py` 原样可跑（原则 III），
    **MUST** 包含 C4（稀疏状态）与 C8（条件边 fresh 状态）两条独立回归测试（原则 II）。
 4. **自动门禁**：CI 全绿，且包含 fake 模型跑通验收基线的一轮（原则 V），
@@ -590,6 +598,56 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
       `harness/features/F17P1_*.md` 初稿已删除，`harness/features/README.md` 的行序表
       与里程碑 / 关键路径视图已同步为 31 Phase。
 
+  - **v1.2.0（2026-11-05）｜MINOR —— 剥离 `typing-extensions`（基础安装零依赖）+ 最低 Python 版本抬至 3.11**
+    - **变更了什么**：① **依赖白名单**的**必装运行时依赖由 `typing-extensions` 改为「无」**
+      ——`pyproject.toml` 的 `dependencies` 改为 **空列表**，基础安装的依赖闭包 **MUST 为空集**；
+      ② **最低 Python 版本由 `>=3.10` 抬至 `>=3.11`**（`requires-python`）；③ 质量门禁第 2 项
+      补入「基础安装闭包 MUST 为空集」的可判定口径；④ `THIRD_PARTY_NOTICES` §2
+      「第三方运行时依赖」表随之清空（§1「引入的第三方代码」本已为空）。
+    - **为什么**：
+      ① **原依赖的存在理由本身是错的**——立项书 §5.4（E18 / 第 190 行）把最低版本定为
+      ≥3.10 的理由写作「`typing.Protocol` / `TypeAlias` / **`Self`** 在 3.10 起可用」，
+      但 **`typing.Self` 是 3.11 才进入标准库的**（实测 Python 3.10.21 无 `Self`）；
+      且同一行本已写明「`typing-extensions` 只需兜底少数新特性，**不作为最低版本约束**」。
+      ② **实测证明 3.10 的标准库足以支撑 v1 全部 31 个 Phase**：31 份 Phase 提示词用到的
+      typing 构造只有 `Annotated`(20) / `Protocol`(8) / `TypedDict`(7) / `runtime_checkable`(1) /
+      `get_type_hints`(1)，**全部是 3.10 标准库成员**；`Self` / `NotRequired` / `TypeVarTuple` /
+      `Unpack` / `LiteralString` / `dataclass_transform` / `asyncio.TaskGroup` /
+      `ExceptionGroup` 在提示词中出现 **0 次**（F12P1 FR-008 明写「本 Phase **不引入 async**
+      （v2 范围）——并发用**线程**实现即可」）。缺口可用标准库惯用法闭合：
+      `Self` → `TypeVar` bound 惯用法、`assert_never` → `NoReturn`、
+      `Required`/`NotRequired` → 结构化识别（freegraph 自身**不需要命名**它们，鸭子类型哲学）。
+      ③ **既然缺口要用惯用法绕，不如抬到 3.11 一次拿齐**：3.11 一次性补齐 7 项 typing
+      （`Self` / `NotRequired` / `Required` / `TypeVarTuple` / `Unpack` / `LiteralString` /
+      `dataclass_transform`），而 3.12 与 3.13 **各只补 2 项**（3.12：`TypeAliasType` / `override`；
+      3.13：`ReadOnly` / `TypeIs`）——3.11 的「typing 增量 / 兼容面损失」性价比最高；
+      ④ **Python 3.10 已于 2026-10 结束安全支持**（本版定稿于 2026-11）——为一个即将 v1.0 的
+      新项目把底线定在一个**已停止安全支持**的 Python 上，是不该做的决定；
+      ⑤ 附带收益：`pip install freegraph` 将**安装零个包**，README 的「零第三方运行时依赖」
+      承诺第一次**字面为真**（此前是「只有一个包」，读起来仍像打折）。
+    - **受影响的原则与特性**：**原则 I–X 的实质要求均未改变**——原则 I（零 LangSmith 依赖）
+      不变且**更严**（闭包从「一个包」收紧为「零个包」）；原则 II（内核纯净）不变；
+      原则 IX 的**许可证白名单 {MIT, Apache-2.0, BSD-2/3, PSF} 不变**（删除一个依赖不与该白名单冲突，
+      且剥离后闭包为空、白名单校验**恒通过**）；原则 X（文档合规义务）不变，
+      只是 `THIRD_PARTY_NOTICES` §2 的登记项由「有一行」变为「空表」。
+      受影响特性：**F1P1**（本 Phase 的依赖闭包门禁 G3 由「闭包 == {typing-extensions}」
+      改为「闭包 == 空集」；契约层实现**零改动**——实测其从不 import 该包）；
+      **F3P1**（CI 矩阵最低版本由 3.10 改 3.11、依赖门禁断言改写）；
+      **F24P1**（打包元数据 `Requires-Dist` 由一条变零条、`Requires-Python` 抬版本）；
+      **F2P1 / F4P1 / F6P1**（可用 `Self` / `NotRequired` 等 3.11 typing，**MUST NOT** 再 import
+      `typing_extensions`）。
+    - **迁移方案**：**无破坏性变更**——v1 尚未发布任何含内核实现的版本，**无已实现特性需要迁移**；
+      已冻结的类型形状（`StateDict` / `Command` / `StateSnapshot` / `RunConfig` 四类型 + 异常体系
+      共 8 个符号）**完全不变**——本次只改**依赖声明**与**解释器版本下限**，
+      **MUST NOT** 触及任何公开符号名、字段名、字段注解或行为。
+      已在 PyPI 占位发布的 **v0.0.2**（`Requires-Dist: typing-extensions>=4.7.0`、
+      `Requires-Python: >=3.10`）是**历史事实，不予改写**；下一次发布以 **v0.0.3** 为准
+      （`Requires-Dist` 无、`Requires-Python: >=3.11`）。
+      落地物：`pyproject.toml` · `.specify/memory/constitution.md`（本条 + 依赖白名单 + 质量门禁第 2 项）·
+      `harness/proposals/立项书.md`（§5.4 E18 / §5.5 / §12）· `specs/001-p01-contracts-core/`
+      （spec FR-007 / SC-002 · plan · research · tasks · quickstart · architecture-gates G3）·
+      `tests/contracts/test_architecture.py`（G2 / G3 / G8 断言）· `README.md` · `THIRD_PARTY_NOTICES`。
+
 > **2026-11-04 补充（不影响版本号）**：`freegraph` 已在 PyPI 上占位发布 **v0.0.1**
 > （owner = PyPI 账号 `yangjiacheng1996`，发行名 = 导入名 = `freegraph`；
 > 发布通道 = GitHub Actions Trusted Publishing（OIDC），工作流
@@ -613,5 +671,14 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
 > （**仅一个必装依赖**）、`Requires-Python: >=3.10`；**源文件署名头已随包发布**
 > （`freegraph/__init__.py` 第 1 行即 `Copyright (c) 2026 杨家成 · MIT License · <仓库地址>`）。
 > → **发布门禁（Release Gate）自此从「机制」变为「已验证生效的机制」。**
+>
+> **2026-11-05 补充（下一版 v0.0.3 将改元数据；v0.0.2 的历史记录不改写）**：
+> 依本宪法修订记录 **v1.2.0**（剥离 `typing-extensions`、最低 Python 抬至 3.11），
+> 下一次发布将改为 **`Requires-Dist` 无（零第三方运行时依赖）**、
+> **`Requires-Python: >=3.11`**，版本号 **v0.0.3**。
+> 上文 v0.0.2 的 `Requires-Dist: typing-extensions>=4.7.0` / `Requires-Python: >=3.10`
+> 是**已发布的事实**，**MUST NOT** 改写——它是「历史」而非「现状」。
+> 本次变更**不触及**任何原则 I–X 的实质要求，也**不触及**任何已冻结的公开面
+> （`freegraph.contracts` 的 8 个符号、字段名、字段注解与行为**全部不变**）。
 
-**Version**: 1.1.0 | **Ratified**: 2026-11-05（发起者批准；首次批准即定版为 1.0.0） | **Last Amended**: 2026-11-05
+**Version**: 1.2.0 | **Ratified**: 2026-11-05（发起者批准；首次批准即定版为 1.0.0） | **Last Amended**: 2026-11-05
