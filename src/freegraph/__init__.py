@@ -30,7 +30,7 @@ MIT 允许文件被单独复制，而复制不会带走 ``LICENSE``，因此署�
 也让「``import freegraph`` 到底加载了什么」变得不可判定。
 架构门禁 G1 以子进程的 ``sys.modules`` 快照断言这条契约。
 
-实现进度见 ``harness/proposals/立项书.md``（31 个 Phase / 93 人日 / v1.0）。
+实现进度见 ``harness/proposals/立项书.md``（31 个 feature / 93 人日 / v1.0）。
 """
 
 from __future__ import annotations

@@ -34,7 +34,7 @@
 我已经更新了spec和plan，请你更新tasks
 
 # /speckit.analyse 
-我更新了F001-P4的spec、plan、tasks，请你阅读相关文档，检查三者内容是否有问题，是否对齐。如果遇到难以决策的地方可以question问我，提问时给出推荐选项，语言中文。
+我更新了 B1F1 的 spec、plan、tasks，请你阅读相关文档，检查三者内容是否有问题，是否对齐。如果遇到难以决策的地方可以question问我，提问时给出推荐选项，语言中文。
 
 # analyse之后
 好的，我看到你发现了一些问题。
@@ -55,7 +55,32 @@
 我看到了你的回答，明白现在需要更新宪法。请你给出宪法更新的提示词，我会新建另一个会话，开始执行/speckit.constitution +提示词 ，来修改宪法。
 
 # /speckit.implement
-根据harness/ 目录中的LangChain、LangGraph官方文档，harness/features/立项书.md，以及相关spec，完成F001-P4（specs/001-donkey-init-workspace/phase-4-cli-version）的TDD软件开发和测试。
+根据 harness/ 目录中的 LangChain、LangGraph 官方文档，harness/proposals/立项书.md，以及相关 spec，完成 B1F1（specs/b1f1-contracts-core/）的 TDD 软件开发和测试。
 
 # /sepckit.converge
-我更新了Fxxx-Px的代码，请你根据代码改动，反向更新相关的spec、plan、tasks。
+我更新了 B<n>F<m> 的代码，请你根据代码改动，反向更新相关的 spec、plan、tasks。
+
+---
+
+## 本仓库的 speckit 约定（2026-11-05 统一）
+
+| 项 | 约定 |
+|---|---|
+| **feature ID** | `B<n>F<m>` —— 立项书的规划 ID（**唯一权威**） |
+| **feature 目录** | `specs/b<n>f<m>-<slug>/` —— **直接用 feature ID**，不带 speckit 的三位序号 |
+| **short-name 建议** | `b<n>f<m>-<slug>`（与目录名一致） |
+| **提示词初稿** | `harness/features/B<n>F<m>_<小目标>.md` |
+| **人工验证记录** | `harness/verification/B<n>F<m>/manual-verification.md` |
+
+> **⚠️ 为什么目录名不带 `001-` 这类三位序号**：
+> speckit 的 `create-new-feature.sh` 用 `printf "%03d"` 生成**创建序号**前缀，
+> 而它的自动编号器（`get_highest_from_specs()`）只认 `^[0-9]{3,}-` 的目录。
+> 但那个序号表达的是「第几个被创建的」，**与立项书的规划 ID 是两个不同的轴**——
+> 一旦创建顺序 ≠ 规划顺序，它就会指错 feature。
+> 目录名应当**只表达唯一权威的规划 ID**，故不带序号。
+>
+> **连带影响（须知）**：speckit 的自动编号器因此**看不见**本仓库的 feature 目录，
+> 故**每个 feature 的目录由本仓库自行创建**（`mkdir specs/b<n>f<m>-<slug>` + 写 spec.md），
+> 并在 `.specify/feature.json` 登记 `feature_directory` —— 工具链的路径解析只认这个文件，
+> 因此读写完全正常（`check-prerequisites.sh` 已实测通过）。
+

@@ -9,7 +9,7 @@
 > 已被 **《项目宪法》修订记录 v1.2.0** 取代 —— 基础安装**零**第三方运行时依赖，
 > 最低 Python 版本抬至 **3.11**。**本汇总的事实取证与黑名单全部仍然有效**；
 > 被取代的只是那一条「建议」。详见 **§8.1 的后续决议**与
-> `specs/001-p01-contracts-core/research.md` **D-21**。
+> `specs/b1f1-contracts-core/research.md` **D-21**。
 
 ---
 
@@ -235,8 +235,8 @@
 > `LiteralString` / `dataclass_transform` 全部在标准库内，故该依赖**不再需要**。
 >
 > **依据**：宪法 Governance · 修订记录 **v1.2.0** ·
-> `specs/001-p01-contracts-core/research.md` **D-21** ·
-> `specs/001-p01-contracts-core/spec.md` Clarifications「Session 2026-11-05（实现阶段 ·
+> `specs/b1f1-contracts-core/research.md` **D-21** ·
+> `specs/b1f1-contracts-core/spec.md` Clarifications「Session 2026-11-05（实现阶段 ·
 > 依赖剥离与最低版本上调）」。
 
 

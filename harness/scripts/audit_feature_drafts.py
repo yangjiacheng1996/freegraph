@@ -2,16 +2,16 @@
 
 为什么需要它
 ------------
-`harness/features/` 下的每份 Phase 初稿是 `/speckit.specify` 的提示词底稿——
-它一旦有错，错误会被复制到该 Phase 的 spec / tasks / 实现里，且**很难在下游被发现**
+`harness/features/` 下的每份 feature 初稿是 `/speckit.specify` 的提示词底稿——
+它一旦有错，错误会被复制到该 feature 的 spec / tasks / 实现里，且**很难在下游被发现**
 （因为下游都"照抄"了它）。而本仓库的宪法原则 VIII 要求「结论必须可追溯」。
 
 本脚本把「初稿 ↔ 立项书 §5.2 总表 ↔ Q8 契约清单」的一致性变成**可自动执行**的检查：
 
-1. **覆盖性**：立项书每个 Phase 有且仅有一份初稿；README 行序表覆盖全部初稿；
+1. **覆盖性**：立项书每个 feature 有且仅有一份初稿；README 行序表覆盖全部初稿；
 2. **元信息对齐**：每份初稿的「层 / 依赖 / 行数」与立项书 §5.2 逐项比对；
 3. **结构完整性**：10 个必备章节齐全，FR / SC 编号不重复，验收判据 ≥ 3 条；
-4. **引用有效性**：引用的契约条目（C1–C27）与 Phase ID 必须真实存在；
+4. **引用有效性**：引用的契约条目（C1–C27）与 feature ID 必须真实存在；
 5. **陈旧表述扫描**：已落定的决策（砍 Store / D11 批准 / 恢复必须挂 checkpointer /
    新的 totals）不得以旧措辞残留。
 
@@ -41,38 +41,38 @@ def warn(f, msg):
 
 # ───────── 1. 解析立项书 §5.2 总表（权威） ─────────
 charter = CHARTER.read_text(encoding='utf-8')
-# §5.2 总表列位：Phase | 层 | 跨层 | Feature | 名称 | 里程碑 | 依赖 | 行数 | 小目标 | 人日 | 成本
+# §5.2 总表列位：feature | 层 | 跨层 | 领域 | 功能块 | 名称 | 里程碑 | 依赖 | 行数 | 小目标 | 人日 | 成本
 rows = {}
 for line in charter.splitlines():
-    if not line.startswith('| F'):
+    if not line.startswith('| B'):
         continue
     c = [x.strip() for x in line.strip().strip('|').split('|')]
-    if len(c) < 8 or not re.fullmatch(r'F\d+P\d+', c[0]):
+    if len(c) < 9 or not re.fullmatch(r'B\d+F\d+', c[0]):
         continue
-    rows[c[0]] = {'layer': c[1], 'dep': c[6], 'lines': int(re.sub(r'[^0-9]', '', c[7]))}
+    rows[c[0]] = {'layer': c[1], 'dep': c[7], 'lines': int(re.sub(r'[^0-9]', '', c[8]))}
 
 # ───────── 2. 解析 README 行序表（开发顺序） ─────────
 readme = (FEAT / 'README.md').read_text(encoding='utf-8')
 order = []
 for line in readme.splitlines():
-    m = re.match(r'^\|\s*(\d+)\s*\|\s*\*\*(F\d+P\d+)\*\*\s*\|\s*\[([^\]]+)\]\(([^)]+)\)\s*\|', line)
+    m = re.match(r'^\|\s*(\d+)\s*\|\s*\*\*(B\d+F\d+)\*\*\s*\|\s*\[([^\]]+)\]\(([^)]+)\)\s*\|', line)
     if m:
         order.append({'step': int(m.group(1)), 'pid': m.group(2), 'label': m.group(3), 'file': m.group(4)})
 
-drafts = sorted(FEAT.glob('F*.md'))
+drafts = sorted(FEAT.glob('B*F*_*.md'))
 draft_ids = {p.name.split('_')[0]: p for p in drafts}
 
-# ───────── 3. 覆盖性：每个 Phase 有且仅有一个初稿 ─────────
+# ───────── 3. 覆盖性：每个 feature 有且仅有一个初稿 ─────────
 if set(draft_ids) != set(rows):
     for miss in sorted(set(rows) - set(draft_ids)):
         err(draft_ids.get(list(draft_ids)[0], FEAT / 'x'), f"缺少初稿：{miss}")
     for extra in sorted(set(draft_ids) - set(rows)):
-        err(draft_ids[extra], "初稿无对应立项书 Phase 行（可能已砍）")
+        err(draft_ids[extra], "初稿无对应立项书 feature 行（可能已砍）")
 
 # ───────── 4. README 行序 vs 立项书行序 ─────────
 order_ids = [o['pid'] for o in order]
 if len(order_ids) != len(set(order_ids)):
-    err(FEAT / 'README.md', "行序表存在重复 Phase")
+    err(FEAT / 'README.md', "行序表存在重复 feature")
 if [o['step'] for o in order] != list(range(1, len(order) + 1)):
     err(FEAT / 'README.md', "行序表的步次不是连续 1..N")
 for o in order:
@@ -122,17 +122,17 @@ for pid, p in sorted(draft_ids.items()):
                 err(p, f"层与立项书不符：初稿 {layer[:20]} vs 立项书 {r['layer']}")
         dm = re.search(r'\| 前置依赖 \| ([^|]+?) \|', t)
         if dm and r['dep'] and r['dep'] != '—':
-            deps = set(re.findall(r'F\d+P\d+', dm.group(1)))
-            expect = set(re.findall(r'F\d+P\d+', r['dep']))
+            deps = set(re.findall(r'B\d+F\d+', dm.group(1)))
+            expect = set(re.findall(r'B\d+F\d+', r['dep']))
             if deps != expect:
                 err(p, f"依赖与立项书不符：初稿 {deps} vs 立项书 {expect}")
 
 # ───────── 6. 陈旧引用扫描 ─────────
 STALE = [
-    (r'F17P1', 'F17 已砍（2026-11-05）'),
+    (r'B17F1', 'B17 已砍（2026-11-05）'),
     (r'D11 未批准|D11 待批|D11 未获批准|D11 未完成|D11 落地前|D11 必须已批准', 'D11 已于 2026-11-05 批准'),
-    (r'31,520 行', '旧行数（已砍 F17 → 30,600）'),
-    (r'32 个 Phase|32 Phase', '旧 Phase 数（→ 31）'),
+    (r'31,520 行', '旧行数（已砍 B17 → 30,600）'),
+    (r'32 个 feature|32 feature', '旧 feature 数（→ 31）'),
     (r'192,000 元', '旧报价（→ 186,000）'),
     (r'96 人日', '旧人日（→ 93）'),
     (r'96 天', '旧工期（→ 94 天）'),
@@ -157,13 +157,13 @@ for p in sorted(drafts):
         if f"C{c}" not in valid_c:
             err(p, f"引用了不存在的契约条目 C{c}")
 
-# ───────── 8. 交叉引用的 Phase 是否存在 ─────────
-all_pids = set(rows) | {'F26'}
+# ───────── 8. 交叉引用的 feature 是否存在 ─────────
+all_pids = set(rows) | {'B26'}
 for p in sorted(drafts) + [FEAT / 'README.md']:
     t = p.read_text(encoding='utf-8')
-    for ref in sorted(set(re.findall(r'F\d+P\d+', t))):
+    for ref in sorted(set(re.findall(r'B\d+F\d+', t))):
         if ref not in all_pids:
-            err(p, f"引用了不存在的 Phase：{ref}")
+            err(p, f"引用了不存在的 feature：{ref}")
 
 # ───────── 报告 ─────────
 print(f"审计对象：{len(drafts)} 份初稿 + README；立项书 §5.2 权威行 {len(rows)} 条")

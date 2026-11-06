@@ -107,8 +107,8 @@ class GraphInterrupt(FreegraphError):
     **结构约定**（契约 C17）：载荷对象须带 ``.value`` 与 ``.id``。
 
     .. note::
-       ``payload`` 的**具体类型**归 **F2P1**（``Send`` / ``interrupt`` 归 F2P1），
-       故本 Phase 的类型标注为 ``Any``——此刻不存在可标注的具体载荷类型，
+       ``payload`` 的**具体类型**归 **B2F1**（``Send`` / ``interrupt`` 归 B2F1），
+       故本 feature 的类型标注为 ``Any``——此刻不存在可标注的具体载荷类型，
        自造载荷类会违反「公开符号面恰 8 个」的约束。
     """
 

@@ -2,7 +2,7 @@
 
 """契约层的**八条架构门禁**（US3）。
 
-门禁定义见 ``specs/001-p01-contracts-core/contracts/architecture-gates.md``：
+门禁定义见 ``specs/b1f1-contracts-core/contracts/architecture-gates.md``：
 
 ======  ==========================================================  ==========
 门禁    含义                                                        spec 条目
@@ -84,7 +84,7 @@ FORBIDDEN_MODULES = frozenset(
 #: G4 禁止的环境变量读取 API。
 FORBIDDEN_ENV_ATTRS = frozenset({"environ", "environb", "getenv"})
 
-#: 本 Phase 新建的源文件（原则 X 的署名头适用范围，含 ``tests/``）。
+#: 本 feature 新建的源文件（原则 X 的署名头适用范围，含 ``tests/``）。
 SIGNED_SOURCE_FILES = (
     "src/freegraph/__init__.py",
     "src/freegraph/contracts/__init__.py",
@@ -377,7 +377,7 @@ class TestPublicSymbolSurface:
             assert getattr(contracts, name) is not None, name
 
     def test_no_send_or_interrupt_public_symbol(self) -> None:
-        """契约层 MUST NOT 出现名为 ``Send`` / ``interrupt`` 的公开符号（归 F2P1）。"""
+        """契约层 MUST NOT 出现名为 ``Send`` / ``interrupt`` 的公开符号（归 B2F1）。"""
         import freegraph.contracts as contracts
 
         assert not hasattr(contracts, "Send")
@@ -408,7 +408,7 @@ class TestPublicSymbolSurface:
 
 # ── G3 · 依赖闭包 + 许可证白名单 ───────────────────────────────────────
 
-#: 宪法依赖白名单（**必装依赖 = 无**；可选 extras 由 F3P1 引入）。
+#: 宪法依赖白名单（**必装依赖 = 无**；可选 extras 由 B3F1 引入）。
 #:
 #: ``typing-extensions`` 已于宪法 **v1.2.0** 从必装依赖剥离——最低 Python 版本
 #: 抬至 3.11 后，``Self`` / ``NotRequired`` / ``Required`` / ``TypeVarTuple`` /
@@ -532,7 +532,7 @@ class TestDependencyClosure:
     def test_extras_closure_is_within_constitution_whitelist(self) -> None:
         """extras 变体闭包 MUST 只含宪法依赖白名单内的包。
 
-        （extras 由 F3P1 引入——本 Phase 无 extras，该条为空断言。）
+        （extras 由 B3F1 引入——本 feature 无 extras，该条为空断言。）
         """
         _require_installed()
         base = dependency_closure("freegraph")
@@ -545,7 +545,7 @@ class TestDependencyClosure:
         取不到许可证信息时该断言 ``skip`` 并提示——不得默认「闭包小就安全」。
 
         **当前基础安装闭包为空**（零第三方依赖），故本断言暂为空转；
-        它在 **F3P1 引入 extras** 后立即变为实质断言——
+        它在 **B3F1 引入 extras** 后立即变为实质断言——
         故此处**同时覆盖 extras 闭包**，以免那条路径失去校验。
         """
         _require_installed()
@@ -569,6 +569,152 @@ class TestDependencyClosure:
             assert not any(token in upper for token in FORBIDDEN_LICENSE_TOKENS), (
                 f"{pkg} 的许可证 {lic!r} 是传染性 / 限制性许可证"
             )
+
+
+# ── G9 · 运行时环境基线（Python 版本与 typing 构件上限）─────────────────
+
+#: 3.12+ / 3.13+ 才进入标准库的 typing 构件 —— 宪法「运行时环境基线」明令禁用。
+#:
+#: 依据：宪法修订记录 **v1.3.0**（新增「运行时环境基线」章节）。
+#: 实测：CPython 3.11 的 ``typing`` **没有**这四个；3.12 才有 ``TypeAliasType`` 与
+#: ``override``，3.13 才加 ``ReadOnly`` 与 ``TypeIs``。
+FORBIDDEN_TYPING_CONSTRUCTS = {
+    "TypeAliasType": "3.12",
+    "ReadOnly": "3.13",
+    "TypeIs": "3.13",
+}
+
+#: ``override`` 只在**装饰器用法 / 显式导入**时才算 3.12+ 构件——
+#: 一个叫 ``override`` 的普通方法名是合法 Python，不是新构件（避免误报）。
+FORBIDDEN_DECORATOR_ONLY = {"override": "3.12"}
+
+
+def scan_runtime_baseline(package_dir: Path) -> list[str]:
+    """G9 · 扫描源码，报告使用了 3.12+ / 3.13+ typing 构件的位置。
+
+    这是个**纯函数**——只吃一个目录、只吐一个列表，故门禁自检可以喂它
+    造出来的违规目录，证明门禁本身有效。
+
+    判定口径（宪法「运行时环境基线」）：
+      ① 显式导入 / 名字引用：``TypeAliasType`` / ``ReadOnly`` / ``TypeIs``；
+      ② 装饰器用法：``@override`` / ``@typing.override``；
+      ③ **PEP 695 语法**（``type X = ...`` / ``class C[T]`` / ``def f[T]()``）——
+         在 3.11 上连解析都过不了，故用 ``SyntaxError`` 捕获并给出可读报错，
+         而不是让开发者对着一个 ``ImportError`` 猜原因。
+    """
+    violations: list[str] = []
+    type_alias_node = getattr(ast, "TypeAlias", None)
+    for path in sorted(Path(package_dir).rglob("*.py")):
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        except SyntaxError as exc:
+            violations.append(
+                f"{path.name}:{exc.lineno}: 在 Python 3.11 上无法解析 —— "
+                f"疑为 3.12+ 语法（PEP 695 `type` 语句 / 泛型参数）：{exc.msg}"
+            )
+            continue
+        for node in ast.walk(tree):
+            if type_alias_node is not None and isinstance(node, type_alias_node):
+                violations.append(
+                    f"{path.name}:{getattr(node, 'lineno', '?')}: "
+                    "PEP 695 `type` 语句（3.12+）"
+                )
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                if getattr(node, "type_params", None):
+                    violations.append(
+                        f"{path.name}:{node.lineno}: PEP 695 泛型语法（3.12+）"
+                    )
+                for deco in node.decorator_list:
+                    deco_name = None
+                    if isinstance(deco, ast.Name):
+                        deco_name = deco.id
+                    elif isinstance(deco, ast.Attribute):
+                        deco_name = deco.attr
+                    if deco_name in FORBIDDEN_DECORATOR_ONLY:
+                        version = FORBIDDEN_DECORATOR_ONLY[deco_name]
+                        violations.append(
+                            f"{path.name}:{node.lineno}: 禁用了 @{deco_name}"
+                            f"（{version} 才进标准库）"
+                        )
+            if isinstance(node, ast.ImportFrom):
+                for alias in node.names:
+                    if alias.name in FORBIDDEN_TYPING_CONSTRUCTS:
+                        version = FORBIDDEN_TYPING_CONSTRUCTS[alias.name]
+                        violations.append(
+                            f"{path.name}:{node.lineno}: 禁用了 {alias.name}"
+                            f"（{version} 才进标准库）"
+                        )
+                    elif alias.name in FORBIDDEN_DECORATOR_ONLY:
+                        version = FORBIDDEN_DECORATOR_ONLY[alias.name]
+                        violations.append(
+                            f"{path.name}:{node.lineno}: 禁用了 {alias.name}"
+                            f"（{version} 才进标准库）"
+                        )
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    root = alias.name.split(".")[0]
+                    if root in FORBIDDEN_TYPING_CONSTRUCTS:
+                        version = FORBIDDEN_TYPING_CONSTRUCTS[root]
+                        violations.append(
+                            f"{path.name}:{node.lineno}: 禁用了 {root}"
+                            f"（{version} 才进标准库）"
+                        )
+            elif isinstance(node, ast.Name):
+                if node.id in FORBIDDEN_TYPING_CONSTRUCTS:
+                    version = FORBIDDEN_TYPING_CONSTRUCTS[node.id]
+                    violations.append(
+                        f"{path.name}:{node.lineno}: 禁用了 {node.id}"
+                        f"（{version} 才进标准库）"
+                    )
+            elif isinstance(node, ast.Attribute):
+                if node.attr in FORBIDDEN_TYPING_CONSTRUCTS:
+                    version = FORBIDDEN_TYPING_CONSTRUCTS[node.attr]
+                    violations.append(
+                        f"{path.name}:{node.lineno}: 禁用了 {node.attr}"
+                        f"（{version} 才进标准库）"
+                    )
+    return violations
+
+
+class TestRuntimeBaseline:
+    """G9 · 运行时环境基线 —— 最低 Python 3.11，typing 构件不得高于 3.11。"""
+
+    def test_no_newer_typing_constructs(self, src_dir: Path) -> None:
+        """源码 MUST NOT 使用 3.12+ / 3.13+ 的 typing 构件。"""
+        violations = scan_runtime_baseline(src_dir / "freegraph")
+        assert violations == [], "\n".join(violations)
+
+    def test_interpreter_is_at_least_3_11(self) -> None:
+        """运行本门禁的解释器 MUST ≥ 3.11（否则本门禁本身失去意义）。"""
+        assert sys.version_info >= (3, 11), (
+            f"本门禁须在 Python ≥ 3.11 上运行（当前 {sys.version.split()[0]}）"
+        )
+
+    def test_requires_python_declares_3_11(self, repo_root: Path) -> None:
+        """``pyproject.toml`` 的 ``requires-python`` MUST 保持 ``>=3.11``。"""
+        text = (repo_root / "pyproject.toml").read_text(encoding="utf-8")
+        assert 'requires-python = ">=3.11"' in text, (
+            "requires-python MUST 为 \">=3.11\"（宪法「运行时环境基线」）"
+        )
+
+    def test_allowed_3_11_constructs_are_available(self) -> None:
+        """3.11 确实提供了这些构件 —— 本门禁的上限**恰好**卡在 3.11。
+
+        （若将来某个构件在 3.11 不可用，本断言会先于源码扫描失败，
+        提醒「上限口径需重新评估」。）
+        """
+        import typing
+
+        for name in (
+            "Self",
+            "NotRequired",
+            "Required",
+            "TypeVarTuple",
+            "Unpack",
+            "LiteralString",
+            "dataclass_transform",
+        ):
+            assert hasattr(typing, name), f"typing.{name} 在 3.11 上不可用"
 
 
 # ── G8 · 文档合规门禁 ──────────────────────────────────────────────────
@@ -759,6 +905,66 @@ class TestGateSelfCheck:
         """真实目录 MUST 两条扫描都无违规——证明门禁有效而非恰好没触发。"""
         assert scan_imports(contracts_dir) == []
         assert scan_forbidden_usage(contracts_dir) == []
+
+    # ── G9 自检 ──────────────────────────────────────────────────────
+
+    @pytest.mark.parametrize(
+        ("source", "expect"),
+        [
+            ("from typing import TypeAliasType\n", "TypeAliasType"),
+            ("from typing import ReadOnly\n", "ReadOnly"),
+            ("from typing import TypeIs\n", "TypeIs"),
+            ("from typing import override\n", "override"),
+            ("import typing\n\nX = typing.TypeAliasType\n", "TypeAliasType"),
+            ("from typing import override\n\n\n@override\ndef f():\n    pass\n", "override"),
+            ("type Alias = int\n", "3.12"),
+            ("class C[T]:\n    pass\n", "3.12"),
+        ],
+        ids=[
+            "import-TypeAliasType",
+            "import-ReadOnly",
+            "import-TypeIs",
+            "import-override",
+            "attr-TypeAliasType",
+            "decorator-override",
+            "pep695-type-stmt",
+            "pep695-generic-class",
+        ],
+    )
+    def test_g9_detects_newer_typing_constructs(
+        self, tmp_path: Path, source: str, expect: str
+    ) -> None:
+        """G9 MUST 逐一抓出 3.12+ / 3.13+ 构件（否则「上限」只是句口号）。"""
+        layer = tmp_path / "g9"
+        layer.mkdir(parents=True, exist_ok=True)
+        (layer / "mod.py").write_text(source, encoding="utf-8")
+        violations = scan_runtime_baseline(layer)
+        assert violations, f"未抓出违规：{source!r}"
+        assert any(expect in v for v in violations), violations
+
+    def test_g9_does_not_flag_3_11_constructs(self, tmp_path: Path) -> None:
+        """G9 MUST NOT 误报 ≤3.11 的合法构件（含叫 ``override`` 的普通方法名）。"""
+        layer = tmp_path / "g9_ok"
+        layer.mkdir(parents=True, exist_ok=True)
+        (layer / "mod.py").write_text(
+            "from typing import Self\n"
+            "from typing import NotRequired\n"
+            "from typing import TypeVarTuple\n"
+            "from typing import Unpack\n"
+            "from typing import LiteralString\n"
+            "from typing import dataclass_transform\n"
+            "\n"
+            "\n"
+            "class Node:\n"
+            "    def override(self) -> Self:\n"
+            "        return self\n",
+            encoding="utf-8",
+        )
+        assert scan_runtime_baseline(layer) == []
+
+    def test_real_package_has_no_baseline_violation(self, src_dir: Path) -> None:
+        """真实包 MUST 无基线违规——门禁在真实代码上确实成立。"""
+        assert scan_runtime_baseline(src_dir / "freegraph") == []
 
 
 

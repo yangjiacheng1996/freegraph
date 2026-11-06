@@ -20,12 +20,12 @@
 
 ## 脚本清单
 
-| 脚本 | 验证什么 | 覆盖契约 | 对应 Phase |
+| 脚本 | 验证什么 | 覆盖契约 | 对应 feature |
 |---|---|---|---|
-| `graph_core.py` | **图运行时内核**（前置用例） | C1–C25（**C20 = `Store` 契约已冻结、v1 不实现**——F17 已砍） | F4P1–F13P1、M1+M2 |
-| `agent_loop.py` | **Agent 工具循环**——`target.py` 的零依赖等价物 | C4·C7·C8·C11·C16·C17 | F7P3·F8P1·F8P2·F9P1·F10P1 |
-| `visualization.py` | **图导出与可视化**（mermaid / PNG / 流式） | C12–C15·C26 | F8P2·F22P1·F23P1 |
-| `acceptance.py` | **人工验收编排器**（自身也 import 并执行 freegraph）：前置自检 + 最小图可执行 + **零出站断言** + 串跑上述三组 + 生成《人工验收记录》 | —— | F25P1 |
+| `graph_core.py` | **图运行时内核**（前置用例） | C1–C25（**C20 = `Store` 契约已冻结、v1 不实现**——B17 已砍） | B4F1–B13F1、M1+M2 |
+| `agent_loop.py` | **Agent 工具循环**——`target.py` 的零依赖等价物 | C4·C7·C8·C11·C16·C17 | B7F3·B8F1·B8F2·B9F1·B10F1 |
+| `visualization.py` | **图导出与可视化**（mermaid / PNG / 流式） | C12–C15·C26 | B8F2·B22F1·B23F1 |
+| `acceptance.py` | **人工验收编排器**（自身也 import 并执行 freegraph）：前置自检 + 最小图可执行 + **零出站断言** + 串跑上述三组 + 生成《人工验收记录》 | —— | B25F1 |
 
 执行顺序（**内核在前、兼容在后**）：
 
@@ -67,8 +67,8 @@ python harness/demo/acceptance.py --record harness/features/freegraph/manual-ver
 
   | 检查 | 待锁定的东西 | 由谁拍板 |
   |---|---|---|
-  | C25 节点别名的调用形态 | `add_node(..., alias=)` 还是别的 | F8P3 |
-  | `recursion_limit` 的载体 | dict / `RunConfig` / 其他 | F13P1 |
+  | C25 节点别名的调用形态 | `add_node(..., alias=)` 还是别的 | B8F3 |
+  | `recursion_limit` 的载体 | dict / `RunConfig` / 其他 | B13F1 |
 
   **形态一旦拍板，这里的软断言就该升级为硬断言。**
 
@@ -77,7 +77,7 @@ python harness/demo/acceptance.py --record harness/features/freegraph/manual-ver
   跨重启可恢复；SQLite 是智能体开发的事实标准，故必须采用 checkpointer）。
   → **恢复路径 MUST NOT 有「不挂 checkpointer 也能恢复」的内存态旁路**；未挂
   checkpointer 时调用恢复 MUST 抛明确异常。
-  → 该项的**形态已锁定**，待 **F14P1** 落地（`MemorySaver` 模块路径随之锁定）时，
+  → 该项的**形态已锁定**，待 **B14F1** 落地（`MemorySaver` 模块路径随之锁定）时，
   在 `graph_core.py` 的 `case_interrupt_resume` 中挂上真实 saver，并把
   `soft(...)` 改为 `check(...)`。**在此之前仍按软断言处理**（不判失败）。
 
@@ -95,16 +95,16 @@ python harness/demo/acceptance.py --record harness/features/freegraph/manual-ver
 | 待锁定的形态 | 依据 |
 |---|---|
 | `compile(tracer=...)` 注入 `TraceSink` | C23 只说「显式传入才生效」，未说载体 |
-| 本地 trace 存储目录的参数名 | F20P1 未说参数名 |
-| `MemorySaver` 的模块路径 | F14P1 未定 |
-| `update_state(...)` 的签名 | F16P1 未说签名 |
+| 本地 trace 存储目录的参数名 | B20F1 未说参数名 |
+| `MemorySaver` 的模块路径 | B14F1 未定 |
+| `update_state(...)` 的签名 | B16F1 未说签名 |
 
 **原则**：*验收脚本与它所验收的能力的 API 形态一起定*——
-章程已锁形态的（M1/M2）现在就写；章程未锁形态的（M3）**随定义它的 Phase 一起写**，
+章程已锁形态的（M1/M2）现在就写；章程未锁形态的（M3）**随定义它的 feature 一起写**，
 否则就是在赌接口长什么样，赌错了要重写一千行。
 
-到 M3 开工时（§5.2 的 F14P1–F20P2），按同样方式补一份 `diagnostics.py`，
-届时那四个形态已在各 Phase 的 spec 里锁定，脚本照写即可。
+到 M3 开工时（§5.2 的 B14F1–B20F2），按同样方式补一份 `diagnostics.py`，
+届时那四个形态已在各 feature 的 spec 里锁定，脚本照写即可。
 
 ## 与 target.py 的关系
 

@@ -12,7 +12,7 @@
 > 目前 `import freegraph` 只会返回一个版本号，**没有任何图运行时能力**——
 > 请勿用于生产，也不要把它当作 LangGraph 的可用替代品。
 >
-> 实现路线见仓库内 `harness/proposals/立项书.md`（31 个 Phase / 93 人日 / v1.0）。
+> 实现路线见仓库内 `harness/proposals/立项书.md`（31 个 feature / 93 人日 / v1.0）。
 
 **English:** FreeGraph is a fully account-free, drop-in replacement for LangGraph,
 faithfully replicating its API while maintaining LangChain compatibility — build and
@@ -48,8 +48,8 @@ run graph-based AI workflows without LangSmith or external account dependencies.
 
 > **兼容意图为互操作，不构成 affiliation** —— freegraph 与 LangChain / LangGraph / LangSmith
 > **无从属、授权或合作关系**，亦未使用其商标、logo、品牌色或官方文案。
-> 本表逐符号标注 freegraph 与上游的等价程度，是**活文档**（随每个 Phase 新增的公开面更新，
-> 由 F24P1 补全与定稿）。
+> 本表逐符号标注 freegraph 与上游的等价程度，是**活文档**（随每个 feature 新增的公开面更新，
+> 由 B24F1 补全与定稿）。
 
 | freegraph 符号 | 对应上游符号 | 等价程度 | 差异说明 |
 |---|---|---|---|

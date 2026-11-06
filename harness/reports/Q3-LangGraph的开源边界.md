@@ -8,7 +8,7 @@
 > **《项目宪法》修订记录 v1.2.0** 取代 —— 基础安装**零**第三方运行时依赖，
 > `typing-extensions` 已**剥离**，最低 Python 版本抬至 **3.11**。
 > **本报告的事实取证全部仍然有效**；被取代的只是那一条「建议」。
-> 详见 **§3.6 的后续决议**与 `specs/001-p01-contracts-core/research.md` **D-21**。
+> 详见 **§3.6 的后续决议**与 `specs/b1f1-contracts-core/research.md` **D-21**。
 
 ---
 
@@ -187,7 +187,7 @@ langchain 1.4.1 ─┬─ langchain-core 1.6.3 ─── langsmith 0.12.6  ★
   > `typing.TypedDict` 自 **3.8** 起即为标准库成员（**都不是 3.12**）；
   > 让 `typing_extensions` 真正有价值的是 `typing.Self`（**3.11** 才进标准库）——
   > 原文「`TypedDict` 在 3.12 已入 stdlib」的表述**不准确**。
-  > 依据见 `specs/001-p01-contracts-core/research.md` **D-21**。
+  > 依据见 `specs/b1f1-contracts-core/research.md` **D-21**。
 - **绝对禁止**：依赖 `langchain-core`——它是 `langsmith` 的唯一入口。
 
 **配置层（哪些环境变量会触发外呼）**
@@ -282,8 +282,8 @@ langchain 1.4.1 ─┬─ langchain-core 1.6.3 ─── langsmith 0.12.6  ★
 > `dataclass_transform` 全部在标准库内，`typing_extensions` **不再需要**。
 >
 > **依据**：《项目宪法》Governance · 修订记录 **v1.2.0** ·
-> `specs/001-p01-contracts-core/research.md` **D-21** ·
-> `specs/001-p01-contracts-core/spec.md` Clarifications「Session 2026-11-05（实现阶段 ·
+> `specs/b1f1-contracts-core/research.md` **D-21** ·
+> `specs/b1f1-contracts-core/spec.md` Clarifications「Session 2026-11-05（实现阶段 ·
 > 依赖剥离与最低版本上调）」· 实测证据：CPython 3.10.21 的 `typing` 构件清单
 > （`Self` / `NotRequired` / `Required` / `TypeVarTuple` / `Unpack` / `LiteralString` /
 > `dataclass_transform` / `assert_never` / `TypeAliasType` / `override` / `ReadOnly` /

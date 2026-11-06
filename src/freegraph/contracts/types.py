@@ -2,7 +2,7 @@
 
 """freegraph 契约层的**四个核心类型**。
 
-本模块定义后续全部 Phase 都会引用的类型地基：
+本模块定义后续全部 feature 都会引用的类型地基：
 
 * :data:`StateDict` —— 状态字典（类型别名，与 ``dict[str, Any]`` 完全等价）；
 * :class:`Command` —— 命令原语（跳转 / 写入 / 恢复三个语义位）；
@@ -53,7 +53,7 @@ class Command:
     **``goto`` 不归一化**：传元组存元组、传列表存列表（与冻结注解逐字一致）。
 
     .. note::
-       运行时（F9P1）解释 ``goto`` 时 MUST 先判 ``isinstance(x, str)`` ——
+       运行时（B9F1）解释 ``goto`` 时 MUST 先判 ``isinstance(x, str)`` ——
        ``str`` 本身也是 ``Sequence[str]``，顺序判断会把它拆成字符序列。
     """
 
@@ -66,7 +66,7 @@ class Command:
 
     类属性（``ClassVar``）而**非**实例字段——dataclass 不会把它当字段，
     ``slots=True`` 也不会为它留槽位。节点名 ``__parent__`` 视为**保留名**
-    （校验归 F7P2 / F9P1）。
+    （校验归 B7F2 / B9F1）。
     """
 
     def __post_init__(self) -> None:
@@ -139,7 +139,7 @@ class RunConfig:
         """从**裸 dict** 构造运行配置。
 
         智能体上下文本就是 JSON，用户手上天然是裸 dict——有了这条路，
-        运行入口将来（归 F7P3）就能容忍裸 dict 传入，调用方不必逐字段搬运。
+        运行入口将来（归 B7F3）就能容忍裸 dict 传入，调用方不必逐字段搬运。
 
         * **默认严格**：``d`` 中出现四字段之外的键时抛 :class:`FreegraphError`，
           消息**点名该键**——当场暴露 ``threadId`` 这类拼写错误，

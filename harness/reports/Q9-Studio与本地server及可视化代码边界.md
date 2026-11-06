@@ -136,12 +136,12 @@ Q6 的 OSS 选型表评估的是 **trace/observability 后端**（Langfuse / Pho
 
 1. **Q6 的独占性判断精化**：freegraph 的独占位置 = **交互式图视图 + 回放入口**；chat/tool/time-travel 可借鉴 Agent Chat UI（MIT）的架构与交互模式。
 2. **v1 不必引入前端技术栈**（会显著改变 §7 的成本模型）：三件套可「**能力层优先**」交付 ——
-   - 图视图 → `draw_mermaid()`（F7-1，纯本地零出站）；
-   - trace 时间线/详情 → 本地 trace 存储 + 查询 API（F6-3）；
-   - 状态快照 + checkpoint 历史 + 回放入口 → `get_state_history()` + `update_state()`（F5-2 / F5-3）。
+   - 图视图 → `draw_mermaid()`（B7-1，纯本地零出站）；
+   - trace 时间线/详情 → 本地 trace 存储 + 查询 API（B6-3）；
+   - 状态快照 + checkpoint 历史 + 回放入口 → `get_state_history()` + `update_state()`（B5-2 / B5-3）。
    UI 若要，只做**只读轻量查看器**（单文件 HTML + 读本地 JSON/SQLite），**不引入 Node 构建链**。
 3. **若 v2 做完整 UI**，可直接借鉴 MIT 的 Agent Chat UI：chat + tool 渲染 + time-travel + state forking 的交互范式已经跑通，**freegraph 只需把「图视图」这一块补上**（这恰是官方没有的部分）。
-4. **协议层先行的顺序**：freegraph 的内核先出**契约层**（P01–P02）→ 再出数据/API（F6/F5）→ 最后才是 UI 子包。这与官方「server 出 API、frontend 自备」的结构一致。
+4. **协议层先行的顺序**：freegraph 的内核先出**契约层**（P01–P02）→ 再出数据/API（B6/B5）→ 最后才是 UI 子包。这与官方「server 出 API、frontend 自备」的结构一致。
 5. **法律边界不变**：Agent Chat UI 是 MIT（可借鉴、须保留声明）；`langgraph_api` 是 **Elastic-2.0**（**绝不能引入或复制**，含其 `/ui` 挂载实现与 JS SDK）→ freegraph 若做本地 UI，必须**依据公开 HTTP/SSE 协议独立实现**，不能抄 `langgraph_api` 的代码。
 
 ---

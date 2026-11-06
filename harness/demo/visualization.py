@@ -18,7 +18,7 @@
 
 覆盖契约：**C12**（流式）、**C13**（图结构导出）、**C14**（mermaid 导出）、
 **C15**（PNG 渲染）、**C26**（子图 v1 仅签名兼容）；
-对应 Phase **F8P2 / F22P1 / F23P1**。
+对应 feature **B8F2 / B22F1 / B23F1**。
 
 依赖：**只 import `freegraph` 与 Python 标准库**。
 
@@ -40,7 +40,7 @@ try:
     )
 except ImportError as exc:  # pragma: no cover - 环境未就绪路径
     print(f"[环境未就绪] 无法导入 freegraph：{exc}")
-    print("→ freegraph 尚未实现（内核自 F1P1 起），或当前环境未安装本仓库。")
+    print("→ freegraph 尚未实现（内核自 B1F1 起），或当前环境未安装本仓库。")
     raise SystemExit(2) from exc
 
 

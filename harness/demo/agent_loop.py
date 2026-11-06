@@ -15,7 +15,7 @@
 最终状态（`messages` 长度、`llm_calls` 计数、工具结果）。
 
 覆盖契约：C4（稀疏状态）、C7/C8（路由与 fresh 读）、C11（完整状态）、
-C16（Command）、C17（中断恢复）；对应 Phase **F7P3 / F8P1 / F8P2 / F9P1 / F10P1**。
+C16（Command）、C17（中断恢复）；对应 feature **B7F3 / B8F1 / B8F2 / B9F1 / B10F1**。
 
 依赖：**只 import `freegraph` 与 Python 标准库**。
 
@@ -39,7 +39,7 @@ try:
     )
 except ImportError as exc:  # pragma: no cover - 环境未就绪路径
     print(f"[环境未就绪] 无法导入 freegraph：{exc}")
-    print("→ freegraph 尚未实现（内核自 F1P1 起），或当前环境未安装本仓库。")
+    print("→ freegraph 尚未实现（内核自 B1F1 起），或当前环境未安装本仓库。")
     raise SystemExit(2) from exc
 
 
@@ -274,7 +274,7 @@ def case_interrupt_in_loop() -> None:
         out = app.invoke(Command(resume="yes"))
     except Exception as exc:  # noqa: BLE001
         soft(False, "Command(resume=) 后工具带审批结果继续执行",
-             f"恢复需 checkpointer 支持（{type(exc).__name__}: {exc}）——载体待 F14P1 锁定")
+             f"恢复需 checkpointer 支持（{type(exc).__name__}: {exc}）——载体待 B14F1 锁定")
         return
     msgs = out.get("messages", [])
     check(

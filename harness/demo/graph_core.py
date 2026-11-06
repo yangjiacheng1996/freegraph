@@ -13,8 +13,8 @@
 * **只 import `freegraph` 与 Python 标准库**——不引入任何第三方依赖，
   因此它同时是「零第三方运行时依赖」承诺（S1 / 立项书 §5.5）的**可执行证据**；
 * **不依赖 LangChain**——证明内核的图语义独立成立，不是因为「蹭了 LangChain 才跑得起来」；
-* 覆盖契约 **C1–C26** 中可独立判定的部分，对应 Phase **F4P1 / F5P1 / F5P2 / F6P1 / F7P1 /
-  F7P2 / F7P3 / F8P1 / F8P3 / F9P1 / F10P1 / F11P1 / F12P1 / F13P1**（即 M1 + M2）。
+* 覆盖契约 **C1–C26** 中可独立判定的部分，对应 feature **B4F1 / B5F1 / B5F2 / B6F1 / B7F1 /
+  B7F2 / B7F3 / B8F1 / B8F3 / B9F1 / B10F1 / B11F1 / B12F1 / B13F1**（即 M1 + M2）。
 
 它在 `target.py` **之前**跑：内核不过，图兼容无从谈起。
 
@@ -27,12 +27,12 @@
 本脚本锁定了若干**章程未逐字规定**的接口形态，是实现者的靶子（括号内为章程依据）：
 
 * 公开门面统一为 `freegraph.graph`，且须再导出 `Command` / `Send` / `interrupt` /
-  `RunConfig`（依据：F2P2「公开 API 门面 `freegraph/graph.py`」+ C16/C17/C18/C22）；
-* `add_node(name, fn, alias=...)` 的**节点别名**形态（依据：C25 / F8P3）；
+  `RunConfig`（依据：B2F2「公开 API 门面 `freegraph/graph.py`」+ C16/C17/C18/C22）；
+* `add_node(name, fn, alias=...)` 的**节点别名**形态（依据：C25 / B8F3）；
 * `compile(checkpointer=..., store=...)` 的关键字形态（依据：C10 / C19 / C20）；
 * `invoke(input, config)` 的 `config` 同时接受 `RunConfig` 与普通 dict
   （依据：C11 签名 `invoke(input, config=None)` + C22）；`recursion_limit` 走 dict 形态
-  （依据：F13P1）。
+  （依据：B13F1）。
 
 `target.py` 是**只读基准**，本脚本不是——它随内核演进，但每次 v1 交付前必须全绿。
 """
@@ -56,7 +56,7 @@ try:
     )
 except ImportError as exc:  # pragma: no cover - 环境未就绪路径
     print(f"[环境未就绪] 无法导入 freegraph：{exc}")
-    print("→ freegraph 尚未实现（内核自 F1P1 起），或当前环境未安装本仓库。")
+    print("→ freegraph 尚未实现（内核自 B1F1 起），或当前环境未安装本仓库。")
     raise SystemExit(2) from exc
 
 
@@ -389,7 +389,7 @@ def case_interrupt_resume() -> None:
         out = app.invoke(Command(resume="yes"))
     except Exception as exc:  # noqa: BLE001
         soft(False, "C17 Command(resume=) 从节点起点重跑并拿到 resume 值",
-             f"恢复需 checkpointer 支持（{type(exc).__name__}: {exc}）——载体待 F14P1 锁定")
+             f"恢复需 checkpointer 支持（{type(exc).__name__}: {exc}）——载体待 B14F1 锁定")
         return
     check(
         any("answer=yes" in str(m) for m in (out.get("messages") or [])),
@@ -442,10 +442,10 @@ def case_concurrency_and_errors() -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# A8 · 递归上限：F13P1
+# A8 · 递归上限：B13F1
 # ─────────────────────────────────────────────────────────────────────────────
 def case_recursion_limit() -> None:
-    section("A8 递归上限 · F13P1")
+    section("A8 递归上限 · B13F1")
 
     def loop(state: State) -> dict:
         return {"messages": ["loop"], "llm_calls": state.get("llm_calls", 0) + 1}
@@ -458,8 +458,8 @@ def case_recursion_limit() -> None:
     app = g.compile()
     try:
         app.invoke({"messages": [], "llm_calls": 0}, {"recursion_limit": 3})
-        # 「超限抛明确异常」的语义由章程规定（F13P1），但**载体**（dict / RunConfig / 其他）章程未锁
-        soft(False, "recursion_limit 超限抛明确异常", "以 dict 形态传 `recursion_limit` 未触发超限——载体待 F13P1 锁定")
+        # 「超限抛明确异常」的语义由章程规定（B13F1），但**载体**（dict / RunConfig / 其他）章程未锁
+        soft(False, "recursion_limit 超限抛明确异常", "以 dict 形态传 `recursion_limit` 未触发超限——载体待 B13F1 锁定")
     except Exception as exc:  # noqa: BLE001
         check(True, "recursion_limit 超限抛明确异常", f"（{type(exc).__name__}）")
 
@@ -520,7 +520,7 @@ def case_node_alias() -> None:
         g.add_node("agent", node, alias="model")
     except TypeError as exc:
         # C25 的**语义**由章程规定，但「别名」的具体调用形态章程未锁（C25 只说「允许别名」）
-        soft(False, "C25 节点别名可寻址", f"实现未采用 `add_node(..., alias=)` 形态（{exc}）——形态待 F8P3 锁定")
+        soft(False, "C25 节点别名可寻址", f"实现未采用 `add_node(..., alias=)` 形态（{exc}）——形态待 B8F3 锁定")
         return
     g.add_edge(START, "agent")
     g.add_edge("agent", END)

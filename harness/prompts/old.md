@@ -1,4 +1,11 @@
 # 开发指南
+
+> **⚠️ 本文件是历史归档（开发指南的旧版），已被 `harness/prompts/guide.md` 取代。**
+> 其中的术语沿用**旧体系**（layer / Feature / Phase），与现行体系不一致：
+> 现行体系为 **层 layer（L1–L6） → 领域 area（A1–A8） → 功能块 block（B1–B25）
+> → feature（B<n>F<m>，= speckit 的一次闭环 = 最小开发单位）**。
+> 保留原文以存历史，**请勿据此行动**。
+
 ## 项目背景
 本项目freegraph是我的个人项目，我启动这个项目的原因，以及我的一些想法都写到了 `harness/prompts/why_this_project.md` 。
 
@@ -58,7 +65,7 @@
 5. 人工验收脚本，harness/demo/*.py
 
 
-现在，请你阅读参考文档，根据立项书中的layer-feature-phase设计，为每一个phase编写一个提示词初稿，放到 `harness/features`目录中。每个提示词初稿将作为 /speckit.specify 子命令的提示词。
+现在，请你阅读参考文档，根据立项书中的layer-功能块-feature设计，为每一个phase编写一个提示词初稿，放到 `harness/features`目录中。每个提示词初稿将作为 /speckit.specify 子命令的提示词。
 初稿文件名以 Phase编号_Phase小目标.md 的格式来命名。并且需要一个导航文件 `harness/features/README.md` ，这是给人看的导航文件，内容是对Phase进行排序，作为开发顺序，第一步开发哪个Phase、第二步开发哪个Phase......
 
 

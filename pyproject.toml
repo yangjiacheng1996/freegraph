@@ -37,8 +37,8 @@ classifiers = [
 # 2026-11-05（宪法 v1.2.0）：原为 ["typing-extensions>=4.7.0"]——
 # 该依赖的存在理由（"`typing.Self` 在 3.10 起可用"）经实测**不成立**
 # （`typing.Self` 是 3.11 才有的），且实测 3.10/3.11 的标准库足以支撑
-# v1 全部 31 个 Phase 的 typing 需求（详见宪法修订记录 v1.2.0 与
-# specs/001-p01-contracts-core/research.md 的 D-21）。基础安装依赖闭包 MUST 为空集
+# v1 全部 31 个 feature 的 typing 需求（详见宪法修订记录 v1.2.0 与
+# specs/b1f1-contracts-core/research.md 的 D-21）。基础安装依赖闭包 MUST 为空集
 # （由 tests/contracts/test_architecture.py 的 G3 门禁断言）。
 dependencies = []
 

@@ -59,7 +59,7 @@ try:
     )
 except ImportError as exc:  # pragma: no cover - 环境未就绪路径
     print(f"[环境未就绪] 无法导入 freegraph：{exc}")
-    print("→ freegraph 尚未实现（内核自 F1P1 起），或当前环境未安装本仓库。")
+    print("→ freegraph 尚未实现（内核自 B1F1 起），或当前环境未安装本仓库。")
     raise SystemExit(2) from exc
 
 import freegraph
@@ -67,9 +67,9 @@ import freegraph
 HERE = Path(__file__).resolve().parent
 
 SUITES: list[tuple[str, str, str]] = [
-    ("core", "graph_core.py", "图运行时内核（C1–C25 / F4P1–F13P1）"),
+    ("core", "graph_core.py", "图运行时内核（C1–C25 / B4F1–B13F1）"),
     ("agent", "agent_loop.py", "Agent 工具循环（零依赖等价物 / C4·C7·C8·C11·C16·C17）"),
-    ("viz", "visualization.py", "图导出与可视化（C12–C15·C26 / F8P2·F22P1·F23P1）"),
+    ("viz", "visualization.py", "图导出与可视化（C12–C15·C26 / B8F2·B22F1·B23F1）"),
 ]
 
 

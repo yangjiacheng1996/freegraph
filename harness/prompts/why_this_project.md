@@ -64,7 +64,7 @@
 - 不追求覆盖 LangSmith 全部企业功能（Fleet、Marketplace、Agent Registry、Context Hub 等），仅在 Part B 中做边界识别。
 - 不做多语言/多模型的完整 provider 矩阵。
 - 不追求与 LangChain **共存**：共存不作为验收项（见 A1 诉求 1 与 A1.1）。
-- **async 全套（`ainvoke`/`astream`）不在 v1 范围**：归 **v2 范围内（未排 Phase）**。初判「v1 不做」已于 2026-11-03 修订——LangGraph 已实现 async，**能力对等是跟进要求**；v1 不排期的理由是需同步/异步两套调度与测试，且 v1 无 async 依赖方。目标脚本不需要 async。详见立项书 §4.6 与 §12-D4。
+- **async 全套（`ainvoke`/`astream`）不在 v1 范围**：归 **v2 范围内（未排 feature）**。初判「v1 不做」已于 2026-11-03 修订——LangGraph 已实现 async，**能力对等是跟进要求**；v1 不排期的理由是需同步/异步两套调度与测试，且 v1 无 async 依赖方。目标脚本不需要 async。详见立项书 §4.6 与 §12-D4。
 
 ### A5 MVP 验收基线：`harness/demo/target.py` 必须可运行
 

@@ -9,7 +9,7 @@
 两个开关：
 
 * ``FREEGRAPH_TEST_INSTALLED=1`` ⇒ **跳过** ``sys.path`` 注入。
-  供 F3P1 的 CI「先 ``pip install .`` 再跑 pytest」用，
+  供 B3F1 的 CI「先 ``pip install .`` 再跑 pytest」用，
   否则测的是源码树而非发行产物。
 
 路径以 **fixture** 暴露（``repo_root`` / ``src_dir`` / ``contracts_dir``），
