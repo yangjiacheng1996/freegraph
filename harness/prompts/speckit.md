@@ -83,4 +83,18 @@
 > 故**每个 feature 的目录由本仓库自行创建**（`mkdir specs/b<n>f<m>-<slug>` + 写 spec.md），
 > 并在 `.specify/feature.json` 登记 `feature_directory` —— 工具链的路径解析只认这个文件，
 > 因此读写完全正常（`check-prerequisites.sh` 已实测通过）。
+>
+> **⚠️ 新克隆需手动指定 feature 目录**：`.specify/feature.json` 被 speckit
+> **故意 gitignore**（`.specify/.gitignore`：*"Machine-local Spec Kit state —
+> not meant to be shared"*）—— 它是**每检出一份**的本地指针，不随仓库分发。
+> 故在新克隆（或不在 feature 分支上）时，须显式指定：
+>
+> ```bash
+> export SPECIFY_FEATURE_DIRECTORY=specs/b<n>f<m>-<slug>
+> ```
+>
+> 否则 `check-prerequisites.sh` 会报
+> *"Feature directory not found. Set SPECIFY_FEATURE_DIRECTORY or run the
+> specify command to create .specify/feature.json."*
+> 在 **feature 分支**上则无需此变量 —— speckit 会从分支名推导目录名。
 
