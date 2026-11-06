@@ -44,7 +44,7 @@
 
 | 步 | 命令 | 对应判据 |
 |---|---|---|
-| 1.1 | `python3 -m pytest tests/contracts -q` | FR-010 / SC-007 · 八条门禁断言 |
+| 1.1 | `python3 -m pytest tests/contracts -q` | FR-010 / SC-007 · 九条门禁断言 |
 | 1.2 | `python3 -m pytest tests/contracts/test_types.py -q` | SC-004 |
 | 1.3 | `python3 -m pytest tests/contracts/test_errors.py -q` | SC-005 |
 | 1.4 | `python3 -m pytest tests/contracts/test_architecture.py -q` | SC-002 / SC-003 / SC-006 / SC-007 |
@@ -245,7 +245,7 @@ $ FREEGRAPH_TEST_INSTALLED=1 /tmp/fg-verify/bin/python -m pytest tests/contracts
 
 ## 4. 结论
 
-**通过。** B1F1 的全部验收判据（A1–A5）与八条架构门禁（G1–G8）均已实测通过，
+**通过。** B1F1 的全部验收判据（A1–A5）与**九条**架构门禁（G1–G9）均已实测通过，
 **且在剥离 `typing-extensions`、最低版本抬至 3.11 之后仍然通过**。
 
 | 判据 | 结果 | 证据 |

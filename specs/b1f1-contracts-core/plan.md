@@ -69,7 +69,7 @@
 - 每个新源文件携带署名头（FR-010 / 宪法原则 X）
 - 发行产物须带 `py.typed`（FR-009 / PEP 561）
 
-**Scale/Scope**: 实现 ≈ 520 行（3 个源文件）+ 测试 ≈ 520 行（4 个测试文件 —— 含 8 条门禁断言与门禁自检；**以断言条数为准**，估算随实现微调）+ 文档 ≈ 90 行（`THIRD_PARTY_NOTICES` + README 兼容矩阵章节 —— **两份已先行起草，本 feature 为复核并对齐**）；公开符号面恰好 8 个；本 feature 是 31 个 feature 中唯一的「纯类型地基」，后续 30 个 feature 全部引用本层
+**Scale/Scope**（实现后回填实测值）：实现 **354 行**（3 个源文件：`types.py` 209 + `errors.py` 121 + `contracts/__init__.py` 24）+ 测试 **1589 行**（4 个测试文件：`test_architecture.py` 972 + `test_types.py` 416 + `test_errors.py` 140 + `conftest.py` 61 —— 含 **9 条**门禁断言与门禁自检，共 **143** 个用例）+ 文档 ≈ 100 行（`THIRD_PARTY_NOTICES` + README 兼容矩阵章节 —— **两份已先行起草，本 Phase 为复核并对齐**）；公开符号面恰好 8 个；本 Phase 是 31 个 Phase 中唯一的「纯类型地基」，后续 30 个 Phase 全部引用本层
 
 ---
 
@@ -84,7 +84,7 @@
 | **原则 III** 验收契约优先 | `harness/demo/target.py` 原样可跑 | 本 feature **不修改** `target.py`；它当前依赖尚未交付的 `freegraph.graph` 门面（B2F2）与运行时（B7F3），故「原样可跑」在本 feature **不适用**——不得为凑这条门禁而提前交付门面 | ✅ 不适用（记录在案） |
 | **原则 IV** 可诊断性是一等功能 | 失败可被上层结构化读取，而非只能解析日志字符串 | FR-006：三个异常各暴露结构化属性（`invalid_keys` / `recursion_limit`+`current_step` / `payload`），错误消息仅为摘要 | ✅ 通过 |
 | **原则 V** 人工验收是最终验收标准 | 本 feature 结束须有人工验证记录（环境 / 步骤 / 实际输出 / 结论 / 遗留问题）；MVP 验收基线须 fake 模型 + 真实模型**各跑一遍** | `quickstart.md` 给出可复制的验证步骤；人工记录落 `harness/verification/B1F1/manual-verification.md`。**「双跑」子项在本 feature 不适用**（无运行时、无模型调用；C4 稀疏状态与 C8 条件边的回归测试分别归 B5F2 / B8F1），已显式记录、非忽略 | ✅ 通过（双跑子项不适用） |
-| **原则 VI** 规格驱动开发 | 有 proposal 与 spec，再进 tasks 与实现 | 本 feature：spec（`specs/b1f1-contracts-core/spec.md`，含 **15** 条澄清记录）→ 本 plan → tasks → 实现 | ✅ 通过 |
+| **原则 VI** 规格驱动开发 | 有 proposal 与 spec，再进 tasks 与实现 | 本 feature：spec（`specs/b1f1-contracts-core/spec.md`，含 **18** 条澄清记录）→ 本 plan → tasks → 实现 | ✅ 通过 |
 | **原则 VII** 职责边界与内核契约 | 不做 freechain 能力；契约清单以 Q8 C1–C27 为唯一权威 | 不实现 `Store` / 4 类协议（B2F1）、不做 LangChain 层能力；本 feature 冻结的类型逐条对应 C1 / C4 / C6 / C11 / C16 / C17 / **C19（checkpointer 协议所承载的「快照形状」；协议本身归 B2F1）** / C21 / C22 | ✅ 通过 |
 | **原则 VIII** 证据与术语纪律 | 事实性结论带来源标记；术语准确 | `research.md` 每条决策标注依据（Q8 §3.4 / 立项书 §5.3.1 / LangGraph 1.2.19 源码核实）；术语统一用「状态字典 / 命令原语 / 状态快照 / 运行配置」 | ✅ 通过 |
 | **原则 IX** 依赖许可证与商标红线 | 无 Elastic-2.0 / AGPL / SSPL；API 同名对齐不得暗示 affiliation | **零**第三方运行时依赖（闭包为空集，许可证白名单校验随之恒通过）；**FR-016** 落两份活文档——`THIRD_PARTY_NOTICES` + `README.md` 的「API 兼容矩阵」，其中含「兼容意图为互操作，**不构成 affiliation**」声明；**FR-016 另要求 `README.md` 含「独立实现、非 LangChain Inc. 产品」声明**（原则 IX 商标禁令的明文要求，不以「不构成 affiliation」一句替代） | ✅ 通过 |
@@ -107,7 +107,7 @@ specs/b1f1-contracts-core/
 ├── quickstart.md        # feature 1 输出：可运行的验收指南
 ├── contracts/
 │   ├── public-api.md    # 公开 API 冻结契约（8 个符号的签名与语义）
-│   └── architecture-gates.md  # 架构门禁契约（8 条门禁及其判定方式）
+│   └── architecture-gates.md  # 架构门禁契约（9 条门禁及其判定方式）
 ├── checklists/
 │   └── requirements.md  # 规格质量清单（/speckit.specify 维护）
 └── tasks.md             # feature 2 输出（/speckit.tasks 创建，本命令不生成）
@@ -134,7 +134,7 @@ tests/
     ├── conftest.py             # 让 pytest 能找到 src/ 下的包（开发期免安装）
     ├── test_types.py           # 四类型的字段、构造、校验、冻结语义
     ├── test_errors.py          # 异常体系结构、属性、基类捕获
-    └── test_architecture.py    # 架构门禁（惰性 / 零内部+零第三方 import / 依赖闭包 / 零环境变量 / 署名头 / py.typed / __all__ / 文档合规）
+    └── test_architecture.py    # 架构门禁（惰性 / 零内部+零第三方 import / 依赖闭包 / 零环境变量 / 署名头 / py.typed / __all__ / 文档合规 / **运行时环境基线**）
 ```
 
 **结构决策**：
@@ -178,4 +178,4 @@ B2F2 门面与 B7F3 运行时而「不适用」，已在门禁表中显式记录
 |---|---|---|
 | `GraphInterrupt.payload` 的**具体类型**属 B2F1 / B10F1（`Send` / `interrupt` 归 B2F1），本 feature 只能以宽松类型承载 | 属性**名**已冻结（`payload`），但其类型注解在 B2F1 落地时会被收紧 | 收紧**元素类型**不属契约破坏（spec Assumptions 已授权：`tasks` / `interrupts` / `payload` 的**元素类型**归 B2F1，**字段注解本身不动**）；属性名与载荷结构（`.value` / `.id`）已冻结。**注意**：字段**注解**本身（`RunConfig` 四字段 / `StateSnapshot` 七字段）自本 feature 起**一并冻结** —— B4F1 / B8F3 只能新增字段、不得改动已有字段的注解 |
 | `Command.PARENT` 的字符串哨兵 `"__parent__"` 理论上可与用户节点名撞名 | 极低概率 | 已写入 spec Edge Cases：该名字视为**保留名**，节点名校验归 B7F2 / B9F1 |
-| 本 feature 交付的类型被后续 feature 反复引用，改名成本极高 | 一次冻结、长期引用 | spec 已把 8 个符号名、字段名、属性名、常量值逐个写死（**15** 条澄清记录）；SC-008 要求把冻结记录写入 feature 验收记录 |
+| 本 feature 交付的类型被后续 feature 反复引用，改名成本极高 | 一次冻结、长期引用 | spec 已把 8 个符号名、字段名、属性名、常量值逐个写死（**18** 条澄清记录）；SC-008 要求把冻结记录写入 feature 验收记录 |

@@ -45,7 +45,7 @@ python3 -m pytest tests/contracts -q
 ```bash
 python3 -m pytest tests/contracts/test_types.py    -q   # 四类型的字段 / 构造 / 校验
 python3 -m pytest tests/contracts/test_errors.py   -q   # 异常体系结构与属性
-python3 -m pytest tests/contracts/test_architecture.py -q  # 八条架构门禁
+python3 -m pytest tests/contracts/test_architecture.py -q  # 九条架构门禁
 ```
 
 ---

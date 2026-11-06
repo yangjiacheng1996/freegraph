@@ -7,7 +7,7 @@ description: "B1F1 · 契约层骨架（contracts 包 + 四个核心类型 + 异
 
 **Input**: Design documents from `/specs/b1f1-contracts-core/`
 
-**Prerequisites**: plan.md（必读）、spec.md（必读 · 含 **15** 条澄清记录 + FR-016）、research.md（20 条决策）、data-model.md（5 实体 + 16 条不变式）、contracts/public-api.md（冻结 API · **规范源**）、contracts/architecture-gates.md（8 条门禁）、quickstart.md（验收指南）
+**Prerequisites**: plan.md（必读）、spec.md（必读 · 含 **18** 条澄清记录 + FR-016）、research.md（21 条决策）、data-model.md（5 实体 + 16 条不变式）、contracts/public-api.md（冻结 API · **规范源**）、contracts/architecture-gates.md（9 条门禁）、quickstart.md（验收指南）
 
 **Tests**: **包含**。spec 的 SC-002…SC-007 全部要求「可自动判定」的断言，feature 提示词 §10 亦把「对应单元测试」列为交付物 ⇒ 本清单按 **TDD 顺序**组织：每个故事的**测试任务排在实现任务之前**，且测试**必须先失败**。
 
@@ -101,7 +101,7 @@ description: "B1F1 · 契约层骨架（contracts 包 + 四个核心类型 + 异
 
 ## feature 5: User Story 3 - 契约层可被单独审计与冻结 (Priority: P3)
 
-**Goal**: 把八条红线变成**可自动判定**的断言：顶层包惰性、契约层零内部 import、零第三方 import、依赖闭包**为空集**、零环境变量零出站、署名头、`py.typed`、公开符号面恰 8 个；并落两份**活文档**（`THIRD_PARTY_NOTICES` + API 兼容矩阵）。
+**Goal**: 把九条红线变成**可自动判定**的断言：顶层包惰性、契约层零内部 import、零第三方 import、依赖闭包**为空集**、零环境变量零出站、署名头、`py.typed`、公开符号面恰 8 个；并落两份**活文档**（`THIRD_PARTY_NOTICES` + API 兼容矩阵）。
 
 **Independent Test**: 静态扫描断言契约层导入图中**零**条边指向 freegraph 内部模块、**零**条指向第三方；在子进程中检查 `import freegraph` 与 `import freegraph.contracts` 之后的 `sys.modules` 清单；断言兼容矩阵覆盖全部 8 个公开符号。
 
@@ -121,7 +121,7 @@ description: "B1F1 · 契约层骨架（contracts 包 + 四个核心类型 + 异
 - [X] T024 [US3] 在 `harness/verification/B1F1/manual-verification.md` 落**人工验证记录**（原则 V 人工门禁）：五段齐全 —— **环境**（Python 版本 / 平台 / freegraph 版本 / pytest 版本）、**步骤**（照 `specs/b1f1-contracts-core/quickstart.md` 第 1–3 节）、**实际输出**（粘贴 T023 采集的**真实**输出，非「符合预期」；单测输出取 `python3 -m pytest tests/contracts -q` 的原始末行）、**结论**、**遗留问题**；**双跑子项在本 feature 不适用**（无运行时、无模型调用）须在「结论」段显式记一句，非忽略
 - [X] T025 [US3] 在 `harness/verification/B1F1/manual-verification.md` 追加「**类型冻结记录**」一节（SC-008）：逐个列出 8 个符号的**名称 / 字段清单 / 字段类型 / 结构化属性名 / 常量值 / 表示形态**，内容 MUST 与 `specs/b1f1-contracts-core/contracts/public-api.md` 的「冻结面速查」一致（该文件是冻结面的**唯一规范源**），并注明「后续 30 个 feature 的唯一引用基准」
 
-**Checkpoint**: 三条用户故事均可独立验证；八条门禁全部有可执行断言且全绿；门禁自检证明门禁有效。
+**Checkpoint**: 三条用户故事均可独立验证；九条门禁全部有可执行断言且全绿；门禁自检证明门禁有效。
 
 ---
 
@@ -271,7 +271,7 @@ Task: "在 src/freegraph/contracts/__init__.py 中再导出 5 个符号并设置
 1. Setup + Foundational → 地基就位
 2. US1 → 单独验证 → 四类型可引用（**MVP**）
 3. US2 → 单独验证 → 异常族完整，`__all__` 补齐为 8 个
-4. US3 → 单独验证 → 八条门禁全部可自动判定 + 两份活文档落盘
+4. US3 → 单独验证 → 九条门禁全部可自动判定 + 两份活文档落盘
 5. Polish → 冻结记录 + 人工验证记录落盘 → **feature 验收完成**
 
 ### Parallel Team Strategy（本项目为单人，此处仅备将来多人协作）

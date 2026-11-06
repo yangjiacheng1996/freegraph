@@ -60,41 +60,5 @@
 # /sepckit.converge
 我更新了 B<n>F<m> 的代码，请你根据代码改动，反向更新相关的 spec、plan、tasks。
 
----
 
-## 本仓库的 speckit 约定（2026-11-05 统一）
-
-| 项 | 约定 |
-|---|---|
-| **feature ID** | `B<n>F<m>` —— 立项书的规划 ID（**唯一权威**） |
-| **feature 目录** | `specs/b<n>f<m>-<slug>/` —— **直接用 feature ID**，不带 speckit 的三位序号 |
-| **short-name 建议** | `b<n>f<m>-<slug>`（与目录名一致） |
-| **提示词初稿** | `harness/features/B<n>F<m>_<小目标>.md` |
-| **人工验证记录** | `harness/verification/B<n>F<m>/manual-verification.md` |
-
-> **⚠️ 为什么目录名不带 `001-` 这类三位序号**：
-> speckit 的 `create-new-feature.sh` 用 `printf "%03d"` 生成**创建序号**前缀，
-> 而它的自动编号器（`get_highest_from_specs()`）只认 `^[0-9]{3,}-` 的目录。
-> 但那个序号表达的是「第几个被创建的」，**与立项书的规划 ID 是两个不同的轴**——
-> 一旦创建顺序 ≠ 规划顺序，它就会指错 feature。
-> 目录名应当**只表达唯一权威的规划 ID**，故不带序号。
->
-> **连带影响（须知）**：speckit 的自动编号器因此**看不见**本仓库的 feature 目录，
-> 故**每个 feature 的目录由本仓库自行创建**（`mkdir specs/b<n>f<m>-<slug>` + 写 spec.md），
-> 并在 `.specify/feature.json` 登记 `feature_directory` —— 工具链的路径解析只认这个文件，
-> 因此读写完全正常（`check-prerequisites.sh` 已实测通过）。
->
-> **⚠️ 新克隆需手动指定 feature 目录**：`.specify/feature.json` 被 speckit
-> **故意 gitignore**（`.specify/.gitignore`：*"Machine-local Spec Kit state —
-> not meant to be shared"*）—— 它是**每检出一份**的本地指针，不随仓库分发。
-> 故在新克隆（或不在 feature 分支上）时，须显式指定：
->
-> ```bash
-> export SPECIFY_FEATURE_DIRECTORY=specs/b<n>f<m>-<slug>
-> ```
->
-> 否则 `check-prerequisites.sh` 会报
-> *"Feature directory not found. Set SPECIFY_FEATURE_DIRECTORY or run the
-> specify command to create .specify/feature.json."*
-> 在 **feature 分支**上则无需此变量 —— speckit 会从分支名推导目录名。
 
