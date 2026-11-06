@@ -39,7 +39,7 @@ harness/verification/
 | feature | 记录 | 状态 |
 |---|---|---|
 | **B1F1** | [B1F1/manual-verification.md](B1F1/manual-verification.md) | ✅ 契约层骨架（四个核心类型 + 异常体系） |
-| **B2F1** | [B2F1/manual-verification.md](B2F1/manual-verification.md) | 🚧 **骨架已就位，待人工执行后回填实测输出**（5 个协议 + 5 个纯数据类） |
+| **B2F1** | [B2F1/manual-verification.md](B2F1/manual-verification.md) | ✅ **已回填实测输出**（5 个协议 + 5 个纯数据类；284 个用例 · 依赖闭包空集 · `mypy --strict` 全绿）—— 3.11 / 3.13 / 3.14 三档多版本实测**未执行**（本机仅 CPython 3.12.3），已记入该记录的 §7 遗留问题 |
 
 ## 相关
 
