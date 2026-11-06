@@ -314,7 +314,7 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
 
 **Requirement**：**MUST** 在每个引入新依赖、或扩展 API 兼容面的特性中更新上述两份清单；
 **MUST NOT** 在清单缺项的情况下宣布该特性完成；**MUST** 为新增的每一个源文件加上署名头
-（静态检查由 F3P1 的 CI 门禁落地，见 `harness/features/F3P1_项目脚手架与CI门禁.md`）。
+（静态检查由 B3F1 的 CI 门禁落地，见 `harness/features/B3F1_项目脚手架与CI门禁.md`）。
 
 ## 项目定位与范围（Additional Context）
 
@@ -366,7 +366,7 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
 > 额外条款（专利授权 / 商标隔离 / 贡献者再授权 / NOTICE / §9 收费承接支持）**对本项目
 > 均属空条款**（无专利组合、无自有商标资产、无外部贡献者、原则 X 已用
 > `THIRD_PARTY_NOTICES` 覆盖归属义务、明确不做 SaaS 变现）。
-> 由此也意味着：**本仓库本身（宪法 / 调研报告 / 验收脚本 / Phase 规格）就是作品集主体**——
+> 由此也意味着：**本仓库本身（宪法 / 调研报告 / 验收脚本 / feature 规格）就是作品集主体**——
 > 「可审计的契约」与「充分的人工验证」既是质量底线，也是能力证明。
 
 ### 非目标
@@ -377,6 +377,33 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
 - **不做 LangSmith 的托管 / 自治 / 评测平台能力**——具体清单与理由分类见原则 VII。
 
 ### 术语约定
+
+#### 本项目的开发层级词表（四层，**互斥、不可混用**）
+
+> **2026-11-05 统一（宪法 v1.4.0）**。此前「Phase」与 speckit 的「feature」同名不同义，
+> 且本项目的「Feature」层级与 speckit 的「feature」层级同名不同义——
+> 一词二义是本项目最持久的概念混淆源。本表是**唯一权威**。
+
+| 层级 | 中文 | English | ID 形式 | 数量 | 含义 |
+|---|---|---|---|---|---|
+| 1 | **层** | `layer` | `L1`–`L6` | 6 | **代码归属层**（依赖层级，取值封闭） |
+| 2 | **领域** | `area` | `A1`–`A8` | 8 | **交付分组**（粗粒度；体量表见立项书 §4.4） |
+| 3 | **功能块** | `block` | `B1`–`B25` | 25 | **交付单元**（一个可独立验收的垂直切片；含 1–3 个 feature） |
+| 4 | **feature** | `feature` | `B<n>F<m>` | 31 | **最小开发单位 = speckit 的一次闭环**（一次 `/speckit.implement` 闭环） |
+
+- **MUST NOT** 把「功能块」与「feature」混用：前者是**交付单元**（多个 feature 的分组），
+  后者是**最小开发单位**（一次闭环 = 一个 feature）。
+- **MUST NOT** 把「层」与「领域」混用：「层」是**代码归属**（L1–L6），
+  「领域」是**交付分组**（A1–A8）——一个领域可跨多层，一个层可含多个领域。
+- **MUST NOT** 把「领域」与「作用域（scope）」混用：「领域」= 交付分组；
+  「作用域」= 依赖红线/配置层/网络层的适用边界（立项书 §9.2）。
+- **ID 形式互不冲突**：`L<n>` / `A<n>` / `B<n>` / `B<n>F<m>` /
+  `E`/`S`/`R`/`D`/`C`（事实/指标/风险/决策/契约）——四套命名空间的分配规则见立项书 §4.4。
+- **参考**：`harness/features/` = feature 提示词初稿；
+  `harness/verification/<feature>/manual-verification.md` = 该 feature 的人工验证记录；
+  `specs/<NNN>-<short-name>/` = speckit 的 feature 目录。
+
+#### 官方术语对照
 
 「三大基础功能」「六大概念」「tool 循环智能体」均为**发起者自造表述，非官方术语**。
 官方术语对照表以 `harness/reports/Q4-LangSmith对LangChain的实际影响程度.md` **§3.4** 为唯一权威。
@@ -403,7 +430,8 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
 | `harness/prompts/` | 提示词（调研任务书、宪法等） |
 | `harness/reports/` | 调研报告（每题一份 + 汇总报告） |
 | `harness/proposals/` | 设计提案（调研结论转化的规格来源） |
-| `harness/features/` | **Phase 提示词初稿**（`F<n>P<m>_*.md`，每 Phase 一份 `/speckit.specify` 提示词）+ 导航文件 `README.md`（开发顺序）；其下 `<feature>/manual-verification.md` = 每个特性的人工验证记录 |
+| `harness/features/` | **feature 提示词初稿**（`B<n>F<m>_*.md`，每 feature 一份 `/speckit.specify` 提示词）+ 导航文件 `README.md`（开发顺序） |
+| `harness/verification/` | **人工验证记录**（原则 V 人工门禁）——按 feature 分目录：`<feature>/manual-verification.md`（`<feature>` = feature ID，如 `B1F1`）；含 `README.md` 说明该目录的约定 |
 | `harness/demo/target.py` | MVP 验收契约（**只读**） |
 | `harness/docs/` | 同步下来的官方文档快照（**只读**） |
 | `THIRD_PARTY_NOTICES` | 第三方代码归属与许可声明清单（原则 X） |
@@ -437,6 +465,56 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
   **freegraph 内核 MUST 零出站**；可选的 OTLP exporter 仅在用户显式传入时生效。
 - **核心层黑名单**：import `langchain` / `langchain-core`（原则 II），
   且**依赖声明中亦不得出现**（`import` 不出现 ≠ 依赖树干净）。
+
+### 运行时环境基线（Python 版本与 typing 构件上限）
+
+本项目**MUST** 在 **Python 3.11** 上运行与开发，且**MUST NOT** 使用任何
+**3.11 之后**才进入标准库的 typing 构件。本条与「依赖白名单」同属**硬约束**——
+它决定「什么样的代码能被写出来」，而不只是「能装什么包」。
+
+- **最低版本 = 3.11**：``requires-python`` MUST 为 ``>=3.11``。
+  理由（依据：修订记录 v1.2.0 · `research.md` D-21）：3.11 一次性补齐 **7 项**
+  typing 构件（`Self` / `NotRequired` / `Required` / `TypeVarTuple` / `Unpack` /
+  `LiteralString` / `dataclass_transform`），使**基础安装零第三方依赖**成为可能；
+  而 3.12 与 3.13 各只补 2 项，性价比更低；3.10 已于 2026-10 结束安全支持。
+- **typing 构件上限 = 3.11**：源码 **MUST NOT** 出现下列 3.12+ / 3.13+ 构件——
+  | 构件 | 进入 stdlib | 所属版本 |
+  |---|---|---|
+  | `TypeAliasType`（PEP 695 `type X = ...` 语法与 `typing.TypeAliasType`） | 3.12 | ❌ 禁用 |
+  | `override`（PEP 698） | 3.12 | ❌ 禁用 |
+  | `ReadOnly`（PEP 705，`TypedDict` 的只读键） | 3.13 | ❌ 禁用 |
+  | `TypeIs`（PEP 742） | 3.13 | ❌ 禁用 |
+  | PEP 695 `type` 语句语法本身 | 3.12 | ❌ 禁用 |
+  同样 **MUST NOT** 使用 3.12+ 的**语法**（如 PEP 695 `type` 语句）与
+  3.11+ 的**其他**标准库新增（`asyncio.timeout`、`tomllib`、`StrEnum` 等
+  **运行时**构件虽不属 typing，但同样须按「只用 3.11」的纪律判断，见下方判定口径）。
+- **判定口径（MUST 可自动判定）**：
+  1. **主判定 = CI 最低档**：CI 矩阵的**最低版本档 MUST 为 3.11**，
+     且**全量**跑测试（含架构门禁）——任何 3.12+ 构件在该档**天然不可用**
+     （`ImportError` / `AttributeError` / `SyntaxError`）。
+  2. **辅判定 = AST 静态断言**：架构门禁 **G9** MUST 以 `ast` 扫描
+     `src/freegraph/**/*.py`，显式点名上表的禁用构件并给出可读报错
+     （报错信息 MUST 指明「你用了 3.12+ 的 X」），而非让开发者对着
+     一个 `ImportError` 猜原因。
+  3. **人工判定**：新引入的第三方构件或标准库构件时，
+     MUST 确认其**首次进入 stdlib 的版本 ≤ 3.11**；不确定时以
+     `hasattr(typing, "<name>")` 在 3.11 上实测为准。
+- **违反后果**：属**阻断性缺陷**——MUST NOT 合入。
+  「本机 Python 是 3.12/3.13 所以能用」**不是**理由：
+  本地能跑的代码在 3.11 上会直接崩，而 3.11 是本项目的**承诺下限**。
+- **与原则 II 的关系**：原则 II 要求「内核纯净（零 langchain）」，
+  本条要求「内核**只用 3.11 以内的标准库构件**」——
+  二者叠加的结果是：**契约层与内核 MUST NOT 需要任何第三方包即可运行**。
+
+**Rationale**：Python 的 typing 是个**只增不减**的演进序列，每代都往标准库里塞新构件。
+若不设上限，开发者会不知不觉地用上本机新版本才有的构件（`Self`、`TypeAliasType`、
+`override`……），把「3.11 是下限」这条承诺在**代码里**悄悄破掉——而这种破坏
+**不会在开发机上暴露**，只在用户装包时才炸。设上限 + 可自动判定，
+是把承诺**钉进代码**而不是钉进文档。
+
+**Requirement**：本条 MUST 由 **G9 静态断言**与 **CI 最低版本档**双重落地（见上方判定口径）；
+`requires-python` MUST 保持 `>=3.11`；CI 矩阵最低档 MUST 为 3.11；
+任何违反视为阻断性缺陷。
 
 ### 质量门禁
 
@@ -526,14 +604,14 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
       必须在上传前拦截；仅靠打包配置（`only-include`）不足以保证——那是「配置」而非「机制」。
     - **受影响的原则与特性**：**原则 I–X 的实质要求均未改变**，原则 IX（许可证与商标红线）
       与原则 X（文档合规义务）亦未受影响；本条为**独立的新增门禁**，只约束**发布环节**。
-      已在 §9.1（质量门禁）与 §5.2 F24P1（打包分发）同步引用。
+      已在 §9.1（质量门禁）与 §5.2 B24F1（打包分发）同步引用。
     - **迁移方案**：无既有特性受影响（项目未开工）。落地物已就位：
       `harness/scripts/check_dist_purity.py`（断言，已用 `force-include` 做过负向验证）
       + `.github/workflows/publish.yml` 在 `uv publish` 之前插入该门禁
       + `pyproject.toml` 的 `only-include` / `exclude` 作为前置双保险。
 
   - **v1.0.0（2026-11-05）｜首次批准并定版**——本版由**立项书 §12 的 D11 与 D12** 触发，
-    两项均为「M0 前置」（不阻塞 F1P1 的编码，但阻塞 F2P1 契约冻结与 F3P1 CI 门禁生效），
+    两项均为「M0 前置」（不阻塞 B1F1 的编码，但阻塞 B2F1 契约冻结与 B3F1 CI 门禁生效），
     现已由发起者**批准并落地**。
     - **变更了什么**（两处原则修订 + 一处 housekeeping）：
       1. **原则 VII 的 MINOR 修订**：契约清单的权威范围由 **C1–C26 扩为 C1–C27**
@@ -552,7 +630,7 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
          并须写明）。质量门禁第 4 项同步。
       3. **housekeeping**：移除文件头的临时「SYNC IMPACT REPORT」草稿块（其内容含已失效描述）；
          「演进触发」条目的契约范围同步为 C1–C27；目录约定补入 `harness/features/`
-         （Phase 提示词初稿 + 人工验证记录）。
+         （feature 提示词初稿 + 人工验证记录）。
     - **为什么**：① **C27 缺位**会让本地 trace 的存储与查询**无契约可依**，
       而它是 v1「三件套」之第 ② 件（trace 时间线 / 详情）的能力载体，且是将来 Studio 子包
       「只通过查询 API 取数、不直连 SQLite 表」这一边界的前提；**span 缺关联键**与
@@ -565,21 +643,21 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
       原则 I「自身零出站、断网可用」不变；原则 V「MUST 有零出站的可判定证据」不变，
       仅**方法**由「拦截」改为「只观测 + 按发起方归因」；原则 VII「契约清单以 Q8 为唯一权威、
       MUST NOT 擅自增删条目」不变，本次是**经批准**的增补（Q8 §3.4.1 + 立项书 §5.3.1）。
-      受影响特性：M0 的 **F2P1**（契约冻结前置解除）、**F3P1**（CI 门禁口径确定）、
-      M3 的 **F8P2 / F18P1 / F19P1 / F20P1 / F20P2**（须实现 C22 / C23 字段约定与 C27）。
+      受影响特性：M0 的 **B2F1**（契约冻结前置解除）、**B3F1**（CI 门禁口径确定）、
+      M3 的 **B8F2 / B18F1 / B19F1 / B20F1 / B20F2**（须实现 C22 / C23 字段约定与 C27）。
     - **迁移方案**：**无破坏性变更**——v1 尚未开工，**无已实现特性需要迁移**；
       C1–C26 的语义与编号**未变**（仅增补 C27 + 补齐字段约定）；已冻结的类型形状
       （`RunConfig` 四字段、`StateSnapshot` 七字段等）**不变**（`run_id` **不进** `RunConfig`，
       由运行时生成）。落地物：Q8 §3.4.1 · 立项书 §5.3 / §5.3.1 / §5.8.3 · 立项书 §12 的
       D11 / D12 状态与 §13.3 签署 · 本宪法原则 V / 原则 VII 正文与本条记录。
 
-  - **v1.1.0（2026-11-05）｜MINOR —— 砍掉 `Store`（F17P1），并补入「通用图框架」定位**
+  - **v1.1.0（2026-11-05）｜MINOR —— 砍掉 `Store`（B17F1），并补入「通用图框架」定位**
     - **变更了什么**：① **项目定位**新增「定位补充」小节——freegraph 是**通用图框架**
       （不止智能体开发，还包括 **RPA 自动化**、**脚本编排**、在一定程度上**替代 `main` 函数**、
       **可视化工作流编排**），并据此确立「**图 = 一个进程**」这条范围边界；
       ② **原则 VII** 新增一条：`v1` **MUST NOT** 提供**跨会话 / 跨图**的长期记忆（`Store`）
-      ——**F17 / F17P1 已从 v1 移除**（合计口径由 25 Feature / 32 Phase / 31,520 行 / 96 人日
-      变为 **24 Feature / 31 Phase / 30,600 行 / 93 人日**），契约 **C20 仍冻结**（实现后补）；
+      ——**B17 / B17F1 已从 v1 移除**（合计口径由 25 功能块 / 32 feature / 31,520 行 / 96 人日
+      变为 **24 功能块 / 31 feature / 30,600 行 / 93 人日**），契约 **C20 仍冻结**（实现后补）；
       ③ `compile(store=...)` 关键字仍被接受但 v1 **背后无实现**，文档 MUST 显式写明；
       ④ **项目性质补充**：明确本项目是**个人开源项目**（作品集 / 名片 / 能力证明，
       非以盈利为直接目的），并据此锁定**许可证 = MIT**（D3，2026-11-05）——
@@ -591,12 +669,12 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
     - **受影响的原则与特性**：**原则 I–X 的实质要求均未改变**——原则 VII 原本就要求
       「MUST NOT 擅自增删契约条目」，本次是**经批准的**范围收缩（C20 保留、不删不改）；
       原则 IV（四类诊断能力）不受影响（Store 不在其依赖链上）；原则 IX / X 不受影响。
-      受影响特性：立项书 §12 **D5**（Store 与 Studio UI 一并归 v2）、§4.6、§5.2（删 F17P1 行）、
+      受影响特性：立项书 §12 **D5**（Store 与 Studio UI 一并归 v2）、§4.6、§5.2（删 B17F1 行）、
       §6 / §7（totals：94 天 / 93,000 元 / 186,000 元）。
     - **迁移方案**：**无破坏性变更**——v1 尚未开工，**无已实现特性需要迁移**；C1–C27 的
       语义与编号**未变**（仅 C20 的 v1 归属标为「已砍 / 实现后补」）；
-      `harness/features/F17P1_*.md` 初稿已删除，`harness/features/README.md` 的行序表
-      与里程碑 / 关键路径视图已同步为 31 Phase。
+      `harness/features/B17F1_*.md` 初稿已删除，`harness/features/README.md` 的行序表
+      与里程碑 / 关键路径视图已同步为 31 feature。
 
   - **v1.2.0（2026-11-05）｜MINOR —— 剥离 `typing-extensions`（基础安装零依赖）+ 最低 Python 版本抬至 3.11**
     - **变更了什么**：① **依赖白名单**的**必装运行时依赖由 `typing-extensions` 改为「无」**
@@ -609,11 +687,11 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
       ≥3.10 的理由写作「`typing.Protocol` / `TypeAlias` / **`Self`** 在 3.10 起可用」，
       但 **`typing.Self` 是 3.11 才进入标准库的**（实测 Python 3.10.21 无 `Self`）；
       且同一行本已写明「`typing-extensions` 只需兜底少数新特性，**不作为最低版本约束**」。
-      ② **实测证明 3.10 的标准库足以支撑 v1 全部 31 个 Phase**：31 份 Phase 提示词用到的
+      ② **实测证明 3.10 的标准库足以支撑 v1 全部 31 个 feature**：31 份 feature 提示词用到的
       typing 构造只有 `Annotated`(20) / `Protocol`(8) / `TypedDict`(7) / `runtime_checkable`(1) /
       `get_type_hints`(1)，**全部是 3.10 标准库成员**；`Self` / `NotRequired` / `TypeVarTuple` /
       `Unpack` / `LiteralString` / `dataclass_transform` / `asyncio.TaskGroup` /
-      `ExceptionGroup` 在提示词中出现 **0 次**（F12P1 FR-008 明写「本 Phase **不引入 async**
+      `ExceptionGroup` 在提示词中出现 **0 次**（B12F1 FR-008 明写「本 feature **不引入 async**
       （v2 范围）——并发用**线程**实现即可」）。缺口可用标准库惯用法闭合：
       `Self` → `TypeVar` bound 惯用法、`assert_never` → `NoReturn`、
       `Required`/`NotRequired` → 结构化识别（freegraph 自身**不需要命名**它们，鸭子类型哲学）。
@@ -630,11 +708,11 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
       原则 IX 的**许可证白名单 {MIT, Apache-2.0, BSD-2/3, PSF} 不变**（删除一个依赖不与该白名单冲突，
       且剥离后闭包为空、白名单校验**恒通过**）；原则 X（文档合规义务）不变，
       只是 `THIRD_PARTY_NOTICES` §2 的登记项由「有一行」变为「空表」。
-      受影响特性：**F1P1**（本 Phase 的依赖闭包门禁 G3 由「闭包 == {typing-extensions}」
+      受影响特性：**B1F1**（本 feature 的依赖闭包门禁 G3 由「闭包 == {typing-extensions}」
       改为「闭包 == 空集」；契约层实现**零改动**——实测其从不 import 该包）；
-      **F3P1**（CI 矩阵最低版本由 3.10 改 3.11、依赖门禁断言改写）；
-      **F24P1**（打包元数据 `Requires-Dist` 由一条变零条、`Requires-Python` 抬版本）；
-      **F2P1 / F4P1 / F6P1**（可用 `Self` / `NotRequired` 等 3.11 typing，**MUST NOT** 再 import
+      **B3F1**（CI 矩阵最低版本由 3.10 改 3.11、依赖门禁断言改写）；
+      **B24F1**（打包元数据 `Requires-Dist` 由一条变零条、`Requires-Python` 抬版本）；
+      **B2F1 / B4F1 / B6F1**（可用 `Self` / `NotRequired` 等 3.11 typing，**MUST NOT** 再 import
       `typing_extensions`）。
     - **迁移方案**：**无破坏性变更**——v1 尚未发布任何含内核实现的版本，**无已实现特性需要迁移**；
       已冻结的类型形状（`StateDict` / `Command` / `StateSnapshot` / `RunConfig` 四类型 + 异常体系
@@ -644,7 +722,7 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
       `Requires-Python: >=3.10`）是**历史事实，不予改写**；下一次发布以 **v0.0.3** 为准
       （`Requires-Dist` 无、`Requires-Python: >=3.11`）。
       落地物：`pyproject.toml` · `.specify/memory/constitution.md`（本条 + 依赖白名单 + 质量门禁第 2 项）·
-      `harness/proposals/立项书.md`（§5.4 E18 / §5.5 / §12）· `specs/001-p01-contracts-core/`
+      `harness/proposals/立项书.md`（§5.4 E18 / §5.5 / §12）· `specs/b1f1-contracts-core/`
       （spec FR-007 / SC-002 · plan · research · tasks · quickstart · architecture-gates G3）·
       `tests/contracts/test_architecture.py`（G2 / G3 / G8 断言）· `README.md` · `THIRD_PARTY_NOTICES`。
 
@@ -681,4 +759,93 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
 > 本次变更**不触及**任何原则 I–X 的实质要求，也**不触及**任何已冻结的公开面
 > （`freegraph.contracts` 的 8 个符号、字段名、字段注解与行为**全部不变**）。
 
-**Version**: 1.2.0 | **Ratified**: 2026-11-05（发起者批准；首次批准即定版为 1.0.0） | **Last Amended**: 2026-11-05
+  - **v1.3.0（2026-11-05）｜MINOR —— 新增「运行时环境基线」章节：最低 Python 3.11 且 typing 构件不得高于 3.11**
+    - **变更了什么**：新增章节 **「运行时环境基线（Python 版本与 typing 构件上限）」**
+      （位于「质量门禁与交付流程」之下，紧随「依赖白名单 / 黑名单」），规定两条硬约束：
+      ① **最低版本 = 3.11**（`requires-python` MUST 为 `>=3.11`）；
+      ② **typing 构件上限 = 3.11** —— 源码 **MUST NOT** 出现
+      `TypeAliasType`（PEP 695）、`override`（PEP 698）、`ReadOnly`（PEP 705）、
+      `TypeIs`（PEP 742）或 PEP 695 的 `type` 语句语法（均为 3.12+ / 3.13+ 构件）。
+      本条**明确给出判定口径**：① **主判定 = CI 矩阵最低档 MUST 为 3.11 且跑全量测试**
+      （3.12+ 构件在该档天然不可用）；② **辅判定 = 架构门禁 G9** 以 `ast` 静态扫描
+      并给出可读报错；③ 人工判定以「该构件首次进入 stdlib 的版本 ≤ 3.11」为准。
+      同时明确「本机 Python 是 3.12/3.13 所以能用」**不是**理由。
+    - **为什么**：v1.2.0 把最低版本抬到 3.11 之后，「3.11 是下限」这条承诺就**只存在于
+      `pyproject.toml` 的一行字与文档里**——代码层面并无约束。Python 的 typing 是
+      **只增不减**的演进序列，开发者会不知不觉地用上本机新版本才有的构件，
+      把承诺在**代码里**悄悄破掉；而这种破坏**不会在开发机上暴露**，
+      只在用户装包时才炸（`ImportError` / `AttributeError` / `SyntaxError`）。
+      设上限 + 可自动判定，是把承诺**钉进代码**而不是钉进文档。
+      另：v1.2.0 已把 `typing-extensions` 剥离，若不加此约束，
+      开发者很可能在「反正要写 `Self`」时把 `typing_extensions` 加回来——
+      那会把刚兑现的「零第三方依赖」推倒。**两条约束互为闭环。**
+    - **受影响的原则与特性**：**原则 I–X 的实质要求均未改变**——原则 II（内核纯净）
+      的要求**不变**（仍是「零 langchain」），本条是**与之叠加**的独立约束，
+      二者合起来的结果是「内核 MUST NOT 需要任何第三方包即可运行」；
+      原则 IX（许可证与商标红线）不涉及；原则 X（文档合规义务）不涉及。
+      **本条本身不是一条新原则**（未新增「原则 XI」），而是交付流程下的一个章节——
+      理由：全仓库约 30 处文档以「原则 I–X」作交叉引用，新增原则会引发大范围措辞返工，
+      而本条的**性质是工程约束**（决定能写出什么代码），不是**价值取向**（决定为什么）。
+      受影响特性：**全部 31 个 feature**（每个 feature 的实现都受此约束）；
+      **B3F1**（CI 矩阵最低档 MUST 为 3.11，且须跑全量测试——这是本条的**主判定**）；
+      **B4F1 / B6F1 / B7F1 / B8F3**（`Self` / `NotRequired` / `TypeVarTuple` /
+      `Unpack` 等**恰好**在 3.11 可用，故这些 feature **不受影响**）；
+      **B2F1**（四类协议的协议定义 MUST 只用 ≤3.11 构件）。
+      **已冻结的公开面不受影响**——`freegraph.contracts` 的 8 个符号、
+      字段名、字段注解与行为**全部不变**（其注解本就在 3.11 标准库内）。
+    - **迁移方案**：**无破坏性变更**——本条约束的是**未来**写出的代码，
+      不要求任何既有代码改动；已交付的 `freegraph.contracts`（v0.0.3）
+      **本已合规**（实测：其全部 typing 构件均 ≤3.11）。
+      落地物：宪法「运行时环境基线」章节（本条）·
+      `tests/contracts/test_architecture.py` 的 **G9** 静态断言（含门禁自检）·
+      `harness/proposals/立项书.md` §5.4 E18 与最低版本行（补「typing 构件上限」）·
+      `harness/features/B3F1_项目脚手架与CI门禁.md`（CI 矩阵最低档 + G9 门禁）·
+      `specs/b1f1-contracts-core/`（plan / research D-21 / architecture-gates G9）。
+    - **housekeeping（同批）**：① **人工验证记录迁出 `harness/features/`**——
+      新增顶层目录 **`harness/verification/`**，按 feature 分目录存放
+      `<feature>/manual-verification.md`（`<feature>` = feature ID，如 `B1F1`）。
+      **理由**：`harness/features/` 是**feature 提示词初稿**的目录（每 feature 一份
+      `/speckit.specify` 提示词），把**人工验证记录**混在其中会让
+      「提示词」与「验收产物」两类性质完全不同的文档混在一个目录里；
+      独立成目录后，「每个 feature 的验收记录在哪」是一个**一眼可见**的约定。
+      ② 已同步全仓 **38 处**路径引用（30 份 feature 提示词 + 立项书 + guide.md +
+      更名说明 + 本层 plan / quickstart / tasks）。③ 宪法「目录约定」表同步补行。
+      **迁移方案**：路径变更，**不影响**任何原则的实质要求与任何已冻结的公开面；
+      已用 `git mv` 保留文件历史（GitHub 上显示为 rename 而非 delete + add）。
+
+  - **v1.4.0（2026-11-05）｜MINOR —— 统一开发层级词表：Phase → feature、Feature → 功能块、域 → 领域**
+    - **变更了什么**：新增「术语约定」下的**开发层级词表（四层）**，并据此把全仓库的
+      术语与 ID 统一：
+      | 层级 | 旧称 | 新称 | ID |
+      |---|---|---|---|
+      | 1 | 层 | **层** layer | `L1`–`L6`（不变） |
+      | 2 | 域 | **领域** area | `A1`–`A8`（ID 不变） |
+      | 3 | **Feature** | **功能块** block | `F<n>` → **`B<n>`** |
+      | 4 | **Phase** | **feature** | `F<n>P<m>` → **`B<n>F<m>`** |
+      同时：立项书 §5.2 执行明细表**新增「领域」列**（此前「领域」只存在于 §4.4 体量表，
+      日常开发看不见）；`harness/features/` 的 31 份提示词初稿与
+      `harness/verification/B1F1/`、`specs/b1f1-contracts-core/` 同步重命名。
+    - **为什么**：**一词二义**是本项目最持久的概念混淆源——立项书的「Phase」与
+      speckit 的「feature」**同名不同义**（speckit 的一次闭环 = 一个 feature =
+      立项书的「Phase」），而立项书的「Feature」层级又与 speckit 的「feature」
+      **同名不同义**（前者是含 1–3 个 Phase 的交付单元，后者是最小闭环）。
+      开发时用 `/speckit.implement` 拆 tasks 成多个「Phase」，与立项书的「Phase」
+      撞车，徒增沟通成本。统一后：**feature = 最小开发单位 = speckit 闭环**
+      （与工具链天然对齐），**功能块 = 交付单元**，**领域 = 交付分组**，**层 = 代码归属**——
+      四层各一个字母，互斥且不可混用。
+    - **受影响的原则与特性**：**原则 I–X 的实质要求均未改变**；**已冻结的公开面
+      （`freegraph.contracts` 的 8 个符号 / 字段名 / 字段注解 / 行为）完全不变**——
+      本次只改**项目自身的开发术语与 ID 命名**，不触及任何用户可见的 API。
+      受影响：全部 31 个 feature 的文档与 ID；立项书 §4.4 / §5.2；宪法「目录约定」与
+      「术语约定」；`harness/features/` 导航；`harness/verification/`；`specs/` 目录名；
+      `harness/prompts/guide.md` 与 `harness/prompts/old.md`（后者加失效横幅，不改写原文）。
+    - **迁移方案**：**无破坏性变更**——改名不改变任何交付内容与行为；改动为
+      **ID 与散文措辞**两类，已用脚本批量执行并逐项校验（`F<n>P<m>` 1597 处、
+      裸 `F<n>` 340 处、散文 828 + 191 处、文件名 31 份）；
+      `.specify/templates/` 与 `.specify/scripts/`（speckit 工具链自身）**原样不动**——
+      其中的 "feature" 本就指 speckit 的 feature，改名后**恰好与新体系一致**。
+      附带修复：立项书 §4.4 表头叫「域」而正文叫「家族体量」的**自相矛盾**，
+      本次一并统一为「领域」。
+
+
+**Version**: 1.4.0 | **Ratified**: 2026-11-05（发起者批准；首次批准即定版为 1.0.0） | **Last Amended**: 2026-11-05
