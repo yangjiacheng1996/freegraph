@@ -39,6 +39,7 @@ harness/verification/
 | feature | 记录 | 状态 |
 |---|---|---|
 | **B1F1** | [B1F1/manual-verification.md](B1F1/manual-verification.md) | ✅ 契约层骨架（四个核心类型 + 异常体系） |
+| **B2F1** | [B2F1/manual-verification.md](B2F1/manual-verification.md) | 🚧 **骨架已就位，待人工执行后回填实测输出**（5 个协议 + 5 个纯数据类） |
 
 ## 相关
 

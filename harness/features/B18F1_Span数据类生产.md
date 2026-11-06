@@ -37,8 +37,15 @@ semconv；未注入 tracer 时零副作用、零开销**。
   而**不是**「产出 OTel SDK 的 span 对象」。spec 必须按此口径写成功标准。
 - **零开销**：未注入 tracer 时，MUST NOT 产生任何 span 对象分配、不引入任何额外
   import 副作用（原则 IV：「未注入 tracer 时零副作用、零开销」）。
-- **DF4 `Span` 的字段**（立项书 §5.4）：`name` / `attributes`（属性名对齐 `gen_ai.*`）/
-  `parent` / `start_time` / `end_time` / `context`。
+- **DF4 `Span` 的字段**（立项书 §5.4，**已随 B2F1 的冻结同步为 11 字段 · 2026-11-06**）：
+  `id`（span 唯一标识）/ `name` / `attributes`（属性名对齐 `gen_ai.*`）/ `parent`（**父 span 的
+  `id`**，非对象引用）/ `start_time` / `end_time` / `context` + **必带四项** `thread_id` /
+  `run_id` / 节点名 / `checkpoint_id`。
+  > **⚠️ 字段面归 B2F1，本 feature 只负责「生产」**（B2F1 澄清 Q2 / Q6）：字段的**逐字冻结**
+  > 在 B2F1（唯一权威 = `specs/b2f1-contracts-protocols/contracts/public-api.md` §1.2）
+  > ——本 feature **MUST NOT 增删字段**；确需变更走**契约修订**流程。
+  > （`id` 的必要性：`parent` 以**标识**引用父 span，放对象引用则 span 不可 JSON 序列化，
+  > C27 第 ③ 条作废——**无 `id` 的 span 无法被引用**。）
 - ✅ **关联键（缺口 2 · 已冻结 · D11 批准 2026-11-05）**：span **必带**
   `thread_id` / `run_id` / 节点名 / `checkpoint_id`（挂接 checkpointer 时有值，否则为空）；
   **缺 `run_id` 的 span 视为实现缺陷**。修订本体见 Q8 §3.4.1 / 立项书 §5.3.1 /
@@ -64,8 +71,10 @@ semconv；未注入 tracer 时零副作用、零开销**。
 
 ### 4. 功能需求
 
-- **FR-001**：系统 MUST 提供**自有 `Span` 数据类**（零第三方依赖），字段至少含
-  `name` / `attributes` / `parent` / `start_time` / `end_time` / `context`。
+- **FR-001**：系统 MUST 提供**自有 `Span` 数据类**（零第三方依赖），字段以 **B2F1 冻结面**
+  为准（**11 字段逐字冻结**：`id` / `name` / `attributes` / `parent` / `start_time` / `end_time` /
+  `context` + 必带四项 `thread_id` / `run_id` / 节点名 / `checkpoint_id`）——本 feature
+  **MUST NOT 增删字段**（字段面归 B2F1 · 本 feature 只负责生产行为）。
 - **FR-002**：系统 MUST 在节点执行时产生**节点级 span**；在检测到模型调用与工具调用
   时产生**模型级 / 工具级 span**（识别方式 MUST 基于**鸭子类型**：具备
   `invoke` 的对象 = 模型；被节点以工具方式调用 = 工具）。
@@ -106,7 +115,7 @@ semconv；未注入 tracer 时零副作用、零开销**。
 
 | 实体 | 语义 | 对应契约 |
 |---|---|---|
-| `Span`（自有数据类） | `name` / `attributes` / `parent` / `start_time` / `end_time` / `context` | **C23** / DF4 |
+| `Span`（自有数据类） | **11 字段**（B2F1 逐字冻结）：`id` / `name` / `attributes` / `parent`（父 span 的 `id`）/ `start_time` / `end_time` / `context` + 必带四项 `thread_id` / `run_id` / 节点名 / `checkpoint_id` | **C23** / DF4（**字段面归 B2F1**） |
 | span 关联键 | `thread_id` / `run_id` / 节点名 / `checkpoint_id` | **✅ C23 字段约定（已冻结 · D11 2026-11-05）** |
 
 > ✅ **口径（已冻结 · D11 批准 2026-11-05）**：立项书 §5.8.3 的**缺口 2** 已关闭——

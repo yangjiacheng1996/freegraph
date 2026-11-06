@@ -5,7 +5,8 @@
 > 2026-11-05 的决议 **D5：砍掉 `Store`（B17 / B17F1）** → 本文件中涉及 B17、32 feature /
 > 25 功能块 / 31,520 行 / 96 人日 / 192,000 元的数字**均已过期**，正确口径为
 > **24 功能块 / 31 feature / 30,600 行 / 93 人日 / 186,000 元 / 94 天**（立项书 §4.4 / §7.2）。
-> 其余结论（架构分层、4 类协议、feature 切分规则 PR-1…PR-6）仍然有效。
+> 其余结论（架构分层、**5 类协议 + 6 种数据格式**（B2F1 契约冻结后已扩充，见 §3.5 与立项书 §5.4）、
+> feature 切分规则 PR-1…PR-6）仍然有效。
 
 > **本文件回答三个问题**：
 > 1. 是否要设计架构？初步架构是什么？
@@ -31,7 +32,7 @@
 | # | 问题 | 结论 | 一句话方案 |
 |---|---|---|---|
 | **1** | 是否要设计架构？ | ✅ **要，但只设计「分层 + 契约」这一种架构，不做微服务/事件驱动/插件市场** | **6 层单向依赖 + 1 个「契约层（contracts）」**。层间只允许通过 `typing.Protocol` + 纯数据类交互；契约层是唯一允许被所有层依赖的模块。理由：Q8 实证 LangGraph 的 135 处 `langchain_core` 引用只集中在 **4 个接缝**（`RunnableConfig` / `Runnable` / `Graph` / callbacks-tracers），**证明"分层 + 契约"是唯一可行的解耦形态**，也是剥离 LangSmith 的物理保证。 |
-| **2** | 是否拆成多个功能块（模块）？ | ✅ **要，拆成 8 个**领域** / 25 个**功能块**，模块间用 **4 类协议 + 3 种数据格式**交互 | 依赖关系与协议见 §3。**关键约束**：功能块 必须是**可独立验收的垂直切片**（能单独通过门禁），而不是按技术分层切。契约层（领域 A1）是所有其他 功能块 的前置依赖。 |
+| **2** | 是否拆成多个功能块（模块）？ | ✅ **要，拆成 8 个**领域** / 25 个**功能块**，模块间用 **5 类协议 + 6 种数据格式**交互 | 依赖关系与协议见 §3。**关键约束**：功能块 必须是**可独立验收的垂直切片**（能单独通过门禁），而不是按技术分层切。契约层（领域 A1）是所有其他 功能块 的前置依赖。 |
 | **3** | feature 拆解？ | ✅ **需要，且必须拆**：**8 个**领域**中 1 个（A3）超 5000 行**，25 个**功能块**中 **1 个（B7）超单功能块 3000 行上限**，最终拆成 **32 个 feature**，**1 feature = 1 次 speckit 闭环** | 依据 §4.1 的 LangGraph 真实 LOC 逐模块标定 + §4.3 的 feature 切分表。**每个 feature 落在 500–2,000 行**（远低于 5000 硬上限，为 spec/plan/tasks 留上下文余量）。 |
 
 ### 0.1 关键数字速览
@@ -45,7 +46,7 @@
 | 最大 feature 规模 | **1,480 行**（B7F1，调度内核） | §4.4 |
 | 测试 / 实现 比 | **0.98** | §4.4 |
 | 最长依赖链（关键路径） | **15 个 feature** | §4.5 |
-| 契约层（C1–C26）条目数 | **26** | Q8 §3.4 |
+| 契约层（C1–C27）条目数 | **27** | Q8 §3.4 / §3.4.1（D11 增补） |
 | `target.py` 必须同名同签名的 API | **7 项** | Q3 §3.4 / 宪法原则 III |
 | 必须有独立回归测试的契约 | **2 条**（C4 稀疏状态、C8 条件边 fresh 读） | Q8 §5.3–5.4 |
 
@@ -140,7 +141,7 @@ LangGraph 对 `langchain_core` 的 135 处引用，按符号统计**只集中在
 | `langchain_core` 符号 | 引用数 | 性质 | freegraph 处置 |
 |---|---|---|---|
 | `runnables.RunnableConfig` | 26 | 配置传递 | 🔴 自有 `RunConfig` |
-| `runnables.Runnable` / `RunnableBindingBase` | 8 | 协议 | 🔴 自有 `Node` / `CompiledGraph` 协议 |
+| `runnables.Runnable` / `RunnableBindingBase` | 8 | 协议 | 🔴 自有 `NodeFunc` / `CompiledGraph` 协议 |
 | `runnables.graph.Graph` / `Node` / `Edge` | 5 | 图结构类型 | 🔴 自有 `Graph` 类型 |
 | `callbacks.*` / `tracers.*` | 12 | 可观测挂钩 | 🟢 换成 OTel |
 | `messages.*` / `tools.*` / `language_models.*` | 15 | LangChain 特有 | 🟢 鸭子类型，不需要 |
@@ -190,7 +191,7 @@ LangGraph 对 `langchain_core` 的 135 处引用，按符号统计**只集中在
                                 │ 只有类型，无实现
 ┌───────────────────────────────┴──────────────────────────────────────────┐
 │ L1  契约层 contracts  ⭐ 唯一被所有层依赖的模块（依赖图的根）              │
-│     C1–C26 契约 · RunConfig · Graph/Node/Edge 结构 · Command/Interrupt      │
+│     C1–C27 契约 · RunConfig · Graph/Node/Edge 结构 · Command/Interrupt      │
 │     StateSnapshot · 异常体系 · 协议(Protocol)定义                          │
 └──────────────────────────────────────────────────────────────────────────┘
          ↕  用户代码（鸭子类型：消息 / 模型 / 工具）——不 import 任何内部层
@@ -253,14 +254,14 @@ freechain 想复用契约就必须装上整个内核。**把契约层独立成�
 
 1. **有明确的用户可见能力**（"用户能 X"），不是"我们实现了 Y 类"；
 2. **可独立验收**：合并后能单独通过 7 项质量门禁中的至少第 1、2、3、4 项；
-3. **有明确的契约增量**：落地 C1–C26 中的哪几条，或新增哪条内部协议；
+3. **有明确的契约增量**：落地 C1–C27 中的哪几条，或新增哪条内部协议；
 4. **有明确的非目标**：本 功能块 **不**做什么（防止范围蔓延）。
 
 ### 3.2 功能块 全景（8 领域 / 25 交付 功能块）
 
 ```
 A1  契约与地基（Contracts & Foundation）         ← 所有其他 功能块 的前置
-    B1 契约骨架 + C1–C26 类型          B2 公开 API 门面与签名冻结
+    B1 契约骨架 + C1–C27 类型          B2 公开 API 门面与签名冻结
     B3 项目脚手架 + CI 门禁（依赖树/许可证/零出站/socket guard）
 
 A2  状态模型（State & Channels）                  ← 内核第一层
@@ -354,39 +355,51 @@ A8  交付与生态（Delivery & Ecosystem）
 | **M3 可诊断** | B14, B15, B16, B17, B18, B19, B20 | checkpoint + trace + 时间旅行 |
 | **M4 生态** | B21, B24, B25 | 打包、兼容矩阵、双跑验收、文档 |
 
-### 3.5 模块间交互：4 类协议 + 3 种数据格式
+### 3.5 模块间交互：5 类协议 + 6 种数据格式
+
+> **本节的完整协议 / 格式清单以 `harness/proposals/立项书.md` §5.4 为准**（B2F1 契约冻结后
+> 已由「4 类协议 + 4 种数据格式」扩充为 **5 类协议（P1–P5）+ 6 种数据格式（DF1–DF6）**）；
+> 本节为**速览**，改动须与 §5.4 同步。
 
 这是问题二的第二半。**freegraph 的模块间交互刻意做到极简**——
 因为 Q8 实证"一个图运行时从外界真正需要的只有 6 类东西"
 [来源: Q8 §3.1]，且**通用协议可以直接采用，LangChain 特有部分全部外移到 freechain**。
 
-#### 3.5.1 协议总览（4 类）
+#### 3.5.1 协议总览（5 类）
 
 | # | 协议 | 签名（契约层冻结） | 定义方 | 消费方 | LangChain 特有? |
 |---|---|---|---|---|---|
-| **P1** | `Node` | `Callable[[StateDict], StateDict \| Command \| None]` | 契约层 | 执行内核 | 🟢 通用 |
+| **P1** | `NodeFunc` | `Callable[[StateDict], StateDict \| Command \| None]` | 契约层 | 执行内核 | 🟢 通用 |
 | **P2** | `Checkpointer` | `get_tuple / list / put / put_writes / delete_thread / get_next_version` | 契约层 | 执行内核 | 🟡 半通用 |
 | **P3** | `TraceSink` | `on_span_start / on_span_end / current_span` | 契约层 | 执行内核 | 🔴 替代 callbacks |
 | **P4** | `Store` | `get / search / put / delete / list_namespaces / batch` | 契约层 | 执行内核 | 🟡 半通用 |
+| **P5** | `CompiledGraph` | `invoke / stream / get_graph / get_state / get_state_history / update_state` | 契约层 | 执行内核 / 可视化层 | 🔴 替代 `Runnable` |
+
+> **⚠️ 命名裁定（B2F1 澄清 Q1 · 2026-11-06）**：`Node` 一词此后**唯一**指**图结构节点元素**
+> （见下方 I3）——**节点函数协议名为 `NodeFunc`**（原写作 `Node`，与图结构元素撞名）。
+> 本表另补 **P5 `CompiledGraph`**（B2F1 契约冻结新增）。
 
 **另有一类"注入式依赖"协议**（不跨模块调用，而是由上层注入给内核）：
 
 | # | 注入点 | 形态 | 用途 |
 |---|---|---|---|
-| **I1** | `RunConfig` | 契约层的 `TypedDict` | 替代 `RunnableConfig`（**不 import `langchain_core`**） |
-| **I2** | `CompiledGraph` | 契约层的 `Protocol` | 替代 `Runnable`；`invoke` / `stream` / `get_graph` / `get_state` |
+| **I1** | `RunConfig` | 契约层的 **`frozen` dataclass** | 替代 `RunnableConfig`（**不 import `langchain_core`**） |
+| **I2** | `CompiledGraph` | 契约层的 `Protocol` | 替代 `Runnable`；`invoke` / `stream` / `get_graph` / `get_state` / `get_state_history` / `update_state` |
 | **I3** | `Graph` / `Node` / `Edge` | 契约层的数据类 | 替代 `langchain_core.runnables.graph.Graph`（**唯一必须重写的类型**） |
 
 > **⚠️ 关键约束**：`RunConfig` / `CompiledGraph` / `Graph` **必须**定义在契约层，
 > **不得**从 `langchain_core` 导入。Q8 §5.2 明确：复用 `RunnableConfig` 会把 `langchain-core` 拖回来。
 
-#### 3.5.2 数据格式总览（3 种）
+#### 3.5.2 数据格式总览（6 种 · D1–D6 与立项书 §5.4 的 DF1–DF6 一一对应）
 
 | 格式 | 用途 | 定义 | 关键字段 |
 |---|---|---|---|
 | **D1 `StateDict`** | 节点入参 / 状态 | `dict[str, Any]`（**稀疏**，只含有值的 key） | C4 语义；**不得**用 Pydantic 对象或自定义 State 类 |
 | **D2 `Command`** | 控制流 + 状态更新 | 契约层数据类 | `goto: str\|Sequence[str]\|None`、`update: dict\|None`、`resume: Any` |
-| **D3 `StateSnapshot`** | 状态查询 / 时间旅行 | 契约层 `NamedTuple`（对齐 LangGraph `types.py:683`） | `values` / `next` / `config` / `metadata` / `created_at` / `tasks` / `interrupts` |
+| **D3 `StateSnapshot`** | 状态查询 / 时间旅行 | 契约层 **`frozen` dataclass**（**自有实现**，非上游 `NamedTuple`） | `values` / `next` / `config` / `metadata` / `created_at` / `tasks` / `interrupts` |
+| **D4 `Span`** | 可观测事件载体 | 契约层 **`frozen` dataclass**（零依赖自有类型） | 11 字段：`id` / `name` / `attributes` / `parent`（父 span 的 **id**）/ `start_time` / `end_time` / `context` + **必带四项** `thread_id` / `run_id` / `node` / `checkpoint_id` |
+| **D5 `Graph` / `Node` / `Edge`** | 图结构 | 契约层数据类（**自有重写**，**不复用** `langchain_core.runnables.graph`） | `Graph.nodes` / `Graph.edges`（不可变元组）；`Node.id` / `Node.name` / `Node.metadata`；`Edge.source` / `Edge.target` / `Edge.conditional` / `Edge.condition` |
+| **D6 `TraceQuery`** | 本地 trace 查询请求（C27） | 契约层 **`frozen` dataclass** | `run_id` / `thread_id` / `node` / `start_time` / `end_time`（全部可空、可组合，全空 = 取全部） |
 
 **跨层传递的三个额外约定**：
 
@@ -402,7 +415,7 @@ A8  交付与生态（Delivery & Ecosystem）
         用户代码 / freechain
               │
               │ ① D1 StateDict（稀疏）in
-              │ ② P1 Node（鸭子类型）调用
+              │ ② P1 NodeFunc（鸭子类型）调用
               ▼
    ┌──────────────────────────────────┐
    │  L2 执行内核                       │◄──③ P2 Checkpointer（快照 + pending writes）
@@ -429,7 +442,7 @@ A8  交付与生态（Delivery & Ecosystem）
 | # | 方向 | 载体 | 格式 | 协议 | 契约依据 |
 |---|---|---|---|---|---|
 | ① | 用户 → 内核 | 节点入参 | **D1 `StateDict`** | 普通 dict 调用 | C4 / C5 |
-| ② | 用户 → 内核 | 节点函数 | **P1 `Node`** | 鸭子类型 callable | C5 |
+| ② | 用户 → 内核 | 节点函数 | **P1 `NodeFunc`** | 鸭子类型 callable | C5 |
 | ③ | 内核 → 持久化 | 快照 / pending writes | `dict`（JSON 可序列化） | **P2 `Checkpointer`** | C19 |
 | ④ | 内核 → 可观测 | span 事件 | 契约层 `Span` 数据类 | **P3 `TraceSink`** | C23 / C24 |
 | ⑤ | 内核 → 用户 | 执行结果 | **D1 `StateDict`**（**完整状态**） | 返回值 | C11 |
@@ -535,7 +548,7 @@ freegraph 要实现的是 LangGraph 的**一个子集**，且**必须重写而�
 | feature | 名称 | 实现 | 测试 | 合计 | 依赖 | 交付物 |
 |---|---|---|---|---|---|---|
 | **B1F1** | 契约层骨架：`contracts/` 包 + `StateDict`/`Command`/`StateSnapshot`/`RunConfig` 类型 + 异常体系 | 520 | 380 | **900** | — | `import freegraph.contracts` 可用；C1/C11/C16 类型冻结 |
-| **B2F1** | 4 类协议（`Node`/`Checkpointer`/`TraceSink`/`Store`）+ `CompiledGraph`/`Graph`/`Node`/`Edge` 协议与数据类 | 480 | 340 | **820** | B1F1 | 协议齐全；freechain 可单独依赖契约层 |
+| **B2F1** | 5 个协议（4 类可插拔协议 `NodeFunc`/`Checkpointer`/`TraceSink`/`Store` + `CompiledGraph`）+ 5 个纯数据类（`Graph`/`Node`/`Edge`/`Span`/`TraceQuery`） | 480 | 340 | **820** | B1F1 | 协议齐全；freechain 可单独依赖契约层 |
 | **B2F2** | 公开 API 门面 `freegraph/graph.py`：`StateGraph` / `START` / `END` 签名冻结 + API 快照测试 | 260 | 300 | **560** | B1F1,B2F1 | `from freegraph.graph import StateGraph, START, END` 可用；签名快照入库 |
 | **B3F1** | 项目脚手架：`pyproject.toml` + extras 划分 + CI 门禁（依赖树断言 / 许可证白名单 / 零出站 socket guard / 导入图单向检查） | 620 | 480 | **1,100** | B1F1,B2F1 | 门禁生效：故意引入 `langchain` 依赖 → CI 必须失败 |
 
@@ -630,7 +643,7 @@ freegraph 要实现的是 LangGraph 的**一个子集**，且**必须重写而�
 
 | 交付 功能块 | 体量 | 占 5000 上限 | > 5000？ | 拆为 feature |
 |---|---|---|---|---|
-| B1 契约骨架 + C1–C26 类型 | 900 | 18% | ❌ | B1F1 |
+| B1 契约骨架 + C1–C27 类型 | 900 | 18% | ❌ | B1F1 |
 | B2 公开 API 门面与签名冻结 | 1,380 | 28% | ❌ | B2F1, B2F2 |
 | B3 项目脚手架 + CI 门禁 | 1,100 | 22% | ❌ | B3F1 |
 | B4 schema 解析 + reducer 提取 | 940 | 19% | ❌ | B4F1 |
@@ -701,7 +714,7 @@ B1F1 → B2F1 → B2F2 → B4F1 → B5F1 → B5F2 → B7F1 → B9F1 → B12F1 �
 
 | 门禁 | 落地 feature | 说明 |
 |---|---|---|
-| 1 规格门禁 | 每个 feature | `specs/NNN-*/` 三件套 + `harness/proposals/` 提案 + `harness/features/<feature>/` 人工记录 |
+| 1 规格门禁 | 每个 feature | `specs/NNN-*/` 三件套 + `harness/proposals/` 提案 + `harness/verification/<feature>/` 人工记录 |
 | 2 **依赖门禁**（红线） | **B3F1** 建立，后续每 feature 持续 | CI 递归展开 `importlib.metadata.requires()`；许可证白名单；`LANGSMITH_*` 扫描；导入图单向检查 |
 | 3 **契约门禁** | **B5F2**（C4）、**B8F1**（C8）建立，后续持续 | 两条独立回归测试；`target.py` 冒烟（B8F1 起为完整验收） |
 | 4 自动门禁 | B3F1 建立 | CI 全绿 + fake 模型跑通验收基线 + socket guard 零出站断言 |
@@ -753,10 +766,10 @@ B1F1 → B2F1 → B2F2 → B4F1 → B5F1 → B5F2 → B7F1 → B9F1 → B12F1 �
 | 本指南的结论 | 对应依据 | 是否与既有文档冲突 |
 |---|---|---|
 | 6 层 + 契约层架构 | Q8 §3.3.1（4 个接缝）、Q3 §5.2（必须重写 `Graph`）、宪法原则 II | ❌ 不冲突（细化） |
-| 契约层独立可安装 | Q8 §5.1 建议 1（把 C1–C26 转成 `freegraph/protocols.py` 的 `Protocol`） | ❌ 不冲突（细化到"可单独安装"） |
+| 契约层独立可安装 | Q8 §5.1 建议 1（把 C1–C27 转成 `freegraph/protocols.py` 的 `Protocol`） | ❌ 不冲突（细化到"可单独安装"） |
 | `RunConfig` / `CompiledGraph` / `Graph` 自有 | Q8 §5.2 建议 2（5 个必须自有类型）、§5.7（`current_span()` 列为 v1 必需） | ❌ 不冲突 |
-| 4 类协议（P1–P4） | Q8 §3.4 的 C1–C26（C19 checkpointer / C23 tracer / C24 current_span / C20 store） | ❌ 不冲突（C24 被提升为必需） |
-| 3 种数据格式（D1–D3） | Q8 §3.4 C4/C5/C6/C11/C16 | ❌ 不冲突 |
+| 5 类协议（P1–P5） | Q8 §3.4 的 C1–C27（C19 checkpointer / C23 tracer / C24 current_span / C20 store / C27 本地 trace 存储与查询） | ❌ 不冲突（C24 被提升为必需） |
+| 6 种数据格式（D1–D6） | Q8 §3.4 C4/C5/C6/C11/C16/C13/C27 | ❌ 不冲突 |
 | `draw_mermaid_png` 离线不阻断 | 宪法原则 III 硬约束、Q3 §3.5 风险 1、Q3 §5 建议 3 | ❌ 不冲突 |
 | 契约层零依赖 | 宪法「包层白名单」（**必装依赖 = 无**，宪法 v1.2.0） | ❌ 不冲突 |
 | 32 个 feature | 5000 行上限（`architecture.md` 任务书）+ §4.1 LOC 标定 + §4.4 逐行求和 | ❌ 不冲突 |
@@ -817,7 +830,7 @@ B1F1 → B2F1 → B2F2 → B4F1 → B5F1 → B5F2 → B7F1 → B9F1 → B12F1 �
 |---|---|---|---|
 | **Q1** | 契约层是否**物理拆成独立发行包**（`freegraph-contracts`），还是同包内的子模块 `freegraph/contracts/`？ | **同包子模块**（v1）。理由：拆包会引入双包版本同步与安装摩擦，收益（freechain 单独装契约）在 freechain 开工前不急。契约层**代码上**保持零内部依赖，将来要拆随时可拆。 | 影响 B1F1/B2F1 的 `pyproject.toml` 布局 |
 | **Q2** | `StateSnapshot` 是否**完全对齐** LangGraph 的 `types.py:683` 字段集？ | **对齐**（`values`/`next`/`config`/`metadata`/`created_at`/`tasks`/`interrupts`）。`config` 用 freegraph 自有 `RunConfig` 而非 `RunnableConfig`。 | 影响 B2F1、B15F1 |
-| **Q3** | v1 是否**必须包含 async**（`ainvoke`/`astream`）？ | **已答（2026-11-03）：默认 v2（未排 feature）**。初判为「v1 不做」，理由是 LangGraph 的 async 为 `SyncPregelLoop` 的镜像副本、语义等价但代码量翻倍，且 `target.py` 不需要 async；**该判断已修订**——LangGraph 已实现 async，**能力对等是跟进要求**，故归入 v2 范围。v1 不排期的理由：需同步/异步两套调度与测试，且 v1 无 async 依赖方。**若 freechain 需要 async 能力，应在 freegraph 提供 async 友好的注入点（如 `Checkpointer` 的异步方法可延后），而非在 v1 内核同步实现全套 async。** | 若提前纳入 v1：约 900–1,500 行 + 2 个 feature ≈ 6 人日 / 12,000 元；且**契约层需补 async 条目**（Q8 C1–C26 目前无 async） |
+| **Q3** | v1 是否**必须包含 async**（`ainvoke`/`astream`）？ | **已答（2026-11-03）：默认 v2（未排 feature）**。初判为「v1 不做」，理由是 LangGraph 的 async 为 `SyncPregelLoop` 的镜像副本、语义等价但代码量翻倍，且 `target.py` 不需要 async；**该判断已修订**——LangGraph 已实现 async，**能力对等是跟进要求**，故归入 v2 范围。v1 不排期的理由：需同步/异步两套调度与测试，且 v1 无 async 依赖方。**若 freechain 需要 async 能力，应在 freegraph 提供 async 友好的注入点（如 `Checkpointer` 的异步方法可延后），而非在 v1 内核同步实现全套 async。** | 若提前纳入 v1：约 900–1,500 行 + 2 个 feature ≈ 6 人日 / 12,000 元；且**契约层需补 async 条目**（Q8 C1–C27 目前无 async） |
 | **Q4** | `Store`（长期记忆）与 **Studio UI** 是否确实推到 v2？ | **是**（见 §6 末尾）。 | 影响 M3/M4 范围 |
 | **Q5** | 是否接受"先做运行时层（M1）→ 再做图定义层（M2，`draw_mermaid_png` 与固定脚本在此就位）→ 再补可观测（M3）"的排序？ | **接受**。理由：运行时层独立性最高（先做可独立验收），且 `draw_mermaid_png` 属 MVP 硬约束，须与固定脚本同在 M2 就位。 | 影响整体排期 |
 
@@ -831,7 +844,7 @@ B1F1 → B2F1 → B2F2 → B4F1 → B5F1 → B5F2 → B7F1 → B9F1 → B12F1 �
 | 问题 1 给出初步架构 | ✅ | §2.3 六层图 + §2.4 四条硬约束 + §3.5 四类协议三族数据格式 |
 | 问题 2 有明确结论（要/不要 + 为什么） | ✅ | §3.1 四条判定标准 + §3.2 8 领域 25 交付 功能块 |
 | 问题 2 给出 功能块 拆解 | ✅ | §3.2 全景 + §3.3 依赖图（拓扑序）+ §3.4 MVP 优先序 |
-| 问题 2 给出模块间数据格式与协议 | ✅ | §3.5：4 类协议（P1–P4）+ 3 种格式（D1–D3）+ 8 条交互路径对照表 + PD-1..PD-5 纪律 |
+| 问题 2 给出模块间数据格式与协议 | ✅ | §3.5：5 类协议（P1–P5）+ 6 种格式（D1–D6）+ 8 条交互路径对照表 + PD-1..PD-5 纪律 |
 | 问题 3 **领域级**体量判定（模块是否超 5000 行） | ✅ | §4.4 上表：8 领域逐条判定，**A3 = 7,840 超限**，其余均 < 5000 |
 | 问题 3 **功能块 级**体量判定 | ✅ | §4.4 下表：25 个交付 功能块 逐条判定，最大 B7 = 3,660（73%），0 个超限 |
 | 问题 3 超限部分拆为多个 feature | ✅ | §4.3 **32 个 feature** 切分表 + §4.5 映射总表 + §4.4 三层判定说明 |

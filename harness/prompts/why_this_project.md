@@ -291,7 +291,7 @@ DeepAgents 处于什么抽象层（基于 LangChain agent + Graph？自带运行
 
 - 本项目全程采用 OpenCode + Speckit 编写代码。
 - 每个特性走标准流程：proposal → spec → tasks → 实现。
-- **充分的人工测试是最终验收标准**：自动测试通过不等于验收通过，必须有人工验证记录（记录文件建议落在 `harness/features/<feature>/`）。
+- **充分的人工测试是最终验收标准**：自动测试通过不等于验收通过，必须有人工验证记录（记录文件落在 `harness/verification/<feature>/manual-verification.md`）。
 - **MVP 验收基线**：`harness/demo/target.py` 必须**原样**跑通——
   fake/伪模型跑一遍（CI 可自动化），真实模型再跑一遍（人工验收），两次都要过；
   且必须在**不设任何 `LANGSMITH_*` 环境变量**的干净环境下验证（对应 A5 约束 2：彻底剥离 LangSmith，不以共存为目标）。

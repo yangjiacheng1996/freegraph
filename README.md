@@ -61,11 +61,32 @@ run graph-based AI workflows without LangSmith or external account dependencies.
 | `InvalidUpdateError` | `langgraph.errors.InvalidUpdateError` | 部分等价 | 同名、同触发条件；freegraph 额外暴露 `.invalid_keys`（上游只有消息字符串） |
 | `GraphRecursionError` | `langgraph.errors.GraphRecursionError` | 部分等价 | 同名、同触发条件；freegraph 额外暴露 `.recursion_limit` / `.current_step`（上游只有消息字符串） |
 | `GraphInterrupt` | `langgraph.errors.GraphInterrupt` | 部分等价 | 同名、同触发条件；freegraph 暴露 `.payload`（按契约 C17 带 `.value` 与 `.id`）；两者均可被 `except Exception` 捕获 |
+| `NodeFunc` | 无上游对应（自由设计） | 不支持 | 契约条目 **C5 / C6**（节点函数签名 / 节点返回值合并）——上游以普通 `dict` 调用节点函数，**无同名协议类**；返回**形态**已冻结（部分状态字典 / 命令原语 / 空值），逐 key 归约语义挂起 B4F1 / B5F1 |
+| `Checkpointer` | `langgraph.checkpoint.base.BaseCheckpointSaver` | 部分等价 | 六方法的**方法名与参数名**逐字对齐；freegraph **纯抽象、无默认实现**，上游是带实现的基类；**返回类型与载荷形状挂起 B14F1**；上游来源 `langgraph/checkpoint/base/__init__.py:239`（`get_tuple`）/ `:253`（`list`）/ `:277`（`put`）/ `:300`（`put_writes`）/ `:320`（`delete_thread`）/ `:692`（`get_next_version`） |
+| `TraceSink` | 无上游对应（自由设计） | 不支持 | 契约条目 **C23 / C24**（可观测挂钩 / 当前 span 上下文）——上游**无 span 推送协议**，其 `callbacks` / `tracers` 是**非同名**物 |
+| `Store` | `langgraph.store.base.BaseStore` | 部分等价 | 六方法与**参数名**逐字镜像上游（`search` 的 `namespace_prefix` 是位置参数、`list_namespaces` 的 `prefix` 是关键字参数——上游的这个命名分歧**照抄不统一**）；命名空间**载体形态**与 `batch` 操作表示挂起 v2；上游来源 `langgraph/store/base/__init__.py:733`（`batch`）/ `:756`（`get`）/ `:779`（`search`）/ `:856`（`put`）/ `:937`（`delete`）/ `:946`（`list_namespaces`） |
+| `CompiledGraph` | `langgraph.pregel.Pregel` | 部分等价 | 六方法的**返回类别**与**参数名（占位名）**已对齐（`invoke` → 完整状态字典 / `stream` → `dict[str, Any]` 事件迭代器 / `get_state` 查不到返回空值）；**行为细节挂起** B7F3 / B8F2 / B15F1 / B16F1；上游来源 `langgraph/pregel/main.py:3783`（`invoke`）/ `:2655`（`stream`）/ `:845`（`get_graph`）/ `:1392`（`get_state`）/ `:1480`（`get_state_history`）/ `:2515`（`update_state`） |
+| `Graph` | `langchain_core.runnables.graph.Graph` | 部分等价 | **同名但自有实现**——不复用、不复制上游代码；freegraph 的节点 / 边集合是**不可变元组**（上游是 `dict[str, Node]` / `list[Edge]`）；上游来源 `langchain_core/runnables/graph.py:255` |
+| `Node` | `langchain_core.runnables.graph.Node` | 部分等价 | **同名但自有实现**；freegraph 的 `name` 缺省**归一为 `id`**、`metadata` 是纯映射（上游 `Node.data` 装的是可调用对象 / pydantic 对象）；上游来源 `langchain_core/runnables/graph.py:95` |
+| `Edge` | `langchain_core.runnables.graph.Edge` | 部分等价 | **同名但自有实现**；freegraph 多一个 `conditional` 位并显式**不可哈希**（上游是 `NamedTuple`，可哈希）；上游来源 `langchain_core/runnables/graph.py:65` |
+| `Span` | 无上游对应（自由设计） | 不支持 | 契约条目 **C23 / C24**（可观测挂钩 / 当前 span 上下文）· 数据格式 **DF4**——11 字段、必带 `thread_id` / `run_id` / `node` / `checkpoint_id`；上游的近似物是 LangSmith 的 `RunTree`（**非同名**物） |
+| `TraceQuery` | 无上游对应（自由设计） | 不支持 | 契约条目 **C27**（本地 trace 存储与查询）——5 字段全可空、可组合，全空 = 取全部；freegraph 自有的本地 trace 查询契约 |
 
 **证据来源**（截至 2026-11-05，按 LangGraph 1.2.19 / langchain-core 1.7.6 源码核实）：
 `langgraph/types.py:711`（`StateSnapshot`）· `:738`（`Send`）· `:833`（`Command`）·
 `langgraph/errors.py:51`（`GraphBubbleUp`）· `:68`（`GraphRecursionError`）· `:91`（`InvalidUpdateError`）· `:103`（`GraphInterrupt`）·
 `langchain_core/runnables/config.py:57`（`RunnableConfig`）。
 另见 `harness/reports/Q8-图运行时最小契约.md` §3.4 与 `harness/proposals/立项书.md` §5.3。
+
+**本层（契约层协议面 · B2F1）来源**（截至 2026-11-06，按 **langgraph 1.2.11** / **langchain-core 1.6.3** 源码核实）：
+`langgraph/checkpoint/base/__init__.py:239`（`get_tuple`）· `:253`（`list`）· `:277`（`put`）· `:300`（`put_writes`）· `:320`（`delete_thread`）· `:692`（`get_next_version`）·
+`langgraph/store/base/__init__.py:733`（`batch`）· `:756`（`get`）· `:779`（`search`）· `:856`（`put`）· `:937`（`delete`）· `:946`（`list_namespaces`）·
+`langgraph/pregel/main.py:3783`（`invoke`）· `:2655`（`stream`）· `:845`（`get_graph`）· `:1392`（`get_state`）· `:1480`（`get_state_history`）· `:2515`（`update_state`）·
+`langchain_core/runnables/graph.py:255`（`Graph`）· `:95`（`Node`）· `:65`（`Edge`）。
+
+> **行号以各自标注的版本为准** —— **表内新增行**（B2F1 的 10 个符号）的上游行号以
+> **langgraph 1.2.11** / **langchain-core 1.6.3** 为准，与既有 8 行的
+> **LangGraph 1.2.19** / **langchain-core 1.7.6** **版本不同**；两套行号各自有效，
+> **不可混用**。
 
 License: MIT

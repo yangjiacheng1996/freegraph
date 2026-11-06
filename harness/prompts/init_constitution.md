@@ -141,7 +141,9 @@ LangGraph 对 `langchain_core` 的 135 处引用只集中在 4 个接缝（`Runn
 
 自动测试通过**不等于**验收通过。每个特性**MUST** 有人工验证记录。
 
-- 人工验证记录**MUST** 落在 `harness/features/<feature>/` 下。
+- 人工验证记录**MUST** 落在 `harness/verification/<feature>/` 下（`manual-verification.md`）——
+  该目录为「人工验证记录」的**唯一**约定位置；`harness/features/` 只放**特征提示词初稿**，
+  两者**MUST NOT** 混放。
 - 记录**MUST** 写明：验证环境、验证步骤、实际输出、结论、遗留问题。
 - MVP 验收基线**必须**跑两遍且都通过：
   1. **fake / 伪模型**跑一遍（CI 可自动化，用于回归）；
@@ -348,7 +350,8 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
 | `harness/prompts/` | 提示词（调研任务书、宪法等） |
 | `harness/reports/` | 调研报告（每题一份 + 汇总报告） |
 | `harness/proposals/` | 设计提案（调研结论转化的规格来源） |
-| `harness/features/<feature>/` | 每个特性的人工验证记录 |
+| `harness/features/<feature>/` | 特征提示词初稿（每特性一份 `/speckit.specify` 提示词） |
+| `harness/verification/<feature>/` | 每个特性的人工验证记录（`manual-verification.md`；原则 V 人工门禁） |
 | `harness/demo/target.py` | MVP 验收契约（**只读**） |
 | `harness/docs/` | 同步下来的官方文档快照（**只读**） |
 | `THIRD_PARTY_NOTICES` | 第三方代码归属与许可声明清单（原则 X） |
@@ -391,7 +394,7 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
    **MUST** 包含 C4（稀疏状态）与 C8（条件边 fresh 状态）两条独立回归测试（原则 II）。
 4. **自动门禁**：CI 全绿，且包含 fake 模型跑通验收基线的一轮（原则 V），
    **SHOULD** 附带 socket guard 的零出站断言（原则 V）。
-5. **人工门禁**：`harness/features/<feature>/` 下有完整人工验证记录，含真实模型一轮（原则 V）。
+5. **人工门禁**：`harness/verification/<feature>/manual-verification.md` 下有完整人工验证记录，含真实模型一轮（原则 V）。
 6. **证据门禁**：新增结论均有来源标记，术语准确（原则 VIII）。
 7. **文档合规门禁**：`THIRD_PARTY_NOTICES` 已登记、API 兼容矩阵已更新（原则 X）。
 

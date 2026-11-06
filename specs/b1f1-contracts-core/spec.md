@@ -173,6 +173,9 @@ P1/P2 交付「契约存在」，P3 交付「契约不被内部实现污染」�
 - 不实现任何运行时行为：无调度、无 channel、无状态读写。
 - 不实现 `invoke` 入口「容忍裸 dict 配置」这一运行时行为本身（属 **B7F3**）——本 feature 只冻结 `RunConfig` 提供了裸 dict 构造路径，使该行为将来落地时无需改动已冻结的类型形状。
 - 不定义节点函数协议与 4 类协议（`Node` / `Checkpointer` / `TraceSink` / `Store`）——属 **B2F1**。
+  > **后续更名注记（2026-11-06 · B2F1 澄清 Q1）**：上文的 `Node` 指**节点函数协议**，
+  > 其名在 B2F1 已定为 **`NodeFunc`**（`Node` 一词此后**唯一**指图结构节点元素）——
+  > 本行**保留原文**作为历史记录，权威口径见 `specs/b2f1-contracts-protocols/contracts/public-api.md` §1.1。
   - 注：`Store` 协议（**C20**）虽**仍冻结**，但 v1 无实现（B17 已砍，2026-11-05）——契约层保留它是为了 freechain 的设计输入不被破坏。
 - 不定义公开 API 门面 `freegraph/graph.py`——属 **B2F2**。
 - 不搭建 `pyproject.toml` 的 **extras 划分** / CI 门禁——属 **B3F1**（本 feature 只按 Clarifications「Session 2026-11-05（实现阶段 · 依赖剥离与最低版本上调）」把依赖白名单改为**空**并把 `requires-python` 抬至 3.11，**MUST NOT** 新增 extras、**MUST NOT** 新增第二发行包）。

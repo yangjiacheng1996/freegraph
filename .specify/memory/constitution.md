@@ -134,7 +134,9 @@ LangGraph 对 `langchain_core` 的 135 处引用只集中在 4 个接缝（`Runn
 
 自动测试通过**不等于**验收通过。每个特性**MUST** 有人工验证记录。
 
-- 人工验证记录**MUST** 落在 `harness/features/<feature>/` 下。
+- 人工验证记录**MUST** 落在 `harness/verification/<feature>/` 下（`manual-verification.md`）——
+  该目录为「人工验证记录」的**唯一**约定位置（见「目录约定」表）；`harness/features/` 只放
+  **feature 提示词初稿**，两者**MUST NOT** 混放。
 - 记录**MUST** 写明：验证环境、验证步骤、实际输出、结论、遗留问题。
 - MVP 验收基线**必须**跑两遍且都通过：
   1. **fake / 伪模型**跑一遍（CI 可自动化，用于回归）；
@@ -532,7 +534,7 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
 4. **自动门禁**：CI 全绿，且包含 fake 模型跑通验收基线的一轮（原则 V），
    **SHOULD** 附带 socket 监测夹具的零出站断言（**只观测不阻断 + 按发起方归因**，
    断言「框架出站 = 0」，原则 V + 立项书 §9.2）。
-5. **人工门禁**：`harness/features/<feature>/` 下有完整人工验证记录，含真实模型一轮（原则 V）。
+5. **人工门禁**：`harness/verification/<feature>/manual-verification.md` 下有完整人工验证记录，含真实模型一轮（原则 V）。
 6. **证据门禁**：新增结论均有来源标记，术语准确（原则 VIII）。
 7. **文档合规门禁**：`THIRD_PARTY_NOTICES` 已登记、API 兼容矩阵已更新（原则 X）。
 
@@ -850,8 +852,40 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
       裸 `F<n>` 340 处、散文 828 + 191 处、文件名 31 份）；
       `.specify/templates/` 与 `.specify/scripts/`（speckit 工具链自身）**原样不动**——
       其中的 "feature" 本就指 speckit 的 feature，改名后**恰好与新体系一致**。
-      附带修复：立项书 §4.4 表头叫「域」而正文叫「家族体量」的**自相矛盾**，
-      本次一并统一为「领域」。
+       附带修复：立项书 §4.4 表头叫「域」而正文叫「家族体量」的**自相矛盾**，
+       本次一并统一为「领域」。
+
+  - **v1.4.1（2026-11-06）｜PATCH —— 修正 v1.3.0 目录迁移遗留的 2 处路径残留（人工验证记录）**
+    - **变更了什么**：把**原则 V 正文**与「**质量门禁第 5 项**」两处的人工验证记录路径
+      由 `harness/features/<feature>/` 更正为 **`harness/verification/<feature>/manual-verification.md`**；
+      并在原则 V 处补一句「该目录为人工验证记录的**唯一**约定位置，`harness/features/` 只放
+      feature 提示词初稿，两者 MUST NOT 混放」。
+    - **为什么**：**v1.3.0 的 housekeeping 已把人工验证记录整体迁出 `harness/features/`**
+      （新增 `harness/verification/`，并同步全仓 38 处路径引用 + 补入「目录约定」表），
+      但**这两处漏改**——导致同一份宪法内部自相矛盾：正文说记录在 `harness/features/<feature>/`，
+      而「目录约定」表与「术语约定」说在 `harness/verification/<feature>/`。
+      后果是：① 规范正文与仓库现状冲突（实现时不知该落哪）；② 质量门禁第 5 项的
+      「人工门禁」按字面无法被判定为通过；③ 后续 feature 会各自猜测路径 → 目录重新混放。
+      该残留在 **B2F1 的文档一致性复核**中被发现并修正（属 v1.3.0 迁移的收尾，非新要求）。
+    - **受影响的原则与特性**：**原则 I–X 的实质要求均未改变**——原则 V 的核心义务
+      （「自动测试通过**不等于**验收通过」「每个特性 MUST 有人工验证记录」
+      「记录 MUST 写明验证环境 / 步骤 / 实际输出 / 结论 / 遗留问题」「MVP 验收基线 MUST 双跑」）
+      **一字未动**；本次只更正**落盘路径**这一实施细节，使正文与「目录约定」表、
+      与仓库现状（`harness/verification/{B1F1,B2F1}/manual-verification.md`）
+      三者一致。质量门禁第 5 项的**判定口径不变**（仍要求「完整人工验证记录 + 真实模型一轮」）。
+      受影响特性：**全部 31 个 feature 的人工验证记录落盘位置**（此前 B1F1 已按
+      `harness/verification/` 实际落盘，属「先做对了、文档没跟上」；本次只把文档补齐）。
+    - **迁移方案**：**无破坏性变更**、**无文件迁移**——路径早在 v1.3.0 就已迁移完毕，
+      本次只改宪法文本中 2 处残留；已实现特性的代码与文档**零改动**。
+      落地物：本宪法原则 V 正文 + 质量门禁第 5 项 + 本条修订记录 + 页脚版本号；
+      **同批修正「模板 / 引导文档」里的同源残留**（否则下一次 `/speckit.constitution`
+      会把旧路径重新生成回宪法）——`harness/prompts/init_constitution.md`
+      （原则 V 正文 + 目录约定表 + 质量门禁第 5 项）· `harness/prompts/guide.md`（规格门禁行）·
+      `harness/prompts/why_this_project.md`（人工记录路径）· `harness/demo/README.md`
+      （`--record` 示例路径）。
+      （按「版本策略」，本条属**措辞/路径残留的非语义性修订** → 记 **PATCH**，
+      版本号 **1.4.0 → 1.4.1**；发起者 2026-11-06 批准。）
 
 
-**Version**: 1.4.0 | **Ratified**: 2026-11-05（发起者批准；首次批准即定版为 1.0.0） | **Last Amended**: 2026-11-05
+
+**Version**: 1.4.1 | **Ratified**: 2026-11-05（发起者批准；首次批准即定版为 1.0.0） | **Last Amended**: 2026-11-06

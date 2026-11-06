@@ -39,7 +39,7 @@ acceptance(自检+零出站) → graph_core → agent_loop → visualization →
 python harness/demo/acceptance.py                      # 全部（推荐入口）
 python harness/demo/graph_core.py                      # 单组
 python harness/demo/acceptance.py --suite core,viz     # 只跑指定组
-python harness/demo/acceptance.py --record harness/features/freegraph/manual-verification.md
+python harness/demo/acceptance.py --record harness/verification/freegraph/manual-verification.md
 ```
 
 **退出码约定**（CI 好用）：

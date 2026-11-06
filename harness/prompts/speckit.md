@@ -34,16 +34,15 @@
 我已经更新了spec和plan，请你更新tasks
 
 # /speckit.analyse 
-我更新了 B1F1 的 spec、plan、tasks，请你阅读相关文档，检查三者内容是否有问题，是否对齐。如果遇到难以决策的地方可以question问我，提问时给出推荐选项，语言中文。
+我更新了 B2F1 的 spec、plan、tasks，请你阅读相关文档，检查三者内容是否有问题，是否对齐。如果遇到难以决策的地方可以question问我，提问时给出推荐选项，语言中文。分析之前，建议先阅读`harness/proposals/立项书.md`。
 
 # analyse之后
 好的，我看到你发现了一些问题。
-我想知道这些问题中，是否存在某些问题由于spec设计缺陷而导致的？
+如果有critical问题，请判断这些critical问题是否与spec设计缺陷有关？
 如果有，需要先修复spec缺陷。请你帮我设计一段提示词。我可以用你给的提示词，新开一个会话执行 /speckit.clarify 来修复spec缺陷。
 由于新开会话导致上下文丢失，需要你在提示词中把问题和处理办法描述清楚。如果在设计提示词的过程中有难以决策的地方，可以向我提问。
-如果spec没有问题，说明以上问题都只是plan和tasks的问题。
-如果是plan问题，给出plan提示词，我会去执行/speckit.plan命令。
-如果是tasks问题，给出tasks提示词，我会去执行/speckit.tasks命令。
+如果这些critical问题与spec无关，我授权你直接修改文件，修复以上问题。
+如果没有critical问题，我授权你直接修改文件，修复以上问题。
 如果宪法有问题，请直接修改宪法。
 如果你认为这些问题太小，忽略不计，无需修复，也可以建议我直接执行/speckit.implement 。
 我不会人工修改文档和代码，因为我担心我的失误导致项目走偏，并且人工修改成本过高，我没有这个时间。
@@ -55,7 +54,7 @@
 我看到了你的回答，明白现在需要更新宪法。请你给出宪法更新的提示词，我会新建另一个会话，开始执行/speckit.constitution +提示词 ，来修改宪法。
 
 # /speckit.implement
-根据 harness/ 目录中的 LangChain、LangGraph 官方文档，harness/proposals/立项书.md，以及相关 spec，完成 B1F1（specs/b1f1-contracts-core/）的 TDD 软件开发和测试。
+根据 harness/ 目录中的 LangChain、LangGraph 官方文档，harness/proposals/立项书.md，以及相关 spec，完成 B2F1（specs/b2f1-contracts-protocols）的 TDD 软件开发和测试。
 
 # /sepckit.converge
 我更新了 B<n>F<m> 的代码，请你根据代码改动，反向更新相关的 spec、plan、tasks。
