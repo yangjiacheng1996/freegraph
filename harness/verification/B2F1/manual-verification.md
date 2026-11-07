@@ -38,6 +38,16 @@
 
 ## 2. 步骤
 
+**最快的入口 —— 本 feature 的可运行验收脚本**（把本文的验收判据落成可判定断言）：
+
+```bash
+python3 harness/verification/B2F1/acceptance.py                    # 跑全部（119 条断言）
+python3 harness/verification/B2F1/acceptance.py --record out.md    # 同时生成五段式记录片段
+```
+
+> 该脚本**只 import Python 标准库**（零第三方依赖）；环境**未安装** freegraph 时自动注入
+> `<repo>/src` 测源码树，「依赖闭包为空集」那条判据标「◌ 环境未就绪」（**不判失败**）。
+
 照 `quickstart.md` 第 1–3 节执行：
 
 | 步 | 命令 | 对应判据 |
