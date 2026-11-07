@@ -259,3 +259,4 @@ C18 / C26）· **「修订」列非空 4 处**（C17 / C22 / C23 / C27 · 正交
 | 14 | `Send` / `interrupt` 的导出 | **v2**（B11F1 / B10F1） | 公开符号面严格 = 18 个 |
 | 15 | **B18F1 提示词**的交付物口径 | **B18F1** | 收窄为「span **生产**行为」（类型面以本文件为准） |
 | 16 | **B22F1 提示词**的 `Graph` / `Node` / `Edge` 命名 | **B22F1** | **不变**（与本文件一致） |
+| 17 | 契约层两个转出符号（`Command` / `RunConfig`）的**调用签名快照** | **B2F2**（已交付） | 门面 `freegraph.graph` 的 API 签名快照见 `specs/b2f2-public-api-facade/contracts/public-api-snapshot.txt`（**机器生成** · 由 `pytest tests/facade/test_api_snapshot.py --update-api-snapshot` 重新生成）——本文件的**字段语义与契约条目归属**仍是 `Command` / `RunConfig` 的权威，两处**各管一面、不重复** |

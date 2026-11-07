@@ -68,6 +68,7 @@ python3 harness/verification/<feature>/acceptance.py --require-installed # 要�
 |---|---|---|---|
 | **B1F1** | [B1F1/manual-verification.md](B1F1/manual-verification.md) | [B1F1/acceptance.py](B1F1/acceptance.py) | ✅ 契约层骨架（四个核心类型 + 异常体系）—— 47 条断言全绿 |
 | **B2F1** | [B2F1/manual-verification.md](B2F1/manual-verification.md) | [B2F1/acceptance.py](B2F1/acceptance.py) | ✅ **已回填实测输出**（5 个协议 + 5 个纯数据类）—— 119 条断言全绿；3.11 / 3.13 / 3.14 三档多版本实测**未执行**（本机仅 CPython 3.12.3），已记入该记录的 §7 遗留问题 |
+| **B2F2** | [B2F2/manual-verification.md](B2F2/manual-verification.md) | [B2F2/acceptance.py](B2F2/acceptance.py) | ✅ **已回填实测输出**（公开 API 门面 7 符号 + API 签名快照 + 顶层包惰性）—— 76 条断言全绿；隔离 venv（CPython **3.11.16**）实测通过，3.13 / 3.14 档**未执行**，已记入该记录的 §5 遗留问题 |
 
 ## 相关
 

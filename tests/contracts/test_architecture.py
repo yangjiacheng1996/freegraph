@@ -37,6 +37,7 @@ import re
 import subprocess
 import sys
 import types
+from collections import Counter
 from collections.abc import Mapping
 from importlib.metadata import PackageNotFoundError, metadata, requires
 from pathlib import Path
@@ -1194,19 +1195,28 @@ class TestDocumentationCompliance:
     def test_compat_matrix_rows_are_within_the_manifest(
         self, repo_root: Path
     ) -> None:
-        """**子集段**（始终启用）——矩阵已有的行 MUST ⊆ §0 的 18 个符号。
+        """**子集段**（始终启用）——契约层的 18 个符号 MUST **至多一行**。
 
-        （抓「清单外符号」与「重复 / 超量」；集合相等段在 README 补入本层
-        10 行之后启用。）
+        （抓「重复 / 超量」。矩阵**整体无重复行**是更一般的判据，一并断言。）
+
+        **口径修订（2026-11-07 · B2F2）**：兼容矩阵自 **B2F2** 起**同时**承载
+        **契约层 18 个**与**门面层 7 个**符号 ⇒「矩阵首列符号集合 **==** 契约层
+        18 个」这一**整表**判据**不再成立**。本门禁的判定因此**按层收敛到
+        契约层**——B2F2 的门禁契约声明本门禁的范围**正是**「契约层 18 个符号」
+        （门面层 7 个符号的覆盖由门禁 **G19** 判，两者的**分工不重叠**）；
+        整表的「无清单外符号」由 **G19** 一并判。
+        **契约层的任何一条判据都未被削弱**——「不多」（本段）与「不少」
+        （集合相等段）两条全部保留。
         """
         readme = (repo_root / "README.md").read_text(encoding="utf-8")
         existing, new = parse_public_api_symbols(repo_root / PUBLIC_API_MANIFEST)
         allowed = set(existing) | set(new)
         rows = _compat_matrix_rows(readme)
         names = [name for name, _ in rows]
-        assert set(names) <= allowed, f"矩阵含清单外的符号：{set(names) - allowed}"
-        assert len(names) <= len(allowed), f"矩阵行数超量：{len(names)} > {len(allowed)}"
         assert len(names) == len(set(names)), f"矩阵存在重复行：{names}"
+        counts = Counter(names)
+        over = sorted(name for name in allowed if counts[name] > 1)
+        assert not over, f"契约层符号在矩阵中出现多行：{over}"
 
     def test_compat_matrix_rows_have_three_columns(self, repo_root: Path) -> None:
         """每行 MUST 含「对应上游符号 / 等价程度 / 差异说明」三列。
@@ -1248,16 +1258,19 @@ class TestDocumentationCompliance:
                 )
 
     def test_compat_matrix_covers_every_manifest_symbol(self, repo_root: Path) -> None:
-        """**集合相等段** —— 矩阵首列符号集合 MUST **等于** §0 的 18 个符号。
+        """**集合相等段** —— 契约层的 18 个符号 MUST 在矩阵中**全部齐备**。
 
         （README 已补入本层 10 行 ⇒ 该段自此启用；抓「漏写」。）
+
+        **口径修订（2026-11-07 · B2F2）**：矩阵自 **B2F2** 起同时承载**门面层**
+        的 7 个符号 ⇒ 整表集合相等判据改为**按层**判定（契约层 18 个**齐备**
+        + 整表符号集合由门禁 **G19** 判）。
         """
         readme = (repo_root / "README.md").read_text(encoding="utf-8")
         existing, new = parse_public_api_symbols(repo_root / PUBLIC_API_MANIFEST)
         rows = [name for name, _ in _compat_matrix_rows(readme)]
-        assert set(rows) == set(existing) | set(new), set(rows) ^ (
-            set(existing) | set(new)
-        )
+        missing = sorted((set(existing) | set(new)) - set(rows))
+        assert not missing, f"矩阵缺契约层符号：{missing}"
 
     def test_compat_matrix_declares_no_affiliation(self, repo_root: Path) -> None:
         """矩阵章节 MUST 含「不构成 affiliation」字样（宪法原则 IX）。"""
@@ -1465,13 +1478,28 @@ class TestPublicSymbolAnnotations:
                 )
 
 
+def _protocol_method_names(proto: type) -> list[str]:
+    """列出协议类的**方法名**（**跨 Python 版本**稳定）。
+
+    ``Protocol.__protocol_attrs__`` **只在 Python 3.12+ 存在**（3.11 没有）
+    ⇒ 不能依赖它，否则本断言在 **3.11 最低档**恒失败（协议方法取不到注解）。
+    改为从类的 ``__dict__`` 里取**公开**的可调用成员（``__call__`` 例外——
+    ``NodeFunc`` 的唯一成员就是它）。
+    """
+    return sorted(
+        name
+        for name, value in vars(proto).items()
+        if (not name.startswith("_") or name == "__call__") and callable(value)
+    )
+
+
 def _symbol_annotations(symbol: Any) -> list[Any]:
     """取一个公开符号的**全部注解**（协议取方法注解，数据类取字段注解）。"""
     annotations: list[Any] = []
     if isinstance(symbol, type) and issubclass(symbol, Exception):
         return annotations
     if isinstance(symbol, type) and getattr(symbol, "_is_protocol", False):
-        for method_name in sorted(getattr(symbol, "__protocol_attrs__", set())):
+        for method_name in _protocol_method_names(symbol):
             annotations.extend(get_type_hints(getattr(symbol, method_name)).values())
         return annotations
     if isinstance(symbol, type):

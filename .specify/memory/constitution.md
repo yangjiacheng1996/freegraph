@@ -403,7 +403,8 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
   `E`/`S`/`R`/`D`/`C`（事实/指标/风险/决策/契约）——四套命名空间的分配规则见立项书 §4.4。
 - **参考**：`harness/features/` = feature 提示词初稿；
   `harness/verification/<feature>/manual-verification.md` = 该 feature 的人工验证记录；
-  `specs/<NNN>-<short-name>/` = speckit 的 feature 目录。
+  `specs/<feature-id>-<short-name>/` = speckit 的 feature 目录（**直接用规划 ID**，
+  **不带** Speckit 的三位序号——见 `harness/prompts/guide.md` §4.7）。
 
 #### 官方术语对照
 
@@ -886,6 +887,41 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
       （按「版本策略」，本条属**措辞/路径残留的非语义性修订** → 记 **PATCH**，
       版本号 **1.4.0 → 1.4.1**；发起者 2026-11-06 批准。）
 
+  - **v1.4.2（2026-11-07）｜PATCH —— 修正「术语约定」里 `specs/` 目录命名的一处过期表述**
+    - **变更了什么**：把「术语约定 · 开发层级词表」的「参考」条目中
+      `specs/<NNN>-<short-name>/` 更正为 **`specs/<feature-id>-<short-name>/`**，
+      并补一句「**直接用规划 ID，不带** Speckit 的三位序号（见 `harness/prompts/guide.md` §4.7）」。
+    - **为什么**：本条是 **v1.4.0** 术语统一时的**遗漏**——那一版已把 `specs/001-p01-contracts-core/`
+      重命名为 `specs/b1f1-contracts-core/`（修订记录 v1.4.0「受影响」栏明列
+      「`specs/` 目录名」），但「参考」条目的**写法**仍是改名前的 `<NNN>-` 形态
+      ⇒ 同一份宪法内部与仓库现状**自相矛盾**：B1F1 / B2F1 的实际目录**都不带序号**，
+      而宪法文字说带。该矛盾在 **B2F2 的文档一致性复核**中被发现：
+      B2F2 的目录被 Speckit 的自动编号器建成了 `specs/001-b2f2-public-api-facade/`，
+      正是照着这条过期表述（或照着工具链默认值）建出来的 ⇒ 同一约定下出现了**两种目录名**。
+      修正后与 `harness/prompts/guide.md` §4.7「本仓库的目录命名约定（2026-11-05 定）」
+      （「feature 目录**直接用规划 ID** …… **不带** Speckit 的三位序号」）**一致**，
+      也与三个 feature 的实际目录一致。
+    - **受影响的原则与特性**：**原则 I–X 的实质要求均未改变**——本次只更正
+      「术语约定 · 参考」里**一个目录名写法**，属**措辞/路径残留的非语义性修订**；
+      原则 VI（规格驱动开发）与原则 VIII（证据与术语纪律）的**判定口径不变**
+      （仍要求 spec 可追溯、术语准确）。
+      受影响特性：**全部 31 个 feature 的 speckit 产物目录**——B2F2 的目录已由
+      `specs/001-b2f2-public-api-facade/` 更名为 `specs/b2f2-public-api-facade/`，
+      与 B1F1 / B2F1 同形；**分支名同步**为 `b2f2-public-api-facade`。
+    - **迁移方案**：**无破坏性变更**、**无代码改动**——speckit 工具链的路径解析
+      只认 `.specify/feature.json` 的 `feature_directory`（`common.sh` 的
+      `resolve_feature_dir`），**不依赖目录名格式** ⇒ 目录更名 + 同步更新
+      `.specify/feature.json` 与**全仓 19 处路径引用**即可
+      （`check-prerequisites.sh --json --require-spec --require-tasks` 已实测通过，
+      `FEATURE_DIR` 正确解析为 `specs/b2f2-public-api-facade`）。
+      落地物：本宪法「术语约定 · 参考」条目 + 本条修订记录 + 页脚版本号；
+      **同批修正「引导文档」里的同源残留**（否则下一次 `/speckit.constitution`
+      会把旧写法重新生成回宪法）——`harness/prompts/guide.md` 的
+      §4.2 切分规则 **PR-1** 与 §4.6 质量门禁落地表的「规格门禁」行
+      （两处 `specs/NNN-*` → `specs/b<n>f<m>-<slug>/`）。
+      （按「版本策略」，本条属**措辞/路径残留的非语义性修订** → 记 **PATCH**，
+      版本号 **1.4.1 → 1.4.2**；发起者 2026-11-07 批准。）
 
 
-**Version**: 1.4.1 | **Ratified**: 2026-11-05（发起者批准；首次批准即定版为 1.0.0） | **Last Amended**: 2026-11-06
+
+**Version**: 1.4.2 | **Ratified**: 2026-11-05（发起者批准；首次批准即定版为 1.0.0） | **Last Amended**: 2026-11-07

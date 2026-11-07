@@ -71,6 +71,11 @@ run graph-based AI workflows without LangSmith or external account dependencies.
 | `Edge` | `langchain_core.runnables.graph.Edge` | 部分等价 | **同名但自有实现**；freegraph 多一个 `conditional` 位并显式**不可哈希**（上游是 `NamedTuple`，可哈希）；上游来源 `langchain_core/runnables/graph.py:65` |
 | `Span` | 无上游对应（自由设计） | 不支持 | 契约条目 **C23 / C24**（可观测挂钩 / 当前 span 上下文）· 数据格式 **DF4**——11 字段、必带 `thread_id` / `run_id` / `node` / `checkpoint_id`；上游的近似物是 LangSmith 的 `RunTree`（**非同名**物） |
 | `TraceQuery` | 无上游对应（自由设计） | 不支持 | 契约条目 **C27**（本地 trace 存储与查询）——5 字段全可空、可组合，全空 = 取全部；freegraph 自有的本地 trace 查询契约 |
+| `StateGraph` | `langgraph.graph.StateGraph` | 部分等价 | 构造**只接受** `schema` 一个位置参数（上游另有 `context_schema` / `input_schema` / `output_schema`）；`add_node` 的参数名为 `name` / `fn`（上游 `node` / `action`）且新增 `alias` 关键字；`compile` 只保留 `checkpointer` / `store` 两个关键字（上游另含 `cache` / `interrupt_before` / `interrupt_after` / `debug` / `name` / `transformers`）；**构建器行为待 B6F1 / B7F2 交付**；上游来源 `langgraph/graph/state.py:131`（核实环境 `langgraph 1.2.11`） |
+| `START` | `langgraph.constants.START` | 行为等价 | 值与语义均一致（`'__start__'`）；上游来源 `langgraph/constants.py:30`（核实环境 `langgraph 1.2.11`） |
+| `END` | `langgraph.constants.END` | 行为等价 | 值与语义均一致（`'__end__'`）；上游来源 `langgraph/constants.py:28`（核实环境 `langgraph 1.2.11`） |
+| `Send` | `langgraph.types.Send` | 部分等价 | 形状等价（`node` / `arg`）；**freegraph 侧不可变**（上游可变）；**fan-out 行为待 B11F1 交付**；上游来源 `langgraph/types.py:704`（核实环境 `langgraph 1.2.11`） |
+| `interrupt` | `langgraph.types.interrupt` | 部分等价 | 形状等价（`value`）；**中断 / 恢复行为待 B10F1 交付**；上游来源 `langgraph/types.py:851`（核实环境 `langgraph 1.2.11`） |
 
 **证据来源**（截至 2026-11-05，按 LangGraph 1.2.19 / langchain-core 1.7.6 源码核实）：
 `langgraph/types.py:711`（`StateSnapshot`）· `:738`（`Send`）· `:833`（`Command`）·
@@ -84,7 +89,7 @@ run graph-based AI workflows without LangSmith or external account dependencies.
 `langgraph/pregel/main.py:3783`（`invoke`）· `:2655`（`stream`）· `:845`（`get_graph`）· `:1392`（`get_state`）· `:1480`（`get_state_history`）· `:2515`（`update_state`）·
 `langchain_core/runnables/graph.py:255`（`Graph`）· `:95`（`Node`）· `:65`（`Edge`）。
 
-> **行号以各自标注的版本为准** —— **表内新增行**（B2F1 的 10 个符号）的上游行号以
+> **行号以各自标注的版本为准** —— **表内新增行**（B2F1 的 10 个 + B2F2 的 5 个符号）的上游行号以
 > **langgraph 1.2.11** / **langchain-core 1.6.3** 为准，与既有 8 行的
 > **LangGraph 1.2.19** / **langchain-core 1.7.6** **版本不同**；两套行号各自有效，
 > **不可混用**。

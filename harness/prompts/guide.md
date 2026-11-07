@@ -526,7 +526,7 @@ freegraph 要实现的是 LangGraph 的**一个子集**，且**必须重写而�
 
 | 规则 | 内容 |
 |---|---|
-| **PR-1** | **1 feature = 1 次 speckit 闭环**（specify → plan → tasks → implement），对应 1 个分支 + 1 个 `specs/NNN-*` 目录 |
+| **PR-1** | **1 feature = 1 次 speckit 闭环**（specify → plan → tasks → implement），对应 1 个分支 + 1 个 `specs/b<n>f<m>-<slug>/` 目录（**不带**三位序号，见 §4.7） |
 | **PR-2** | **单 feature ≤ 5000 行**（实现 + 测试 + 该 feature 新增的文档/示例） |
 | **PR-3** | feature 内**可包含多个 功能块** 的工作（若它们共同构成一个可验收切片）；反之一个 功能块 也可跨多个 feature |
 | **PR-4** | **feature 必须能独立通过门禁**。跨 feature 依赖只允许是"接口契约"依赖（协议已冻结），不允许是"实现未完成"依赖 |
@@ -714,7 +714,7 @@ B1F1 → B2F1 → B2F2 → B4F1 → B5F1 → B5F2 → B7F1 → B9F1 → B12F1 �
 
 | 门禁 | 落地 feature | 说明 |
 |---|---|---|
-| 1 规格门禁 | 每个 feature | `specs/NNN-*/` 三件套 + `harness/proposals/` 提案 + `harness/verification/<feature>/` 人工记录 |
+| 1 规格门禁 | 每个 feature | `specs/b<n>f<m>-<slug>/` 三件套 + `harness/proposals/` 提案 + `harness/verification/<feature>/` 人工记录 |
 | 2 **依赖门禁**（红线） | **B3F1** 建立，后续每 feature 持续 | CI 递归展开 `importlib.metadata.requires()`；许可证白名单；`LANGSMITH_*` 扫描；导入图单向检查 |
 | 3 **契约门禁** | **B5F2**（C4）、**B8F1**（C8）建立，后续持续 | 两条独立回归测试；`target.py` 冒烟（B8F1 起为完整验收） |
 | 4 自动门禁 | B3F1 建立 | CI 全绿 + fake 模型跑通验收基线 + socket guard 零出站断言 |

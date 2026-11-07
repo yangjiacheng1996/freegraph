@@ -34,7 +34,7 @@
 我已经更新了spec和plan，请你更新tasks
 
 # /speckit.analyse 
-我更新了 B2F1 的 spec、plan、tasks，请你阅读相关文档，检查三者内容是否有问题，是否对齐。如果遇到难以决策的地方可以question问我，提问时给出推荐选项，语言中文。分析之前，建议先阅读`harness/proposals/立项书.md`。
+我更新了 B2F2 的 spec、plan、tasks，请你阅读相关文档，检查三者内容是否有问题，是否对齐。如果遇到难以决策的地方可以question问我，提问时给出推荐选项，语言中文。分析之前，建议先阅读`harness/proposals/立项书.md`。
 
 # analyse之后
 好的，我看到你发现了一些问题。
@@ -54,7 +54,7 @@
 我看到了你的回答，明白现在需要更新宪法。请你给出宪法更新的提示词，我会新建另一个会话，开始执行/speckit.constitution +提示词 ，来修改宪法。
 
 # /speckit.implement
-根据 harness/ 目录中的 LangChain、LangGraph 官方文档，harness/proposals/立项书.md，以及相关 spec，完成 B2F1（specs/b2f1-contracts-protocols）的 TDD 软件开发和测试。
+根据 harness/ 目录中的 LangChain、LangGraph 官方文档，harness/proposals/立项书.md，以及相关 spec，完成 B2F2（specs/b2f2-public-api-facade）的 TDD 软件开发和测试。
 
 # /sepckit.converge
 我更新了 B<n>F<m> 的代码，请你根据代码改动，反向更新相关的 spec、plan、tasks。

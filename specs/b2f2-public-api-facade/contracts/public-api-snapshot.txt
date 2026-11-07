@@ -1,0 +1,31 @@
+# freegraph 公开 API 快照 —— 门面 `freegraph.graph`
+# 本文件由 `pytest tests/facade/test_api_snapshot.py --update-api-snapshot` 生成，请勿手工编辑。
+# 格式契约：specs/b2f2-public-api-facade/contracts/snapshot-format.md
+# 导出面清单（哪些符号算公开）的权威是 contracts/facade-api.md §0；本文件只记录签名。
+#
+[class] Command
+    [attribute] PARENT: ClassVar[Literal['__parent__']] = '__parent__' (readonly)
+    [attribute] goto: str | Sequence[str] | None = None (readonly)
+    [attribute] resume: Any | None = None (readonly)
+    [attribute] update: dict[str, Any] | None = None (readonly)
+    [method] __init__(self, *, goto: str | Sequence[str] | None = None, update: dict[str, Any] | None = None, resume: Any | None = None) -> None
+[constant] END = '__end__'
+[class] RunConfig
+    [attribute] context: Any = None (readonly)
+    [attribute] metadata: Mapping[str, Any] = {} (readonly)
+    [attribute] tags: Sequence[str] = () (readonly)
+    [attribute] thread_id: str | None = None (readonly)
+    [method] __init__(self, *, thread_id: str | None = None, context: Any = None, metadata: Mapping[str, Any] = {}, tags: Sequence[str] = ()) -> None
+    [method] from_dict(cls, d: Mapping[str, Any], *, ignore_unknown: bool = False) -> RunConfig
+[constant] START = '__start__'
+[class] Send
+    [attribute] arg: Any = <required> (readonly)
+    [attribute] node: str = <required> (readonly)
+    [method] __init__(self, node: str, arg: Any) -> None
+[class] StateGraph
+    [method] __init__(self, schema: Any) -> None
+    [method] add_conditional_edges(self, src: str, path_fn: Callable[..., str | list[str]], path_map: list[str] | dict[str, str]) -> Self
+    [method] add_edge(self, src: str | list[str], dst: str) -> Self
+    [method] add_node(self, name: str, fn: NodeFunc, *, alias: str | None = None) -> Self
+    [method] compile(self, *, checkpointer: Checkpointer | None = None, store: Store | None = None) -> CompiledGraph
+[function] interrupt(value: Any) -> Any
