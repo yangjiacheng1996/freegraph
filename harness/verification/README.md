@@ -80,6 +80,7 @@ python3 harness/verification/<feature>/acceptance.py --require-installed # 要�
 | **B1F1** | [B1F1/manual-verification.md](B1F1/manual-verification.md) | [B1F1/acceptance.py](B1F1/acceptance.py) | ✅ 契约层骨架（四个核心类型 + 异常体系）—— 47 条断言全绿 |
 | **B2F1** | [B2F1/manual-verification.md](B2F1/manual-verification.md) | [B2F1/acceptance.py](B2F1/acceptance.py) | ✅ **已回填实测输出**（5 个协议 + 5 个纯数据类）—— 119 条断言全绿；3.11 / 3.13 / 3.14 三档多版本实测**未执行**（本机仅 CPython 3.12.3），已记入该记录的 §7 遗留问题 |
 | **B2F2** | [B2F2/manual-verification.md](B2F2/manual-verification.md) | [B2F2/acceptance.py](B2F2/acceptance.py) | ✅ **已回填实测输出**（公开 API 门面 7 符号 + API 签名快照 + 顶层包惰性）—— 76 条断言全绿；隔离 venv（CPython **3.11.16**）实测通过，3.13 / 3.14 档**未执行**，已记入该记录的 §5 遗留问题 |
+| **B3F1** | [B3F1/manual-verification.md](B3F1/manual-verification.md) | （无 —— 判据以 `pytest` 断言 + 门禁脚本承载） | ✅ **项目脚手架 + extras 划分 + CI 门禁** —— **10 条新门禁 G21–G30**（**逐条**退出码 0）+ **8 条强制反向用例**全绿 + 7 作业 CI 矩阵（**7/7 作业全绿** · 含 Windows / macOS / arm64）；交付时全量 **402 passed / 4 skipped**（3.11 / 3.14 两档）；**T049 / T057 两条发起者追认均已作出**（§3.6 / §5.1）；⚠️ 遗留 #5「禁止色值清单待取证」· #6「自有品牌资产白名单待登记」**仍未关闭** |
 | **B4F1** | [B4F1/manual-verification.md](B4F1/manual-verification.md) | [B4F1/acceptance.py](B4F1/acceptance.py) | ✅ **已回填实测输出**（状态 schema 解析 + 归约器提取 · 二元性判定表逐条比对）—— **pytest 90 条新断言全绿**（CPython **3.11.16** / **3.14.7** 两档）+ **验收脚本 89 条断言全绿**；⚠️ **T053 发起者追认（plan 登记项 R-1）待办 ⇒ 阻断合入**，详见该记录 §4.3 |
 
 ## 相关
