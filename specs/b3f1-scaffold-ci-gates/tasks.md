@@ -336,6 +336,33 @@ quickstart.md（**可照抄**的验证手册）
 
 ---
 
+## Phase 10: 修订轮 · **CI 首跑的第 2、3 轮修复**（2026-11-08）
+
+> **CI 三轮**：第 1 轮（`e82a8a7`）macOS × 2 成功 / ubuntu × 3 与 windows × 2 失败；
+> 第 2 轮（`6eb6989`）**ubuntu × 3 全绿** / windows × 2 仍失败；
+> 第 3 轮（`e35b55e`）**7/7 全绿** ✅。
+> **诊断手段**：GitHub 的「下载作业日志」需 admin ⇒ 改用 **REST API 的注解通道**
+> （pytest 失败逐条输出为 `::error` 工作流命令 ⇒ `check-runs/{id}/annotations`
+> **免鉴权可读**）。
+
+- [X] T070 [US5] **Windows 的换行口径** —— Windows 上的 Git 默认 `core.autocrlf=true`
+  ⇒ 检出把 **LF 转成 CRLF** ⇒ 破坏既有门禁 **G16** 的「API 快照**逐字节**比对」与
+  快照文本合规判据（`test_line_endings_are_lf`）⇒ 连带
+  `test_update_entry_point_is_off_by_default` 失败 ⇒ **新增 `.gitattributes`**
+  （`* text=auto eol=lf`）⇒ 换行口径**固定在仓库里**（不依赖本地 git 配置）⇒
+  **实测**：以 `core.autocrlf=true` 克隆后检出 ⇒ 快照**不含** CRLF ✅
+- [X] T071 [US5] **CI 诊断通道** —— `tests/conftest.py`（**新增**）的
+  `pytest_terminal_summary` 钩子把每条失败 / 错误输出为 **GitHub 注解**
+  （`::error title=pytest failure::…`）⇒ 失败时**不必**翻日志即可定位到具体用例
+  （REST API 免鉴权可读）⇒ **判据零改动**（只多打印一行工作流命令）
+- [X] T072 [US5] **CI 的 junit 报告 artifact** —— pytest 步骤加 `--junitxml`，
+  并以 `if: always()` 上传为 artifact ⇒ 失败报告**永远拿得到**
+- [X] T073 [US5] 文档与记录 —— 人工验证记录 **§3.10**（三轮首跑 → 7/7 全绿的实测与修复）
+  + §5 遗留 **#1 / #10 关闭** · `contracts/ci-matrix.md` §3.2（两条平台性前置 +
+  换行口径）· `quickstart.md` §4.2（Ubuntu 24.04 前置）
+
+---
+
 ## Dependencies & Execution Order
 
 > **⚠️ 执行策略（2026-11-07 分析轮定案 · 实现阶段 MUST 遵循）**：**不逐任务人工确认**，改为

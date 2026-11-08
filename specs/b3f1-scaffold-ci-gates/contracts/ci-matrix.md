@@ -229,6 +229,10 @@ unshare --net --map-root-user uv run --no-project --python .venv python -m pytes
   ⇒ **该步骤必红**（首跑 3 个 ubuntu 作业全部止步于此）⇒ CI 步骤 MUST 先
   `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`（解除**发行版级策略**，
   命名空间仍以**非特权**方式创建 ⇒ **设计前提不变**）；
+- **⚠️ 换行口径**（**CI 首跑实测 · 2026-11-08**）：Windows 上的 Git 默认
+  `core.autocrlf=true` ⇒ 检出把 **LF 转成 CRLF** ⇒ 破坏既有门禁 **G16** 的
+  「API 快照**逐字节**比对」⇒ 仓库 MUST 带 **`.gitattributes`**（`* text=auto eol=lf`）
+  ⇒ 三个平台的检出**逐字节一致**（换行口径**固定在仓库里**，不依赖本地 git 配置）；
 - **⚠️ Windows 的输出编码**（**CI 首跑实测 · 2026-11-08**）：控制台 / 管道默认编码是
   **cp1252 / cp936** ⇒ **打印中文**（门禁报告 · pytest 的 skip 理由 · `harness/demo/*.py`
   的验收输出）会 `UnicodeEncodeError`；**读取**中文输出也会 `UnicodeDecodeError`

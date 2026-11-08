@@ -491,15 +491,27 @@ $ FREEGRAPH_TEST_INSTALLED=1 uv run --no-project --python .venv314 python -m pyt
 | G28 报「通过率 < 100%」 | —— | ✅ 实测 100%（§3.2）；清单漂移 ⇒ 指名报错（规则 G28-04） |
 | 3.11 档报 `ImportError` | —— | ✅ 两档全绿（§3.5） |
 
-### 3.10 **CI 首跑**的实测与修复（2026-11-08 · 提交 `e82a8a7`）
+### 3.10 **CI 首跑 → 7/7 全绿**的实测与修复（2026-11-08）
 
-> **首跑结果**：7 个作业中 **macOS × 2 成功**、**ubuntu × 3 与 windows × 2 失败** ⇒
-> 两个**平台性**问题（非门禁判据问题）。
+> **三轮**（每轮都是 7 个作业）：**第 1 轮**（`e82a8a7`）macOS × 2 成功、
+> ubuntu × 3 与 windows × 2 失败；**第 2 轮**（`6eb6989`）**ubuntu × 3 全绿**
+> （断网任务在 GitHub runner 上真跑通了）、windows × 2 仍失败；
+> **第 3 轮**（`e35b55e`）**7/7 全绿** ✅。
+>
+> **诊断手段**（值得沉淀）：GitHub 的「下载作业日志」接口**需要 admin 权限** ⇒
+> 外部拿不到日志 ⇒ ① 用 REST API 的 **作业 / 步骤结论**定位到失败的**步骤**；
+> ② 增设**诊断通道**——pytest 的失败逐条输出为 **GitHub 注解**
+> （`::error title=…::…`，见 `tests/conftest.py`）⇒ 可经 REST API 的
+> `check-runs/{id}/annotations` **免鉴权直读** ⇒ 拿到了确切的失败用例。
+>
+> **第 1 轮的两个失败面**（**平台性**问题，非门禁判据问题）：
 
 | 失败面 | 根因（实测） | 处置 |
 |---|---|---|
 | **ubuntu × 3** 止步于 **Gate G28（offline equivalence）** | **Ubuntu 24.04 的发行版级限制**：默认启用 AppArmor 的「限制非特权用户命名空间」策略（`kernel.apparmor_restrict_unprivileged_userns=1`）⇒ `unshare --map-root-user`（需要**用户命名空间**）对普通用户直接 `Operation not permitted` ⇒ **该步骤必红** | CI 步骤先 `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`（解除**发行版级策略**）⇒ 命名空间仍以**非特权**方式创建（`--map-root-user` · 免 `CAP_SYS_ADMIN`）⇒ **设计前提不变**；另加「命名空间创建能力自检」，失败时给出**指名**的 `::error::` 而非裸红 |
 | **windows × 2** 止步于 **Run test suite** | **Windows 的输出编码**：控制台 / 管道默认 **cp1252 / cp936** ⇒ ① **打印**中文（门禁报告 · pytest 的 skip 理由 · `harness/demo/*.py` 的验收输出）会 `UnicodeEncodeError`；② **读取**中文输出会 `UnicodeDecodeError` ⇒ **既有** `tests/facade/test_facade.py` 的两条验收脚本用例即崩（**实测**：本地用 `PYTHONIOENCODING=cp1252` 复现了同一处 `UnicodeDecodeError`） | ① CI 的 job `env:` 设 **`PYTHONUTF8=1`**（UTF-8 模式 · 三个平台统一）· ② `_gatekit.configure_stdio()` 把门禁自己的 stdout/stderr 切到 UTF-8（**脱离 CI 也能跑**）· ③ 门禁与测试里的**全部子进程**显式 `encoding="utf-8", errors="replace"` + 给子进程设 `PYTHONIOENCODING=utf-8` · ④ 既有的 `tests/contracts/test_architecture.py` / `tests/facade/_gatesupport.py` / `tests/facade/test_facade.py` 三处子进程执行器**同源加固**（**判据零改动** —— 只是解码口径） |
+
+| **windows × 2**（止步于 **Run test suite**）—— **换行符**：Windows 上的 Git 默认 `core.autocrlf=true` ⇒ 检出时把 **LF 转成 CRLF** ⇒ 破坏既有门禁 **G16** 的「API 快照**逐字节**比对」与快照文本合规判据（`tests/facade/test_api_snapshot.py::TestSnapshotTextCompliance::test_line_endings_are_lf` ⇒ 快照 MUST 用 LF）⇒ 连带 `test_update_entry_point_is_off_by_default`（它在子进程里再跑一次该文件 ⇒ 连带失败） | **新增 `.gitattributes`**（`* text=auto eol=lf`）⇒ 换行口径**固定在仓库里**（不依赖每个开发者的本地 git 配置）⇒ 三个平台的检出**逐字节一致** ⇒ 快照类判据在任何平台都成立。**实测**：用 `core.autocrlf=true` 克隆后检出 ⇒ 快照**不含** CRLF ✅ |
 
 **本地复现与验证**（不等 CI）：
 
@@ -513,8 +525,25 @@ $ PYTHONIOENCODING=cp1252 … gate_G21_dependencies.py   → PASS（退出码 0�
 $ PYTHONIOENCODING=ascii  … gate_G30_attribution.py    → PASS（退出码 0）
 ```
 
-> **判据未被改动**：本次修复**只动「输出编码 / 命名空间创建的前置」**，**G1–G30 的任何
-> 判据句都未变**（既有门禁只改了子进程的**解码口径**，判据逻辑逐字未动）。
+> **判据未被改动**：本次修复**只动「输出编码 / 命名空间创建的前置 / 换行口径」**，
+> **G1–G30 的任何判据句都未变**（既有门禁只改了子进程的**解码口径**，判据逻辑逐字未动；
+> `.gitattributes` 是**让工作树满足既有判据**，不是放宽判据）。
+
+**第 3 轮结果（7/7 全绿）**：
+
+```text
+gates (ubuntu-24.04, 3.11)       success
+gates (ubuntu-24.04, 3.14)       success
+gates (ubuntu-24.04-arm, 3.11)   success
+gates (macos-15, 3.11)           success
+gates (macos-15, 3.14)           success
+gates (windows-2025, 3.11)       success
+gates (windows-2025, 3.14)       success
+```
+
+> ⇒ **§5 遗留 #1**（断网等价性的「命名空间」层）**已由 CI 证实**：Linux 作业在
+> `unshare --net --map-root-user` 下**通过率 == 100%**（G28 步骤绿）⇒ 该层**不再是遗留**；
+> **§5 遗留 #10**（macOS / Windows 作业）**已实测全绿** ⇒ 该项**关闭**。
 
 ---
 
@@ -576,7 +605,7 @@ $ PYTHONIOENCODING=ascii  … gate_G30_attribution.py    → PASS（退出码 0�
 
 | # | 遗留 | 归属 | 状态 |
 |---|---|---|---|
-| **1** | **断网等价性的「命名空间」层** —— **CI 首跑（2026-11-08）证实该层在 GitHub 的 ubuntu 作业上会因 Ubuntu 24.04 的 AppArmor 策略而 `EPERM`**（⇒ 已定位并修复，见 §3.10）⇒ 修复后需**再跑一次 CI** 才能拿到「全部网络接口不可用」的实测证据<br>**📌 发起者处置（2026-11-08）**：**本机只有一个 Ubuntu 环境** ⇒ 该层**留着**，**以后有问题再回填** ⇒ 本条**保持开放**，不阻塞合入 | CI（Linux 作业） | **留待以后**（发起者已决 · 根因已定位） |
+| **1** | **断网等价性的「命名空间」层** —— **✅ 已由 CI 证实**（2026-11-08 · 第 3 轮）：3 个 Linux 作业在 `unshare --net --map-root-user` 下**全绿**（G28 步骤通过 ⇒ 通过率 == 100%）⇒ **本条关闭** | CI（Linux 作业） | ✅ **已关闭** |
 | **2** | **T049 · G3 占位填充的发起者追认** —— 既有门禁 **G3** 的**判据句逐字未动**，但 `CONSTITUTION_DEPENDENCY_WHITELIST`（4 个占位 → **12 个确切包名**）与 extras 枚举语义（过近似 → 精确变体）被填充 ⇒ **净效果 = 变严** ⇒ 依裁定 8 属**唯一一处例外** ⇒ **MUST 由发起者追认**（**实现者不代签**） | **发起者** | ✅ **已追认（2026-11-08 · T049 · 追认文字见下）** |
 | **3** | **T057 · 三条宪法质量门禁缺口的发起者追认**（§3.6 的 ①②③） | **发起者** | ✅ **已追认（2026-11-08 · T049 · 追认文字见下）** |
 | **4** | **FR-020 · 分支保护未启用** —— 本机无 `gh` CLI、无 GitHub 令牌 ⇒ 只能交付**可照抄的设置步骤**（§3.4）；**未启用前该项在人工验证记录中标「未完成」**，MUST NOT 记为通过 | **发起者** | ✅ **已启用（2026-11-08 · 发起者确认 · 见 §3.4 ③）** |
@@ -586,7 +615,7 @@ $ PYTHONIOENCODING=ascii  … gate_G30_attribution.py    → PASS（退出码 0�
 | **8** | **`[otel]` 的 OTLP exporter 归 B21F1** —— `opentelemetry-exporter-otlp` 的闭包含 `certifi`（**MPL-2.0**）⇒ 不可进 `[otel]`（裁定 21） | **B21F1** | **已登记** |
 | **9** | **判据重叠（已登记 · 不合并）** —— ① 既有 `tests/facade/_gatesupport.py` 与本 feature 的 **G24 / G25 / G29 / G30** 判据大面积重叠（方向是**更严**）；② `harness/demo/acceptance.py` 的 `EgressProbe` 是仓库内**第三份**出站归因实现，用的是**已被裁定 19 否决**的旧口径 ⇒ 本 feature 的零出站证据**一律**取自 `_gatekit`；③ 既有 G3 与新 G23 的许可证口径不同（`MIT-CMU` 在 G3 通过 / 在 G23 被拒 ⇒ **G23 更严** ⇒ 总体为严） | **B25F1** 统一 | **已登记** |
 | **11** | **`[png]` 的真 PNG 渲染后端方向待 v2.0 专项调研** —— 候选与代价见 `research.md` **D-16**（`playwright` 需另装浏览器二进制 · 约 300 MB / 自研最小渲染器 · 永久零依赖 / 继续只出占位 PNG）⇒ **v1.0 只出占位 PNG**（零依赖）⇒ **不阻塞**本 feature | **v2.0 专项调研**（发起者 + 实现者互动 · research DR-8） | **待调研** |
-| **10** | **Windows / macOS 作业** —— **CI 首跑（2026-11-08）**：macOS × 2 **成功**（命令串的跨平台写法**已验证**）；Windows × 2 因**输出编码**失败（根因已定位并修复，见 §3.10）⇒ 需**再跑一次 CI** 确认 7/7 全绿 | CI | **待复跑确认** |
+| **10** | **Windows / macOS 作业** —— **✅ 已实测全绿**（2026-11-08 · 第 3 轮）：**7/7 作业 success** ⇒ 命令串的**跨平台写法**与**换行口径**均已验证 | CI | ✅ **已关闭** |
 
 ### 5.1 T049 的追认文字（G3 占位填充 · 裁定 8 的唯一一处例外 · 2026-11-08）
 
