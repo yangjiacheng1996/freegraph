@@ -242,6 +242,41 @@
   - **本裁定只统一「取证口径」，不改动任何判据**：白名单仍是 **5 个精确 SPDX id**（裁定 18）· 「取不到许可证明 ⇒ 判失败」一字不动（FR-006 ②）· **MUST NOT** 引入任何白名单 / 豁免机制（FR-018）· **MUST NOT** 放宽许可证白名单。
   - **落点**：**FR-006**（被检查包集合 + 取证口径）· `contracts/architecture-gates.md`（G23 的 📌 块 + §2.1 CLI 表的 G23 行）· `tasks.md` **T016 / T023** · `data-model.md` §4（许可证据实体）。
 
+- **裁定 26（**v1.0 的依赖面 = 零** · 可选 extra 全部移入 v2.0 · **2026-11-08 发起者已决** · 宪法 v1.7.0）**：
+  > **发起者的产品决定**：「freegraph v1.0 不希望看到依赖包，所有依赖包放到 v2.0」。
+  - **决定**：**v1.0 的发行元数据 MUST NOT 出现任何依赖包名** ⇒
+    ① `pyproject.toml` **MUST NOT** 含 `[project.optional-dependencies]`；
+    ② 四个 extra（`[pydantic]` / `[checkpoint]` / `[otel]` / `[png]`）的声明**移入仓库内的
+    **v2.0 清单**：`specs/b3f1-scaffold-ci-gates/contracts/extras-v2.toml`
+    （**不进发行包** · 刻意采用 `pyproject` 的**同构**形态 ⇒ 门禁的解析器零改动即可消费）；
+    ③ 门禁 **G21 / G23** 的判据对象**改为该清单**（新增 CLI 参数 **`--project`**
+    = 被检的**依赖声明文件**，与 G21 的 `--project` **同名同义**；**MUST NOT**
+    把它当作 `--root` 的别名）⇒ **v1.0 即完成「预验证」**（许可证 ∈ 5 个精确 SPDX id ·
+    无 langchain / langgraph / langsmith / deepagents）⇒ **违规的依赖进不了 v2.0**
+    （比 v2.0 开工后再发现**更早**）；
+    ④ **v2.0 落地时只需把清单搬进 `pyproject.toml`** ⇒ **门禁实现零改动**；
+    ⑤ `[png]` 的**渲染后端方向留待 v2.0 专项调研后决策**（候选：`playwright`
+    （白名单下唯一实测可行 · 需另装浏览器二进制）· 自研最小 SVG→PNG 渲染器
+    （纯标准库 · 永久零依赖）· 继续只出占位 PNG）。
+  - **为何四个 extra 移走不阻断任何 v1.0 交付物**（**实测**）：内核与契约层对这四个包
+    **零引用**（`grep` 无命中）· 契约层只用标准库（`collections.abc` / `typing` /
+    `dataclasses` ⇒ G2 的「契约层只允许标准库」判据不受影响）⇒ 代价只是 v1.0 用户
+    拿不到「pydantic 校验 / 快序列化 / OTel 出口 / 真 PNG」四项**便利**；
+    **内核里程碑（B6F1 建图 / B7F2 compile / B7F3 invoke）不受影响**。
+  - **本裁定只改「哪个版本可以出现依赖包名」，一条红线未动**：原则 IX 的
+    **许可证白名单**与**包层黑名单**仍**逐包**适用（对 v2.0 清单**立即**生效）⇒
+    **判据未被放宽**（FR-018）；**MUST NOT** 以「v1.0 不声明」为由
+    **放宽**任何白名单或引入豁免机制。
+  - **落点**：**FR-001**（基础依赖为空 + 声明位置）· **FR-004**（v1.0 无 extra ·
+    v2.0 清单）· **FR-005 ①**（判据对象 = v2.0 清单）· **FR-006 ⓪**（同上）·
+    **FR-015 ⑤**（CI 装的是「**预验证**依赖」· 非 v1.0 依赖）· `contracts/dependency-gate.md`
+    （§1 环境表 · §2.1 extras 划分）· `contracts/architecture-gates.md`（G21 / G23 +
+    §2.1 CLI 表的 G23 行）· `contracts/ci-matrix.md`（§1 · §2 步骤 5.5 · 步骤 7）·
+    `data-model.md`（§3 闭包 · §4.1 被检查包集合）· `plan.md`（Summary + Constraints）·
+    `tasks.md`（**T058–T066**）· `quickstart.md`（§0.1 · §1.3 · §2 · §10）·
+    宪法 **v1.7.0**（包层白名单条 + 修订记录）· `harness/proposals/立项书.md`（**D14** 修订）·
+    `README.md`（extras 章节）· `THIRD_PARTY_NOTICES`（§2）。
+
 - **Q**（`/speckit.clarify` · 2026-11-07 · **澄清会话第 3 轮** · 第 1 题）：既有门禁 G3 的判据在 extras 声明后必然失败，能不能既不改它的判据、又不靠放宽白名单，让它变绿？ → **A**：**唯一一处具名例外** —— 只填 G3 的**两处占位**（① `CONSTITUTION_DEPENDENCY_WHITELIST` 换成四个 extra 真实闭包的 **12 个确切包名**；② extras 变体枚举改为「**只枚举 freegraph 自身的 extras 变体**」），**判据句与许可证取值方式逐字不动** ⇒ **净效果 = 变严**；**MUST NOT** 引入任何新白名单 / 豁免机制；**须经发起者追认后方可合入**。
   **落点**：裁定 8（改写 · 唯一一处具名例外）· FR-016 ②（改写）· FR-018（**不变** —— 净效果变严）· Assumptions（「既有门禁的处置」）。
 - **Q**（`/speckit.clarify` · 2026-11-07 · **澄清会话第 3 轮** · 第 2 题）：`[otel]` 到底装什么——按提示词原文装 `opentelemetry-exporter-otlp`，还是换掉？ → **A**：**取宪法依赖白名单原文所列**的 `opentelemetry-api` + `opentelemetry-sdk`（宪法本就不含 exporter；实测其闭包含 `certifi`（`MPL-2.0`）⇒ **必然**被 G23 拒）⇒ **MUST NOT** 为此放宽白名单；exporter 的合规解法（gRPC 路径 / 权威 SPDX 归一 / 无 Python 依赖的 exporter 形态）**归 B21F1**。
@@ -359,10 +394,10 @@
 
 #### A. 项目脚手架
 
-- **FR-001**：系统 MUST 提供完整的项目元数据声明，其中：**基础运行时依赖为空集**（零第三方运行时依赖）、`requires-python` 为 **`>=3.11`**；**可选 extra 的依赖内容 MUST 取自宪法「依赖白名单 / 黑名单」· 包层白名单条原文所列**，MUST NOT 自行引入该白名单之外的包（各 extra 的具体内容见 **FR-004**；**`[otel]` MUST NOT 含任何 OTLP exporter** —— 见 **裁定 21**；**`[png]` = `playwright`** —— **宪法 v1.5.0 已列明**（原「mermaid 相关」的**类别式**表述**已被宪法 v1.5.0 取代**为确切包名），MUST NOT 另行引入第二个渲染后端）。
+- **FR-001**：系统 MUST 提供完整的项目元数据声明，其中：**基础运行时依赖为空集**（零第三方运行时依赖）、`requires-python` 为 **`>=3.11`**；**⚠️ v1.0 的版本范围（2026-11-08 · 裁定 26 · 宪法 v1.7.0）**：**v1.0 的发行元数据 MUST NOT 出现任何依赖包名** ⇒ v1.0 的 `pyproject.toml` **MUST NOT** 含 `[project.optional-dependencies]` ⇒ FR-004 的四个 extra 单元**移入 v2.0 范围**（声明落在 `contracts/extras-v2.toml` · 不进发行包）；**可选 extra 的依赖内容 MUST 取自宪法「依赖白名单 / 黑名单」· 包层白名单条原文所列**，MUST NOT 自行引入该白名单之外的包（各 extra 的具体内容见 **FR-004**；**`[otel]` MUST NOT 含任何 OTLP exporter** —— 见 **裁定 21**；**`[png]` = `playwright`** —— **宪法 v1.5.0 已列明**（原「mermaid 相关」的**类别式**表述**已被宪法 v1.5.0 取代**为确切包名），MUST NOT 另行引入第二个渲染后端）。
 - **FR-002**：系统 MUST 采用 **`src/` 布局**（包代码位于 `src/<pkg>/`），且 MUST 发布**类型标记文件** `py.typed`（PEP 561），其内容 MUST 为空。
 - **FR-003**：系统的 Python 版本区间 MUST **不设上限**——`requires-python` MUST NOT 含任何上界（仅含下界 `>=3.11`）。
-- **FR-004**：系统 MUST 提供**可选 extra** 单元，且至少包含：`[pydantic]`（结构化状态 schema 支持）、`[checkpoint]`（checkpoint 序列化，依赖 `ormsgpack`）、`[otel]`（OpenTelemetry 可观测内核，依赖 **`opentelemetry-api`** 与 **`opentelemetry-sdk`**——**取宪法「依赖白名单 / 黑名单」· 包层白名单条原文所列**，**MUST NOT** 含任何 OTLP exporter，见 **裁定 21**）、`[png]`（本地 PNG 渲染，**后端 = `playwright`** —— **宪法 v1.5.0 已列明**，**默认关闭**）。
+- **FR-004**（**适用版本 = v2.0** · 2026-11-08 裁定 26 修订）：系统 MUST 提供**可选 extra** 单元，且至少包含：`[pydantic]`（结构化状态 schema 支持）、`[checkpoint]`（checkpoint 序列化，依赖 `ormsgpack`）、`[otel]`（OpenTelemetry 可观测内核，依赖 **`opentelemetry-api`** 与 **`opentelemetry-sdk`**——**取宪法「依赖白名单 / 黑名单」· 包层白名单条原文所列**，**MUST NOT** 含任何 OTLP exporter，见 **裁定 21**）、`[png]`（本地 PNG 渲染，**后端 = `playwright`** —— **宪法 v1.5.0 已列明**，**默认关闭**）。
   - **FR-004 ①**：每个 extra MUST 是**独立可选**的——不装即不可用，且**基础安装 MUST NOT 拉起任何 extra 的依赖**。
   - **FR-004 ②**：`[png]` extra 的渲染后端 = **宪法 v1.5.0 已列明的 `playwright`**，且 MUST 同时满足：(a) **默认关闭**；(b) 依赖闭包 MUST 全部落在**许可证白名单** {MIT, Apache-2.0, BSD-2/3, PSF} 内；(c) **零出站**——MUST NOT 依赖任何远程渲染服务。（**2026-11-08 分析轮订正**：原写「具体渲染后端由 plan 决定」⇒ 已被宪法 v1.5.0 取代 ⇒ **plan 只核验许可证标识 ∈ 白名单与运行期零出站**，MUST NOT 另选后端。）
   - **FR-004 ③**：extra 的依赖声明 MUST NOT 引入任何黑名单包（见 **FR-005 ①** 的黑名单口径），且 MUST NOT 引入任何**传染性 / 限制性**许可证的包（见 **FR-006** 的许可证白名单）——该条覆盖**一切不在许可证白名单内**的标识符（含 `MPL-2.0`），这正是 `[otel]` 的 exporter 不可进本 feature 的原因（**裁定 21**）。
@@ -370,13 +405,13 @@
 #### B. 依赖门禁（阻断 · 宪法原则 I / II / IX）
 
 - **FR-005**：CI MUST 实现**依赖门禁**，其断言 MUST 同时覆盖**三个可判定环境**（裁定 6）：
-  - **FR-005 ①（依赖断言环境 · 7/7 全装环境）**：递归展开 freegraph 自身声明的依赖（**基础安装 + 全部 extras 变体**），断言闭包中**无** `langsmith` / `langchain*` / `langgraph*` / **`deepagents`**（含子包与 provider 包，如 `langchain-core` / `langchain-anthropic` / `langchain-openai`）。**⚠️ 本条 MUST 在「extras 的传递依赖已安装」的环境里执行**（否则递归展开无法取证 ⇒ 按门禁自身规则「未安装 ⇒ 判失败」⇒ **必红** · `contracts/dependency-gate.md` §1 · 裁定 6 的 2026-11-08 订正）。
+  - **FR-005 ①（依赖断言环境 · 7/7 全装环境）**：递归展开 freegraph 自身声明的依赖（**基础安装 + 全部 extras 变体** —— **⚠️ v1.0 的判据对象 = v2.0 清单**（裁定 26）：v1.0 的发行元数据零依赖 ⇒ 门禁对 `contracts/extras-v2.toml` 取证），断言闭包中**无** `langsmith` / `langchain*` / `langgraph*` / **`deepagents`**（含子包与 provider 包，如 `langchain-core` / `langchain-anthropic` / `langchain-openai`）。**⚠️ 本条 MUST 在「extras 的传递依赖已安装」的环境里执行**（否则递归展开无法取证 ⇒ 按门禁自身规则「未安装 ⇒ 判失败」⇒ **必红** · `contracts/dependency-gate.md` §1 · 裁定 6 的 2026-11-08 订正）。
   - **FR-005 ②（隔离环境 · 导入副作用）**：在**只装基础包**的隔离 venv 中 `import freegraph` 后，`sys.modules` 中 MUST NOT 出现 `langsmith` / `langchain_core` / `langgraph`（并同时断言基础安装闭包 **== 空集**）。
   - **FR-005 ③（验收环境 · 反向断言 · 分阶段落地 · 裁定 22）**：在含**脚本自带** `langchain` 系的环境中，freegraph MUST NOT import `langchain` / `langchain_core`（运行环境里有 ≠ 被 freegraph 引入）。本条按**两段**落地：
     - **FR-005 ③①（B3F1 交付 · 声明级 + 导入级）**：在**同一**隔离 venv 中额外安装 `langchain-core`（模拟「脚本自带的 `langchain` 系」）⇒ 断言 ① freegraph 自身 `Requires-Dist` **无** `langchain*` / `langsmith` / `langgraph*`；② 在该环境 `import freegraph` **及** `import freegraph.graph`（公开 API 门面）后，`sys.modules` 中**从未**出现 `langchain` / `langchain_core` / `langgraph`。
     - **FR-005 ③②（M2 补齐 · 运行期）**：待内核运行时落地（**B6F1** 建图 / **B7F2** compile / **B7F3** invoke）后，补「在该环境跑一段**最小图**（建图 → 编译 → 执行）」的运行期断言。**B3F1 MUST NOT** 以「最小图已跑通」为交付口径。**承接路径见裁定 22**（承接条款 MUST 写入目标 feature 的提示词初稿 ⇒ 由该 feature 的 spec 显式承接）。
 - **FR-006**：CI MUST 实现**许可证白名单门禁**：依赖的许可证 MUST 属于 **{MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, PSF-2.0}**；出现 **Elastic-2.0 / AGPL / SSPL / BUSL** 即失败。
-  - **FR-006 ⓪（被检查的包集合 · 已定案 · 裁定 25）**：本门禁的**被检查包集合** MUST = **（依赖闭包中的包）∪（取证作用域根下扫到的 `*.dist-info` / `*.egg-info` 所对应的包）**；**许可证据** MUST **先**取取证作用域根下的元数据、**后**回落**已安装**元数据（**并集口径**）。MUST NOT 只查其中之一——只查已安装包 ⇒ 注入的假元数据不可见 ⇒ **反向用例空转**；只查作用域根 ⇒ 正常路径一个包都查不到 ⇒ **空门禁 ⇒ 违宪**（门禁 MUST 可判定）。
+  - **FR-006 ⓪（被检查的包集合 · 已定案 · 裁定 25 · **v1.0 的闭包来源 = v2.0 清单**（裁定 26））**：本门禁的**被检查包集合** MUST = **（依赖闭包中的包）∪（取证作用域根下扫到的 `*.dist-info` / `*.egg-info` 所对应的包）**；**许可证据** MUST **先**取取证作用域根下的元数据、**后**回落**已安装**元数据（**并集口径**）。MUST NOT 只查其中之一——只查已安装包 ⇒ 注入的假元数据不可见 ⇒ **反向用例空转**；只查作用域根 ⇒ 正常路径一个包都查不到 ⇒ **空门禁 ⇒ 违宪**（门禁 MUST 可判定）。
     > **注**：`--root` 等**作用域参数**是**契约层**（`contracts/architecture-gates.md` §2.1）的设计决定，**本 spec 不锁定参数名**——本条只锁定**语义**（被检查集合 = 并集 + 证据读取顺序）。
   - **FR-006 ①**：**额外点名** `langgraph-api` / `langgraph-runtime-inmem` / Phoenix（Elastic-2.0 组件）——它们不在通用前缀规则覆盖范围内，MUST 被显式名单拦截。
   - **FR-006 ①①（白名单的匹配口径 · 已定案 · 严格精确匹配）**：白名单 MUST 按**精确的 SPDX 标识符**匹配——仅接受上列 **5 个**标识符；**同一个许可证的其它标识写法一律不放行**（含但不限于 `MIT-CMU` / `MIT-0` / `HPND` / `Apache-2.0 WITH LLVM-exception` / `PSF` 的非 `PSF-2.0` 写法）。
@@ -493,7 +528,7 @@
     - **FR-015 ④①**：`macOS` 的最新 runner 本身即为 arm64，故 **macOS arm64 无需额外作业**；**Windows arm64** 的 runner 供给尚不稳定，**v1 不纳入**。
     - **FR-015 ④②**：Linux arm64 档 MUST 跑**全量测试**（与 x86_64 的 3.11 档同档位），MUST NOT 只跑子集。
     - **FR-015 ④③**：runner 标签 MUST **钉死到具体镜像与 Python 版本**（MUST NOT 用浮动标签），以免上游 runner 升级引入不可复现的行为差异。
-    - **FR-015 ⑤（依赖安装范围 · 已定案）**：**全部 7 个作业** MUST 安装**四个 extras 的依赖**（`uv pip install --python .venv -e ".[pydantic,checkpoint,otel,png]"` —— 只装 Python 包、**不装**浏览器二进制；**`--python .venv` = venv 目录 · 跨平台写法** · `contracts/ci-matrix.md` §2.0）。
+    - **FR-015 ⑤（依赖安装范围 · 已定案 · **v1.0：装的是「v2.0 预验证依赖」**（裁定 26 · 宪法 v1.7.0）—— **不是** v1.0 的依赖（v1.0 发行元数据零依赖））**：**全部 7 个作业** MUST 安装**四个 extras 的依赖**（`uv pip install --python .venv -e ".[pydantic,checkpoint,otel,png]"` —— 只装 Python 包、**不装**浏览器二进制；**`--python .venv` = venv 目录 · 跨平台写法** · `contracts/ci-matrix.md` §2.0）。
       **理由（非推测 · 门禁自身的判定要求）**：G21 的判定是「递归展开闭包」且「**未安装 ⇒ 判失败**」（`architecture-gates.md` G21）⇒ 若**非 Linux 作业不装 extras**，其闭包走不到末端、而门禁按自身规则**必红** ⇒ **与 PR-4（分支保护把红挡在合并外）直接冲突**。
       **MUST NOT** 以「非 Linux 作业跳过 G21」来规避 —— 那会让门禁在半数作业上**静默失效**（**违宪**：门禁 MUST 可判定 · FR-016）。
       **不装则更严重**：G23 取不到许可证据（要么必红、要么退化为**空门禁** ⇒ **违宪**）· G3 的 12 名白名单永不触达。

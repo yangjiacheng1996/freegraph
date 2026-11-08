@@ -31,8 +31,8 @@
 | packaging | **26.3**（开发期依赖 · SPDX 表达式解析；`packaging.licenses` 自 24.2 起存在） |
 | freegraph 版本 | **0.0.3**（`pyproject.toml` 的 `version`） |
 | `requires-python` | `>=3.11`（**无** `<` 上界） |
-| 基础安装的依赖闭包 | **空集** —— 实测 `Requires-Dist` = 5 个条目，**全部**带 `extra ==` 标记 ⇒ **无 marker 的条目数 == 0** |
-| 四个 extras 的完整闭包 | **恰好 12 个包**：`annotated-types` · `greenlet` · `opentelemetry-api` · `opentelemetry-sdk` · `opentelemetry-semantic-conventions` · `ormsgpack` · `playwright` · `pydantic` · `pydantic-core` · `pyee` · `typing-extensions` · `typing-inspection` |
+| **v1.0 的发行元数据** | **零依赖包名** —— 实测 `importlib.metadata.requires("freegraph")` == **`None`**（**整个为空**）· 构建产物的 wheel `METADATA` 里**没有任何 `Requires-Dist`** ⇒ **v1.0 真正零依赖**（裁定 26 · 宪法 v1.7.0） |
+| v2.0 清单的目标闭包（**预验证对象** · 非 v1.0 依赖） | **恰好 12 个包**：`annotated-types` · `greenlet` · `opentelemetry-api` · `opentelemetry-sdk` · `opentelemetry-semantic-conventions` · `ormsgpack` · `playwright` · `pydantic` · `pydantic-core` · `pyee` · `typing-extensions` · `typing-inspection` |
 | `unshare --net --map-root-user` | **本环境不可用**（实测：`unshare: 写失败：/proc/self/uid_map: 不允许的操作` —— 容器内无 `CAP_SYS_ADMIN`）⇒ 断网等价性的**命名空间**部分**未实测**（见 §5 遗留 #1） |
 
 ---
@@ -45,7 +45,7 @@
 |---|---|---|---|
 | 0 | 环境准备（**四条命令**） | `uv venv --python 3.11` → `uv pip install --python .venv --group dev` → `uv pip install --python .venv -e .` → `uv pip install --python .venv -e ".[pydantic,checkpoint,otel,png]"` | FR-001 / FR-004 |
 | 1 | 脚手架（§1） | `python3 -c "import tomllib,pathlib;print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['optional-dependencies'])"` · `grep -E 'requires-python' pyproject.toml` · `ls -l src/freegraph/py.typed && wc -c < src/freegraph/py.typed` | SC-002 / FR-002 / FR-003 |
-| 2 | 依赖门禁（§2 · 含 ★ 负向验证） | `uv run --no-project --python .venv python harness/scripts/gates/gate_G21_dependencies.py` · 同上 `gate_G22_isolated_env.py` · `gate_G23_licenses.py` · ★ `gate_G21_dependencies.py --self-test-negative` | SC-001 / SC-009 / SC-013 |
+| 2 | 依赖门禁（§2 · 含 ★ 负向验证） | `gate_G21_dependencies.py --project .../extras-v2.toml` · 同上 `gate_G22_isolated_env.py` · `gate_G23_licenses.py --project .../extras-v2.toml` · ★ `gate_G21_dependencies.py --self-test-negative` | SC-001 / SC-009 / SC-013 |
 | 3 | 静态门禁（§3） | `gate_G24_config_layer.py` · `gate_G25_import_graph.py` · `gate_G26_network_static.py` · `gate_G30_attribution.py` | SC-002c / SC-012 / SC-008 / SC-016 |
 | 4 | 运行时门禁（§4） | `gate_G27_zero_egress.py` · `gate_G28_offline_equiv.py`（**外层** `unshare --net --map-root-user`）· `gate_G29_contract_carrier.py` | SC-006 / SC-004 / SC-003 / SC-011 |
 | 5 | 全量测试（§5） | `FREEGRAPH_TEST_INSTALLED=1 uv run --no-project --python .venv python -m pytest tests/ -ra` | 全部 |
@@ -296,6 +296,7 @@ langchain 家族 import = 0 条
 [G21] PASS —— 依赖闭包黑名单（声明级 · 含全部 extras 变体）           退出码 = 0
 [G22] PASS —— 隔离环境断言（依赖闭包为空集 + sys.modules 无 langchain 家族）  退出码 = 0
 [G23] 被检查的包数 = 12（并集口径：闭包包集 ∪ 取证作用域根下扫到的 dist-info）
+        —— 闭包来源 = **v2.0 清单**（`--project .../extras-v2.toml` · 裁定 26）
 [G23] PASS —— 许可证白名单（4 级证据链 · 5 个精确 SPDX id）            退出码 = 0
 [G24] PASS —— 配置层（LANGSMITH_* / LANGCHAIN_* / LANGGRAPH_* 零读取 + 内核零环境变量）  退出码 = 0
 [G25] PASS —— 导入图单向（ARCH-1 · 层注册表驱动）                      退出码 = 0
@@ -408,6 +409,56 @@ G30 · 见 §3.5）⇒ 被延后的**只有**「依赖内核运行时」的**能
 > **⚠️ 签名的时序**：本块由**发起者**在人工验收通过后填写 ⇒ 实现者**只负责
 > 转录与勾选**，MUST NOT 预签（MUST NOT 由实现者代签 · 宪法 v1.6.0）。
 
+### 3.9 修订轮记录：**v1.0 零依赖**（2026-11-08 · 裁定 26 · 宪法 v1.7.0 · 发起者已决）
+
+> **发起者的产品决定**：「freegraph v1.0 不希望看到依赖包，所有依赖包放到 v2.0；
+> 如果这个浏览器是必要的，也需要我们互动调研后决策。」
+
+**决策与落地**
+
+| # | 项 | 处置 |
+|---|---|---|
+| ① | **v1.0 的发行元数据** | **零依赖包名** —— `pyproject.toml` **移除** `[project.optional-dependencies]`；实测 `requires("freegraph")` == **`None`**；构建产物的 wheel `METADATA` 里**无任何 `Requires-Dist`** |
+| ② | **四个 extra 的声明** | 移入仓库内的 **`contracts/extras-v2.toml`**（**不进发行包** · **刻意与 `pyproject` 同构** ⇒ 门禁解析器零改动即可消费） |
+| ③ | **门禁的判据对象** | **G21 / G23 对该清单取证**（G23 新增 `--project` 参数，**同名同义**于 G21 的 `--project`）⇒ **v1.0 即完成预验证**：实测 **被检查 12 个包**（**非空门禁** ✓） |
+| ④ | **CI** | 步骤 5.5 改为「**v2.0 预验证依赖**」（直接装 5 个包 · **不是** v1.0 的依赖 · 不进发行包 / 不进 `Requires-Dist`）；步骤 7 的 G21 / G23 追加 `--project .../extras-v2.toml` |
+| ⑤ | **既有门禁 G3** | 12 名白名单**一字未改**（**T049 的追认依然有效**）· 仅补注适用版本为「**v2.0 的目标闭包**」⇒ v1.0 为**空断言** · v2.0 落地时**自动变实质**（门禁零改动） |
+| ⑥ | **`[png]` 的真 PNG 渲染** | **渲染后端方向留待 v2.0 专项调研后决策**（候选与代价见 `research.md` **D-16** 与立项书 §5.5 的 PNG 方案表）⇒ v1.0 只出**占位 PNG**（自研最小编码器 · 零依赖） |
+| ⑦ | **红线** | **一条未动**：原则 IX 的许可证白名单与包层黑名单仍**逐包**适用（对 v2.0 清单**立即**生效）⇒ **违规的依赖进不了 v2.0**（比 v2.0 开工后再发现**更早**） |
+
+**修订轮的实测输出**
+
+```text
+$ uv pip install --python .venv -e . && uv run --no-project --python .venv python -c \
+    "import importlib.metadata as m; print(m.requires('freegraph'))"
+Requires-Dist = None                      ← v1.0 零依赖包名（更强：整个为空）
+
+$ uv run --no-project --python .venv python harness/scripts/gates/gate_G21_dependencies.py \
+    --project specs/b3f1-scaffold-ci-gates/contracts/extras-v2.toml
+[G21] PASS —— 依赖闭包黑名单（声明级 · 含全部 extras 变体）      退出码 = 0
+
+$ uv run --no-project --python .venv python harness/scripts/gates/gate_G23_licenses.py \
+    --project specs/b3f1-scaffold-ci-gates/contracts/extras-v2.toml
+[G23] 被检查的包数 = 12（并集口径：闭包包集 ∪ 取证作用域根下扫到的 dist-info）
+[G23] PASS —— 许可证白名单（4 级证据链 · 5 个精确 SPDX id）      退出码 = 0
+
+$ python3 -c "…读 dist/*.whl 的 METADATA…"
+Name: freegraph
+Version: 0.0.3                             ← **无任何 Requires-Dist** ⇒ 发行物真正零依赖
+
+$ FREEGRAPH_TEST_INSTALLED=1 uv run --no-project --python .venv python -m pytest tests/ -ra -q
+405 passed, 4 skipped                      ← 3.11 档（修订轮后新增 3 条断言）
+$ FREEGRAPH_TEST_INSTALLED=1 uv run --no-project --python .venv314 python -m pytest tests/ -ra -q
+405 passed, 4 skipped                      ← 3.14 档
+```
+
+**修订轮的落地清单**（tasks **T058–T066**）：宪法 v1.7.0 · `pyproject.toml` ·
+`contracts/extras-v2.toml`（新建）· `gate_G23_licenses.py`（`--project`）· `ci.yml` ·
+`tests/gates/test_gates.py` · spec 裁定 26 · 三份契约 + `data-model.md` ·
+`research.md`（D-16 + DR-8）· `plan.md` · `tasks.md` · `quickstart.md` ·
+`README.md` · `THIRD_PARTY_NOTICES` · 立项书（D14 修订 + **D15** 新增）·
+`harness/prompts/init_constitution.md` · 本记录。
+
 ### 3.7 来源覆盖表（宪法原则 VIII）
 
 | 结论 | 来源标记 |
@@ -485,6 +536,8 @@ G30 · 见 §3.5）⇒ 被延后的**只有**「依赖内核运行时」的**能
 - [x] `ci.yml` 矩阵档位数 == **7** · runner 标签**无浮动** · 展开后的 7 个 job 名与契约 §4.1 **逐字一致**
 - [x] 人工验证记录 `harness/verification/B3F1/manual-verification.md` **已回填**（**五段式** · 仓库既有约定）
       （含：零出站证据 · 断网全绿证据 · M0 三 feature 补检结论 · **分支保护设置步骤与状态取证**）
+- [x] **v1.0 的发行元数据零依赖包名**：`Requires-Dist` **整个为空** + wheel `METADATA` **无任何 `Requires-Dist`** + `pyproject.toml` **不含** `[project.optional-dependencies]`（裁定 26 · 宪法 v1.7.0）
+- [x] **v2.0 清单的预验证**：G21 / G23 对 `contracts/extras-v2.toml` 取证 ⇒ **被检查 12 个包**（**非空门禁** ✓）
 - [x] **G3 占位填充的追认**（plan.md「唯一一处例外」· `tasks.md` **T049**）已获发起者确认 —— ✅ **2026-11-08 已追认**（追认文字见 §5.1）
 - [x] **plan 登记项 R-4 偏离的追认**（宪法**质量门禁 3 / 4 / 5 三项**在本 feature 均不适用 ——
       门禁 3 的 C4 / C8 回归 · 门禁 4 的 fake 模型轮 · 门禁 5 + 原则 V 的真实模型轮 · `tasks.md` **T057**）已获发起者确认
@@ -498,7 +551,7 @@ G30 · 见 §3.5）⇒ 被延后的**只有**「依赖内核运行时」的**能
 
 | # | 遗留 | 归属 | 状态 |
 |---|---|---|---|
-| **1** | **断网等价性的「命名空间」层未实测** —— 本机 `unshare --net --map-root-user` 不可用（容器内无 `CAP_SYS_ADMIN`）⇒ **G28 的脚本逻辑已实测**（清单读取 · 逐条 `--deselect` · 清单自校验 · 通过率 == 100%），但「全部网络接口不可用」这一层由 **CI 的 Linux 作业**承担 ⇒ **首次 CI 运行后需回填本记录** | CI（Linux 作业） | **待回填** |
+| **1** | **断网等价性的「命名空间」层未实测** —— 本机 `unshare --net --map-root-user` 不可用（容器内无 `CAP_SYS_ADMIN`）⇒ **G28 的脚本逻辑已实测**（清单读取 · 逐条 `--deselect` · 清单自校验 · 通过率 == 100%），但「全部网络接口不可用」这一层由 **CI 的 Linux 作业**承担 ⇒ **首次 CI 运行后需回填本记录**<br>**📌 发起者处置（2026-11-08）**：**本机只有一个 Ubuntu 环境** ⇒ 该层**留着**，**以后有问题再回填** ⇒ 本条**保持开放**，不阻塞合入 | CI（Linux 作业） | **留待以后**（发起者已决） |
 | **2** | **T049 · G3 占位填充的发起者追认** —— 既有门禁 **G3** 的**判据句逐字未动**，但 `CONSTITUTION_DEPENDENCY_WHITELIST`（4 个占位 → **12 个确切包名**）与 extras 枚举语义（过近似 → 精确变体）被填充 ⇒ **净效果 = 变严** ⇒ 依裁定 8 属**唯一一处例外** ⇒ **MUST 由发起者追认**（**实现者不代签**） | **发起者** | ✅ **已追认（2026-11-08 · T049 · 追认文字见下）** |
 | **3** | **T057 · 三条宪法质量门禁缺口的发起者追认**（§3.6 的 ①②③） | **发起者** | ✅ **已追认（2026-11-08 · T049 · 追认文字见下）** |
 | **4** | **FR-020 · 分支保护未启用** —— 本机无 `gh` CLI、无 GitHub 令牌 ⇒ 只能交付**可照抄的设置步骤**（§3.4）；**未启用前该项在人工验证记录中标「未完成」**，MUST NOT 记为通过 | **发起者** | ✅ **已启用（2026-11-08 · 发起者确认 · 见 §3.4 ③）** |
@@ -507,6 +560,7 @@ G30 · 见 §3.5）⇒ 被延后的**只有**「依赖内核运行时」的**能
 | **7** | **G3 的 12 名白名单是**版本敏感**的快照** —— extras 的版本约束是**开区间**（`pydantic>=2.0`）⇒ 上游**新增一个传递依赖**即会让闭包多出一个包名 ⇒ 白名单失配 ⇒ CI 变红。⇒ 复核的**双触发点**：① **extras 的版本约束变更**（`[project.optional-dependencies]` 任一条变更）· ② **CI 因闭包失配而红** ⇒ **二者任一**即 MUST **重跑闭包实测**并追认更新白名单（**MUST NOT** 以「放宽白名单让它变绿」的方式绕过 · FR-018） | 依赖变更时 | **纪律已登记** |
 | **8** | **`[otel]` 的 OTLP exporter 归 B21F1** —— `opentelemetry-exporter-otlp` 的闭包含 `certifi`（**MPL-2.0**）⇒ 不可进 `[otel]`（裁定 21） | **B21F1** | **已登记** |
 | **9** | **判据重叠（已登记 · 不合并）** —— ① 既有 `tests/facade/_gatesupport.py` 与本 feature 的 **G24 / G25 / G29 / G30** 判据大面积重叠（方向是**更严**）；② `harness/demo/acceptance.py` 的 `EgressProbe` 是仓库内**第三份**出站归因实现，用的是**已被裁定 19 否决**的旧口径 ⇒ 本 feature 的零出站证据**一律**取自 `_gatekit`；③ 既有 G3 与新 G23 的许可证口径不同（`MIT-CMU` 在 G3 通过 / 在 G23 被拒 ⇒ **G23 更严** ⇒ 总体为严） | **B25F1** 统一 | **已登记** |
+| **11** | **`[png]` 的真 PNG 渲染后端方向待 v2.0 专项调研** —— 候选与代价见 `research.md` **D-16**（`playwright` 需另装浏览器二进制 · 约 300 MB / 自研最小渲染器 · 永久零依赖 / 继续只出占位 PNG）⇒ **v1.0 只出占位 PNG**（零依赖）⇒ **不阻塞**本 feature | **v2.0 专项调研**（发起者 + 实现者互动 · research DR-8） | **待调研** |
 | **10** | **Windows / macOS 作业未在本地实测** —— 本机是 Linux ⇒ 7 个 CI 作业中的 4 个（macOS × 2 · Windows × 2）只能由 CI 实跑；命令串已按**跨平台写法**编写（只出现 venv 目录 `.venv` · 无平台专属解释器路径） | CI | **待 CI 实跑** |
 
 ### 5.1 T049 的追认文字（G3 占位填充 · 裁定 8 的唯一一处例外 · 2026-11-08）
@@ -539,6 +593,7 @@ G30 · 见 §3.5）⇒ 被延后的**只有**「依赖内核运行时」的**能
 | **B8F1**（M2） | **C8**（条件边 fresh 状态读）的**独立回归测试** —— 落点 `tests/contracts/test_contract_regressions.py::test_c8_conditional_edge_fresh_state_read`（当前 `status=not-landed`） |
 | **B7F2**（M2） | **fake 模型注入** ⇒ 门禁 **4** 的「fake 模型跑通验收基线的一轮」随内核运行时一并落地（G29 ② 的退出码细分届时将判为「真断言失败」而非「环境未就绪」） |
 | **B21F1** | **OTLP exporter 插件**（`opentelemetry-exporter-otlp`）—— 归 B21F1 解决；**不可**进 `[otel]` extra（`certifi` / MPL-2.0） |
+| **v2.0 的 extras 落地** | 把 `contracts/extras-v2.toml` 的内容搬进 `pyproject.toml` 的 `[project.optional-dependencies]` ⇒ **门禁实现零改动**（G21 / G23 的 `--project` 换回 `pyproject.toml` 即可） |
 | **B24F1** | **发行流水线的最终拦截** —— 本 feature 只提供**先行检查**（`ci.yml` 的「发行产物纯度先行检查」）；`publish.yml` **零改动** |
 | **B25F1** | **双跑验收** + `acceptance.py` 的退出码断言 + **`_gatekit` 归因口径的统一**（替掉 `acceptance.py` 的 `EgressProbe` 旧口径）+ 自有品牌资产白名单的登记 |
 | **发起者** | ~~T049 / T057 的追认~~ **（2026-11-08 已完成）** · ~~分支保护的启用~~ **（2026-11-08 已完成）** |

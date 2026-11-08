@@ -42,27 +42,20 @@ classifiers = [
 # （由 tests/contracts/test_architecture.py 的 G3 门禁断言）。
 dependencies = []
 
-# 可选依赖（extras）—— B3F1（spec FR-004 · 裁定 1 / 21）。
+# **v1.0 的依赖面 = 零**（宪法 v1.7.0 · 发起者 2026-11-08 决定）。
 #
-# 四个 extra **各自独立可选**：不装即不可用；**基础安装 MUST NOT** 拉起任何
-# extra 的依赖（基础安装的依赖闭包 MUST 为空集 · SC-002 · 由 G3 / G22 断言）。
+# 「freegraph v1.0 不希望看到依赖包，所有依赖包放到 v2.0」⇒
+# v1.0 的**发行元数据 MUST NOT 出现任何依赖包名** ⇒ 本文件**不含**
+# `[project.optional-dependencies]`。
 #
-# 三条纪律：
-#   1. 内容 MUST 取自宪法「依赖白名单 / 黑名单」· 包层白名单条原文所列
-#      （宪法 v1.5.0 已把 `[png]` 的「mermaid 相关」类别式表述收敛为确切包名
-#      `playwright`）⇒ 四个 extra **全部逐包名列**；
-#   2. 完整递归闭包 **恰好 12 个包**（annotated-types · greenlet ·
-#      opentelemetry-api · opentelemetry-sdk · opentelemetry-semantic-conventions ·
-#      ormsgpack · playwright · pydantic · pydantic-core · pyee · typing-extensions ·
-#      typing-inspection）⇒ 许可证标识 **全部落在** {MIT, Apache-2.0, BSD-2-Clause,
-#      BSD-3-Clause, PSF-2.0} 内（research D-02 实测）⇒ 与 G3 的白名单逐一命中；
-#   3. `[otel]` **MUST NOT** 含 `opentelemetry-exporter-otlp`——其闭包含
-#      `certifi`（MPL-2.0）⇒ 必被 G23 拒（裁定 21）⇒ exporter 归 B21F1。
-[project.optional-dependencies]
-pydantic = ["pydantic>=2.0"]
-checkpoint = ["ormsgpack>=1.0"]
-otel = ["opentelemetry-api>=1.20", "opentelemetry-sdk>=1.20"]
-png = ["playwright>=1.40"]
+# **v2.0 的四个可选 extra**（`[pydantic]` / `[checkpoint]` / `[otel]` / `[png]`）
+# 声明在 **`specs/b3f1-scaffold-ci-gates/contracts/extras-v2.toml`**
+# （**不进发行包** · 刻意采用 `pyproject` 的同构形态）⇒
+# 门禁 **G21 / G23** 对该清单**取证** ⇒ v1.0 就完成**预验证**（许可证 / 黑名单），
+# v2.0 落地时只需把清单搬进本节 ⇒ **门禁实现零改动**。
+#
+# **四个 extra 均非内核的必要条件**（实测：内核与契约层对这四个包**零引用**，
+# 契约层只用标准库）⇒ 移走它们**不阻断**任何 v1.0 内核里程碑。
 
 [project.urls]
 Homepage = "https://github.com/yangjiacheng1996/freegraph"

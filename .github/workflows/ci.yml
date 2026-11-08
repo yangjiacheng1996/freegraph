@@ -77,13 +77,15 @@ jobs:
       - name: Install package
         run: uv pip install --python .venv -e .
 
-      # 5.5 ── 四个 extras 的依赖（**全部 7 个作业**都装 · FR-015 ⑤）
-      #       只装 Python 包、不装浏览器二进制（`playwright install chromium`
-      #       由用户显式执行 · 属安装期动作）。
-      #       **不是可选项**：G21 的递归取证、G23 的许可证据、G3 的 12 名白名单
-      #       都以「传递依赖已安装」为前提 ⇒ 不装则非 Linux 作业的 G21 **必红**。
-      - name: Install extras
-        run: uv pip install --python .venv -e ".[pydantic,checkpoint,otel,png]"
+      # 5.5 ── **v2.0 extras 的「预验证」依赖**（**不是** v1.0 的依赖！）
+      #       v1.0 的发行元数据**零依赖包名**（宪法 v1.7.0）⇒ 本步装的包
+      #       **不进发行包、不进 `Requires-Dist`**，只为让 G21 / G23 能对
+      #       **v2.0 清单**（`contracts/extras-v2.toml`）完成**预验证**
+      #       （许可证 ∈ 5 个精确 SPDX id · 无黑名单包）⇒ 违规的依赖**进不了 v2.0**。
+      #       **只装 Python 包、不装浏览器二进制**（`playwright install chromium`
+      #       由用户显式执行 · 属安装期动作 · v2.0 专项调研后再定）。
+      - name: Install v2.0 extras (pre-validation only)
+        run: uv pip install --python .venv "pydantic>=2.0" "ormsgpack>=1.0" "opentelemetry-api>=1.20" "opentelemetry-sdk>=1.20" "playwright>=1.40"
 
       # 6 ── **全量测试套件**（含架构门禁的测试 G1–G20 ⇒ 最低档 3.11 是
       #      「typing 构件上限 = 3.11」的**主判定** · FR-015 ①）
@@ -97,11 +99,13 @@ jobs:
       #      ⇒ 否则 Linux 作业上会被跑两遍。
       #      ⚠️ 调用 MUST 用跨平台写法（`uv run --no-project --python .venv python …`）
       #         —— `--no-project` ⇒ uv 不解析项目、不同步环境 ⇒ MUST NOT 让它
-      #         把已装的四个 extras 依赖卸掉。
+      #         把已装的依赖卸掉。
+      #      ⚠️ G21 / G23 的 `--project` 指向 **v2.0 清单** ⇒ 判据的对象是
+      #         「v2.0 计划的依赖」⇒ v1.0 即完成预验证（v1.0 的发行元数据零依赖）。
       - name: Gate G21 (dependency blacklist)
-        run: uv run --no-project --python .venv python harness/scripts/gates/gate_G21_dependencies.py
+        run: uv run --no-project --python .venv python harness/scripts/gates/gate_G21_dependencies.py --project specs/b3f1-scaffold-ci-gates/contracts/extras-v2.toml
       - name: Gate G23 (license whitelist)
-        run: uv run --no-project --python .venv python harness/scripts/gates/gate_G23_licenses.py
+        run: uv run --no-project --python .venv python harness/scripts/gates/gate_G23_licenses.py --project specs/b3f1-scaffold-ci-gates/contracts/extras-v2.toml
       - name: Gate G24 (config layer)
         run: uv run --no-project --python .venv python harness/scripts/gates/gate_G24_config_layer.py
       - name: Gate G25 (import graph)

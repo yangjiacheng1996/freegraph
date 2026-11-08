@@ -26,6 +26,15 @@ import pytest
 
 import _gatekit
 
+#: **v2.0 的 extras 清单**（不进发行包 · 宪法 v1.7.0）—— G21 / G23 的判据对象。
+V2_MANIFEST = (
+    Path(__file__).resolve().parents[2]
+    / "specs"
+    / "b3f1-scaffold-ci-gates"
+    / "contracts"
+    / "extras-v2.toml"
+)
+
 
 # ── 工具 ──────────────────────────────────────────────────────────────────
 
@@ -139,7 +148,13 @@ def test_g23_rejects_agpl_license(isolated_copy: Path) -> None:
     write_dist_info(
         isolated_copy, "agpl-pkg", "1.0.0", "License-Expression: AGPL-3.0-or-later\n"
     )
-    result = run_gate("gate_G23_licenses.py", "--root", str(isolated_copy))
+    result = run_gate(
+        "gate_G23_licenses.py",
+        "--root",
+        str(isolated_copy),
+        "--project",
+        str(V2_MANIFEST),
+    )
     output = result.stdout + result.stderr
     assert result.returncode != 0, f"AGPL 元数据未被拒：\n{output}"
     assert "agpl-pkg" in output, f"输出未点名 agpl-pkg：\n{output}"
@@ -151,7 +166,13 @@ def test_g23_rejects_license_variant(isolated_copy: Path) -> None:
     write_dist_info(
         isolated_copy, "variant-pkg", "1.0.0", "License-Expression: MIT-CMU\n"
     )
-    result = run_gate("gate_G23_licenses.py", "--root", str(isolated_copy))
+    result = run_gate(
+        "gate_G23_licenses.py",
+        "--root",
+        str(isolated_copy),
+        "--project",
+        str(V2_MANIFEST),
+    )
     output = result.stdout + result.stderr
     assert result.returncode != 0, f"MIT-CMU 变体未被拒：\n{output}"
     assert "variant-pkg" in output, f"输出未点名 variant-pkg：\n{output}"
@@ -161,7 +182,13 @@ def test_g23_rejects_license_variant(isolated_copy: Path) -> None:
 def test_g23_rejects_missing_evidence(isolated_copy: Path) -> None:
     """G23 · 四级证据链**全无** ⇒ **失败并指名**（FR-006 ② · MUST NOT skip）。"""
     write_dist_info(isolated_copy, "bare-pkg", "1.0.0", "Summary: 无任何许可信息\n")
-    result = run_gate("gate_G23_licenses.py", "--root", str(isolated_copy))
+    result = run_gate(
+        "gate_G23_licenses.py",
+        "--root",
+        str(isolated_copy),
+        "--project",
+        str(V2_MANIFEST),
+    )
     output = result.stdout + result.stderr
     assert result.returncode != 0, f"取不到许可证明时未被拒：\n{output}"
     assert "bare-pkg" in output, f"输出未点名 bare-pkg：\n{output}"
@@ -169,7 +196,13 @@ def test_g23_rejects_missing_evidence(isolated_copy: Path) -> None:
 
 def test_g23_is_not_an_empty_gate(isolated_copy: Path) -> None:
     """G23 · **正常路径**下被检查的包数 > 0 ⇒ **非空门禁**（违宪防护）。"""
-    result = run_gate("gate_G23_licenses.py", "--root", str(isolated_copy))
+    result = run_gate(
+        "gate_G23_licenses.py",
+        "--root",
+        str(isolated_copy),
+        "--project",
+        str(V2_MANIFEST),
+    )
     output = result.stdout + result.stderr
     assert result.returncode == 0, f"正常路径不该失败：\n{output}"
     assert "被检查的包数 = 0" not in output, f"G23 退化为空门禁：\n{output}"
@@ -606,23 +639,66 @@ def test_g22_isolated_env_negative_case(isolated_copy: Path) -> None:
 
 
 def test_scaffold_base_install_closure_is_empty(repo_root: Path) -> None:
-    """**基础安装**的依赖闭包 MUST 为空集 —— 判据 = **无 ``extra ==`` 标记**的
-    ``Requires-Dist`` 条目数 == 0（声明 extras 后 ``Requires-Dist`` **非** ``None``）。
+    """**基础安装**的依赖闭包 MUST 为空集。
+
+    v1.0（宪法 v1.7.0）：``Requires-Dist`` **整个为空** ⇒ 连 ``extra ==`` 标记的
+    条目也没有 ⇒ 比「无 marker 的条目数 == 0」**更强**。
     """
     import importlib.metadata as metadata
 
     requires = metadata.requires("freegraph") or []
-    base = [item for item in requires if "extra ==" not in item]
-    assert base == [], f"基础安装拉起了 {base}"
+    assert requires == [], f"基础安装拉起了 {requires}"
 
 
-def test_scaffold_extras_are_independently_optional(repo_root: Path) -> None:
-    """四个 extra **各自独立可选**（不装即不拉起其依赖）。"""
+def test_scaffold_v1_metadata_has_no_dependency_package(
+    repo_root: Path,
+) -> None:
+    """**v1.0 的发行元数据 MUST NOT 出现任何依赖包名**（宪法 v1.7.0）。
+
+    判据 = ``Requires-Dist`` **整个为空**（v1.0 不含任何 extra ⇒ 连
+    ``extra ==`` 标记的条目也没有 ⇒ 比「无 marker 的条目数 == 0」**更强**）。
+    """
+    import importlib.metadata as metadata
+
+    requires = metadata.requires("freegraph")
+    assert not requires, f"v1.0 的发行元数据仍带依赖声明：{requires}"
+
+
+def test_scaffold_v1_pyproject_declares_no_extra(repo_root: Path) -> None:
+    """v1.0 的 ``pyproject.toml`` **MUST NOT** 含 ``[project.optional-dependencies]``。"""
     import tomllib
 
     data = tomllib.loads(
         (repo_root / "pyproject.toml").read_text(encoding="utf-8")
     )
+    assert "optional-dependencies" not in data.get("project", {}), (
+        "v1.0 的发行元数据 MUST NOT 声明任何 extra（宪法 v1.7.0）"
+    )
+    assert data["project"]["dependencies"] == [], data["project"]["dependencies"]
+
+
+def test_v2_extras_manifest_is_frozen_and_compliant(
+    repo_root: Path, gates_dir: Path
+) -> None:
+    """**v2.0 清单**（不进发行包）—— 四个 extra 齐备且内容合宪。
+
+    * 四个 extra **各自独立可选**（不装即不拉起其依赖）；
+    * ``[otel]`` **MUST NOT** 含任何 OTLP exporter（其闭包含 ``certifi``（MPL-2.0）
+      ⇒ 必被 G23 拒 · 裁定 21）；
+    * ``[png]`` 的后端 = ``playwright``（宪法 v1.5.0 已列明的确切包名）——
+      **渲染后端方向留待 v2.0 专项调研**（清单里已标注）。
+    """
+    import tomllib
+
+    manifest = (
+        repo_root
+        / "specs"
+        / "b3f1-scaffold-ci-gates"
+        / "contracts"
+        / "extras-v2.toml"
+    )
+    assert manifest.is_file(), "v2.0 清单缺失（v1.0 的发行元数据零依赖 ⇒ 门禁对清单取证）"
+    data = tomllib.loads(manifest.read_text(encoding="utf-8"))
     extras = data["project"]["optional-dependencies"]
     assert set(extras) == {"pydantic", "checkpoint", "otel", "png"}, extras
     assert extras["otel"] == [
@@ -630,6 +706,30 @@ def test_scaffold_extras_are_independently_optional(repo_root: Path) -> None:
         "opentelemetry-sdk>=1.20",
     ], "〔otel〕MUST 恰为 api + sdk（MUST NOT 含任何 exporter · 裁定 21）"
     assert extras["png"] == ["playwright>=1.40"], "〔png〕的后端 = playwright（宪法 v1.5.0）"
+    assert "opentelemetry-exporter-otlp" not in manifest.read_text(encoding="utf-8")
+
+
+def test_g21_and_g23_judge_the_v2_manifest(
+    repo_root: Path, gates_dir: Path
+) -> None:
+    """G21 / G23 对 **v2.0 清单**取证 ⇒ 判据**非空**（v1.0 即完成预验证）。"""
+    manifest = (
+        repo_root
+        / "specs"
+        / "b3f1-scaffold-ci-gates"
+        / "contracts"
+        / "extras-v2.toml"
+    )
+    g21 = run_gate(
+        "gate_G21_dependencies.py", "--project", str(manifest), cwd=repo_root
+    )
+    assert g21.returncode == 0, f"G21 对 v2.0 清单判定失败：\n{g21.stdout}{g21.stderr}"
+    g23 = run_gate(
+        "gate_G23_licenses.py", "--project", str(manifest), cwd=repo_root
+    )
+    output = g23.stdout + g23.stderr
+    assert g23.returncode == 0, f"G23 对 v2.0 清单判定失败：\n{output}"
+    assert "被检查的包数 = 0" not in output, f"G23 退化为空门禁：\n{output}"
 
 
 def test_scaffold_py_typed_is_empty(repo_root: Path) -> None:

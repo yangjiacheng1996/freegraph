@@ -38,13 +38,19 @@ uv pip install --python .venv --group dev
 # ③ 发行形态（可编辑安装）
 uv pip install --python .venv -e .
 
-# ④ 四个 extras 的依赖 —— **G21 / G23 / G3 可判定的前置条件**（只装 Python 包，不装浏览器二进制）
-uv pip install --python .venv -e ".[pydantic,checkpoint,otel,png]"
+# ④ **v2.0 extras 的「预验证依赖」**（**不是** v1.0 的依赖 · 裁定 26 · 宪法 v1.7.0）
+#    —— v1.0 的发行元数据**零依赖包名**；这 5 个包只为让 G21 / G23 能对
+#    **v2.0 清单**（specs/b3f1-scaffold-ci-gates/contracts/extras-v2.toml）取证
+#    ⇒ v1.0 即完成预验证（只装 Python 包，不装浏览器二进制）
+uv pip install --python .venv "pydantic>=2.0" "ormsgpack>=1.0" "opentelemetry-api>=1.20" "opentelemetry-sdk>=1.20" "playwright>=1.40"
 ```
 
-> **⚠️ 第 ④ 条 MUST NOT 省略、且适用范围是全部 7 个作业**（2026-11-07 分析轮订正）：不装 extras ⇒
+> **⚠️ 第 ④ 条 MUST NOT 省略、且适用范围是全部 7 个作业**（2026-11-07 分析轮订正 ·
+> **2026-11-08 裁定 26 修订**：装的仍是这 5 个包，但它们是「**v2.0 预验证依赖**」，
+> **不是 v1.0 的依赖** —— v1.0 的 `pyproject.toml` **不含** `[project.optional-dependencies]`）：
+> 不装 ⇒
 > ① **G23** 取不到许可证据（要么必红、要么退化为空门禁 ⇒ **违宪**）② **G21** 的闭包走不到末端
-> （且非 Linux 作业上 G21 会因「未安装 ⇒ 判失败」而**必红**）③ **G3** 的 12 名白名单永不触达
+> （且非 Linux 作业上 G21 会因「未安装 ⇒ 判失败」而**必红**）③ v2.0 的目标闭包永不触达
 > ⇒ **四个 extras 的依赖是纯 Python 包、跨平台可得**（`playwright` 只装 Python 包、不装浏览器二进制）。
 > **实测**：四个 extras 的完整闭包**恰好 12 个包**（`annotated-types` · `greenlet` · `opentelemetry-api` ·
 > `opentelemetry-sdk` · `opentelemetry-semantic-conventions` · `ormsgpack` · `playwright` · `pydantic` ·
@@ -98,12 +104,25 @@ grep -E 'requires-python' pyproject.toml
 
 **期望**：`requires-python = ">=3.11"`（**无** `<` 上界）。
 
-### 1.3 四个 extra MUST 存在且各自独立可选（FR-004）
+### 1.3 **v1.0 的发行元数据 MUST NOT 出现任何依赖包名**（裁定 26 · 宪法 v1.7.0）
 
 ```bash
 python3 -c "
 import tomllib, pathlib
 d = tomllib.loads(pathlib.Path('pyproject.toml').read_text())
+print('v1.0 的 optional-dependencies =', d['project'].get('optional-dependencies', '（不存在 ⇒ 零依赖）'))
+print('v1.0 的 dependencies =', d['project']['dependencies'])
+"
+```
+
+**期望**：`optional-dependencies` **不存在**、`dependencies` == `[]` ⇒ **v1.0 零依赖**。
+
+**v2.0 的四个 extra**（声明在 `contracts/extras-v2.toml` · **不进发行包**）：
+
+```bash
+python3 -c "
+import tomllib, pathlib
+d = tomllib.loads(pathlib.Path('specs/b3f1-scaffold-ci-gates/contracts/extras-v2.toml').read_text())
 for k, v in d['project']['optional-dependencies'].items():
     print(f'{k:12s} -> {v}')
 "
@@ -134,7 +153,8 @@ ls -l src/freegraph/py.typed && wc -c < src/freegraph/py.typed
 > 且「未安装 ⇒ 无法取证」按契约 **判失败**（MUST NOT 静默跳过）。
 
 ```bash
-uv run --no-project --python .venv python harness/scripts/gates/gate_G21_dependencies.py
+uv run --no-project --python .venv python harness/scripts/gates/gate_G21_dependencies.py \
+  --project specs/b3f1-scaffold-ci-gates/contracts/extras-v2.toml
 ```
 
 **期望**：退出码 **0** · 输出无违规。
@@ -151,10 +171,12 @@ uv run --no-project --python .venv python harness/scripts/gates/gate_G22_isolate
 ### 2.3 G23 · 许可证白名单（4 级证据链 · 5 个精确 SPDX id）
 
 ```bash
-uv run --no-project --python .venv python harness/scripts/gates/gate_G23_licenses.py
+uv run --no-project --python .venv python harness/scripts/gates/gate_G23_licenses.py \
+  --project specs/b3f1-scaffold-ci-gates/contracts/extras-v2.toml
 ```
 
-**期望**：退出码 **0**；输出逐包列出「包名 → 证据来源 → SPDX 表达式 → 判定」。
+**期望**：退出码 **0**；输出逐包列出「包名 → 证据来源 → SPDX 表达式 → 判定」；
+**被检查的包数 = 12**（**非空门禁** —— v1.0 即对 v2.0 清单完成预验证）。
 
 > **⚠️ 取证作用域 = 并集口径（2026-11-08 分析轮订正 · spec 裁定 25）**：G23 的**被检查包集合** =
 > **（依赖闭包中的包）∪（`--root` 下扫到的 `*.dist-info` / `*.egg-info` 所对应的包）**；
@@ -446,12 +468,13 @@ uv run --no-project --python .venv python harness/scripts/gates/gate_G29_contrac
 ## 10. 完工检查表
 
 - [x] `pytest tests/ -ra` **全绿**
-- [x] **环境已按 §0.1 准备**：dev 组已装 + 发行形态已装 + **四个 extras 的依赖已装齐**
+- [x] **环境已按 §0.1 准备**：dev 组已装 + 发行形态已装 + **v2.0 预验证依赖已装齐**（裁定 26）
+- [x] **v1.0 的发行元数据零依赖包名**：`Requires-Dist` **整个为空** + `pyproject.toml` **不含** `[project.optional-dependencies]`（裁定 26 · 宪法 v1.7.0）
 - [x] 10 条新门禁**逐条**退出码 **0**
 - [x] 负向验证：**门禁失败** + **工作树逐字不变**（`--self-test-negative` 自检**通过 ⇒ 退出码 0**）
 - [x] 3.11 档与 3.14 档**各跑一次**全量测试，均全绿
 - [x] `git ls-files '*.py'` 的**顶部**署名头覆盖率 == **100%**（**首行或 shebang 之后**；除 `target.py`）
-- [x] 基础安装**无 `extra ==` 标记的 `Requires-Dist` 条目数 == 0**（**口径订正** · 声明 extras 后 `Requires-Dist` **非** `None`）
+- [x] 基础安装的 `Requires-Dist` **整个为空**（裁定 26 · v1.0 零依赖 ⇒ 比「无 `extra ==` 标记的条目数 == 0」**更强**）
 - [x] `ci.yml` **矩阵档位数 == 7**（单作业 + `strategy.matrix.include` 7 档 · 契约 ci-matrix §2.0 的实现配方）· runner 标签**无浮动** · 展开后的 **7 个 job 名**与契约 §4.1 **逐字一致**
 - [x] 人工验证记录 `harness/verification/B3F1/manual-verification.md` **已回填**（**五段式** · 仓库既有约定）
       （含：零出站证据 · 断网全绿证据 · M0 三 feature 补检结论 · **分支保护设置步骤与状态取证**）

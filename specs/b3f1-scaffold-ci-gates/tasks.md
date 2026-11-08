@@ -264,6 +264,51 @@ quickstart.md（**可照抄**的验证手册）
 
 ---
 
+## Phase 8: 修订轮 · **v1.0 零依赖**（2026-11-08 · 裁定 26 · 宪法 v1.7.0 · 发起者已决）
+
+> **背景**：发起者产品决定 ——「freegraph v1.0 不希望看到依赖包，所有依赖包放到 v2.0」
+> ⇒ **v1.0 的发行元数据 MUST NOT 出现任何依赖包名** ⇒ 四个 extra 移入 v2.0 范围。
+> ⇒ 本轮是**实现轮之后**的**修订轮**（追加任务 · **不改动** T001–T057 的判据）·
+> **全量改**：宪法 + spec + 契约 + 代码 + CI + 文档 + 人工验证记录。
+> **判据未被放宽**：原则 IX 的许可证白名单与包层黑名单仍**逐包**适用（对 v2.0 清单
+> **立即**生效）⇒ 违规的依赖**进不了 v2.0**（比 v2.0 开工后再发现**更早**）。
+
+- [X] T058 [US5] **宪法 v1.7.0** —— 「依赖白名单 / 黑名单」条的**包层白名单**项改为
+  「**v1.0 的发行元数据 MUST NOT 出现任何依赖包名**」+ 四个 extra 移入 v2.0 +
+  v2.0 清单位置 + `[png]` 后端待调研；**修订记录**新增 v1.7.0 条目（变更了什么 / 为什么 /
+  受影响的原则与特性 / 迁移方案）· **页脚版本号 1.6.0 → 1.7.0**
+- [X] T059 [US5] `pyproject.toml` —— **删除** `[project.optional-dependencies]`（v1.0 零依赖）
+  + 补注「v2.0 清单在 `contracts/extras-v2.toml` · 不进发行包」⇒ 实测
+  `importlib.metadata.requires("freegraph")` == **`None`**
+- [X] T060 [US5] 新建 **`specs/b3f1-scaffold-ci-gates/contracts/extras-v2.toml`** —— v2.0 的
+  extras 声明（**刻意采用 `pyproject` 的同构形态** ⇒ 门禁解析器零改动即可消费）
+  + `[tool.freegraph.extras_v2]` 说明小节（**不参与判定**）+ `[png]` 后端待调研的标注
+- [X] T061 [US5] `gate_G23_licenses.py` —— 新增 **`--project`** 参数（被检的**依赖声明文件**
+  · **同名同义**于 G21 的 `--project` · **MUST NOT** 当作 `--root` 的别名 · 默认
+  `<root>/pyproject.toml`）⇒ 闭包来源可指向 v2.0 清单 ⇒ **门禁仍非空**（实测 12 个包）
+- [X] T062 [US5] `ci.yml` —— 步骤 5.5 改为「**v2.0 预验证依赖**」（直接装 5 个包 ·
+  **不是** v1.0 的依赖 · 不进发行包 / 不进 `Requires-Dist`）· 步骤 7 的 **G21 / G23**
+  追加 `--project .../extras-v2.toml`
+- [X] T063 [US5] `tests/gates/test_gates.py` —— 脚手架断言改为「**v1.0 的发行元数据零依赖
+  包名**」（`Requires-Dist` 整个为空 + `pyproject.toml` **不含** `[project.optional-dependencies]`）
+  + 新增「v2.0 清单**齐备且合宪**」与「G21 / G23 对清单取证 ⇒ **非空门禁**」两条断言
+  · G23 的四个用例改为「`--root <副本>` + `--project <清单>`」
+- [X] T064 [US5] 契约与 spec —— **裁定 26**（spec）· `dependency-gate.md`（§1 环境表 ·
+  §2.1 extras 划分 · §2.4 基础闭包口径）· `architecture-gates.md`（G21 / G23 + §2.1 CLI
+  表 + §4 G3）· `ci-matrix.md`（§1 · §2 步骤 5.5 / 步骤 7）· `data-model.md`（§3 · §4.1）·
+  `research.md`（**D-16** + DR-8）· `plan.md`（Summary + Constraints）
+- [X] T065 [US5] 文档同步 —— `README.md` 的「可选依赖（extras）」章节改为「**v1.0 零依赖**
+  + v2.0 预告」· `THIRD_PARTY_NOTICES` §2（extras 依赖改列为 **v2.0 计划** · 必装仍为空集）·
+  `harness/proposals/立项书.md`（**D14 修订** · 包层白名单行 · `[png]` 待调研）·
+  `harness/prompts/init_constitution.md`（宪法模板同步 v1.7.0 条）
+- [X] T066 [US5] 既有门禁 **G3** 的白名单常量 —— **12 个包名一字未改**（**T049 的追认
+  依然有效**）· 仅**补注**其适用版本为「**v2.0 的目标闭包**」（v1.0 为空断言 · v2.0
+  落地时自动变实质 ⇒ 门禁实现零改动）· 人工验证记录**重跑**并补「修订轮」小节
+
+---
+
+---
+
 ## Dependencies & Execution Order
 
 > **⚠️ 执行策略（2026-11-07 分析轮定案 · 实现阶段 MUST 遵循）**：**不逐任务人工确认**，改为

@@ -1,0 +1,75 @@
+# B3F1 · v2.0 的 extras 清单（**不进发行包** · 宪法 v1.7.0）
+#
+# **这是什么**：freegraph **v2.0** 计划引入的**四个可选 extra** 的依赖声明。
+#
+# **为什么在 v1.0 不放在 `pyproject.toml` 里**（宪法 v1.7.0 · 发起者 2026-11-08 决定）：
+# 「freegraph v1.0 不希望看到依赖包，所有依赖包放到 v2.0」⇒ v1.0 的**发行元数据**
+# MUST NOT 出现任何依赖包名 ⇒ v1.0 的 `pyproject.toml` **不含**
+# `[project.optional-dependencies]`。
+#
+# **为什么还要留着它**（而不是删掉了事）：
+# ① 门禁 **G21**（依赖黑名单）与 **G23**（许可证白名单）**对这份清单取证**
+#    ⇒ v1.0 就把 v2.0 计划的依赖**预验证**一遍（许可证 ∈ 5 个精确 SPDX id ·
+#    无 langchain / langgraph / langsmith / deepagents）⇒ **违规的依赖进不了 v2.0**
+#    （比 v2.0 开工后再发现**更早**）；
+# ② **v2.0 落地时只需把本文件的内容搬进 `pyproject.toml` 的
+#    `[project.optional-dependencies]`** ⇒ **门禁实现零改动**
+#    （本文件刻意采用 `pyproject` 的同构形态 ⇒ G21 / G23 的 `--project` 参数
+#    可直接指向本文件）。
+#
+# **格式**：**刻意**与 `pyproject.toml` 同构（`[project.optional-dependencies]`）
+# ⇒ 门禁的解析器零改动即可消费（G21 的 `--project` / G23 的 `--project`）。
+# 其余小节（`[tool.…]`）**不参与判定**，只承载说明。
+#
+# **⚠️ `[png]` 的渲染后端 = 待调研**（v2.0 专项决策 · 2026-11-08 发起者决议）：
+# 本清单**当前**登记的是**唯一实测可行**的白名单内后端 `playwright`
+# （Apache-2.0；闭包 `greenlet` / `pyee` / `typing-extensions` 实测全绿；
+# 全部纯 Python 后端实测被拒：`cairosvg`/`svglib`/`pycairo` = **LGPL**（传染性）·
+# `pillow` = `MIT-CMU`（变体标识符不放行）· `matplotlib` 闭包含 `pillow` +
+# `numpy`（`0BSD`/`Zlib`/`CC0-1.0`）· `pymupdf` = **AGPL** · `resvg-py` = **无任何
+# 许可证信息** —— research D-02）⇒ 但**真 PNG 渲染的后端方向留待 v2.0 专项调研后决策**
+# （候选：`playwright`（需用户另装浏览器二进制 · 约 300 MB · 安装期动作）·
+# 自研最小 SVG→PNG 渲染器（纯标准库 · 永久零依赖）· 继续只出占位 PNG）。
+# ⇒ **调研完成前，本清单的 `[png]` 段 MUST NOT 被当作「已定的方案」**。
+
+[project.optional-dependencies]
+# 结构化状态 schema 支持（B4F1 / B5F1）—— **非内核必要**：契约层的
+# `StateDict` 只是 `dict[str, Any]` 的别名，标准库 `TypedDict` / `dataclass` 同样可用。
+pydantic = ["pydantic>=2.0"]
+# checkpoint 序列化（B14F1 / B15F1）—— **非内核必要**：标准库 `json` 也能存，
+# 只是慢一点、体积大一点 ⇒ 这是**性能优化**，不是功能前提。
+checkpoint = ["ormsgpack>=1.0"]
+# OpenTelemetry 可观测内核（B18F1–B20F2）—— **非内核必要**：项目**已自研**
+# `TraceSink` / `Span` 协议（B2F1 已落）⇒ OTel 只是一个**互操作出口**。
+# **MUST NOT** 含任何 OTLP exporter：其闭包含 `certifi`（**MPL-2.0**，不在白名单）
+# ⇒ 必被 G23 拒（裁定 21 · exporter 归 B21F1）。
+otel = ["opentelemetry-api>=1.20", "opentelemetry-sdk>=1.20"]
+# 本地 PNG 渲染（B23F1）—— **默认关闭**；**渲染后端待 v2.0 专项调研**（见文件头）。
+png = ["playwright>=1.40"]
+
+[tool.freegraph.extras_v2]
+# 说明性小节 —— **不参与门禁判定**（判定只看 `[project.optional-dependencies]`）。
+target_version = "v2.0"
+license_whitelist = ["MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "PSF-2.0"]
+forbidden = [
+    "langsmith",
+    "langchain*",
+    "langgraph*",
+    "deepagents",
+    "all provider packages",
+]
+png_backend = "playwright（唯一实测可行的白名单内后端）—— **渲染后端方向待 v2.0 专项调研**"
+closed_closure = [
+    "annotated-types",
+    "greenlet",
+    "opentelemetry-api",
+    "opentelemetry-sdk",
+    "opentelemetry-semantic-conventions",
+    "ormsgpack",
+    "playwright",
+    "pydantic",
+    "pydantic-core",
+    "pyee",
+    "typing-extensions",
+    "typing-inspection",
+]

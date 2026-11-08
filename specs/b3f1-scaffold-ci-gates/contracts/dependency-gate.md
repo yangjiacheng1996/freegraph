@@ -16,7 +16,7 @@
 
 | 环境 | 装什么 | 断言 | 门禁 |
 |---|---|---|---|
-| ① **依赖断言环境** | **7/7 全装环境**（基础包 **+ 四个 extras 的传递依赖已安装** —— 否则 G21 的递归展开**无法取证**） | 递归展开 freegraph 自身 `Requires-Dist`（**含全部 extras 变体**）无 `langsmith` / `langchain*` / `langgraph*` / `deepagents`；`import freegraph` 后 `sys.modules` 中无 `langsmith` / `langchain_core` / `langgraph` | **G21** · **G23** |
+| ① **依赖断言环境** | **7/7 全装环境**（基础包 **+ 四个 extras 的传递依赖已安装** —— 否则 G21 的递归展开**无法取证**）<br>**⚠️ v1.0（裁定 26）**：装的是「**v2.0 预验证依赖**」，**不是** v1.0 的依赖（v1.0 发行元数据零依赖）；判据对象 = `contracts/extras-v2.toml` | 递归展开 freegraph 自身 `Requires-Dist`（**含全部 extras 变体**）无 `langsmith` / `langchain*` / `langgraph*` / `deepagents`；`import freegraph` 后 `sys.modules` 中无 `langsmith` / `langchain_core` / `langgraph` | **G21** · **G23** |
 | ② **隔离环境** | **只装基础包的隔离 venv**（零必装依赖 · 不装任何 extra） | 第三方依赖闭包 **== 空集** + `import freegraph` 后 `sys.modules` 无 langchain 家族（SC-002 · FR-005 ②） | **G22** |
 | ③ **验收环境** | freegraph + **脚本自带的** `langchain` 系 | **反向断言**：freegraph **运行期从不** import `langchain` / `langchain_core`；freegraph 自身**零出站** | **G25**（导入图）· **G27**（零出站） |
 
@@ -40,15 +40,28 @@
 
 ## 2. extras 变体的枚举语义
 
-### 2.1 extras 的划分（FR-001 · FR-004）
+### 2.1 extras 的划分（FR-001 · FR-004 · **适用版本 = v2.0**）
+
+> **⚠️ 2026-11-08 · 裁定 26 · 宪法 v1.7.0**：**v1.0 的发行元数据 MUST NOT 出现任何
+> 依赖包名** ⇒ v1.0 的 `pyproject.toml` **MUST NOT** 含
+> `[project.optional-dependencies]` ⇒ 下表**移入 v2.0 范围**，其声明落在
+> **`contracts/extras-v2.toml`**（**不进发行包** · **刻意采用 `pyproject` 的同构形态**
+> ⇒ 门禁的解析器零改动即可消费）⇒ **G21 / G23 的判据对象 = 该清单**。
 
 ```toml
+# contracts/extras-v2.toml（v2.0 的 extras 声明 · 不进发行包）
 [project.optional-dependencies]
 pydantic  = ["pydantic>=2.0"]
 checkpoint = ["ormsgpack>=1.0"]
 otel      = ["opentelemetry-api>=1.20", "opentelemetry-sdk>=1.20"]
 png       = ["playwright>=1.40"]
 ```
+
+> **📌 `[png]` 的渲染后端方向留待 v2.0 专项调研后决策**（2026-11-08 发起者决议）：
+> 上表登记的是**唯一实测可行**的白名单内后端 `playwright`（research D-02）⇒
+> 但**真 PNG 渲染**的方向（`playwright` 需另装浏览器二进制 vs 自研最小渲染器 vs
+> 继续只出占位 PNG）**MUST 在 v2.0 专项调研后决策** ⇒ 调研完成前
+> **MUST NOT** 把上表当作「已定的方案」。
 
 - **基础安装的 `dependencies` MUST 为空列表**（零第三方运行时依赖 · 宪法 v1.2.0）⇒ 基础闭包 **== 空集**。
 - 每个 extra **独立可选**：不装即不可用；基础安装 MUST NOT 拉起任何 extra 的依赖（FR-004 ①）。
@@ -101,6 +114,11 @@ png       = ["playwright>=1.40"]
 
 `dependencies = []` ⇒ 基础变体的闭包 == **空集**。
 这是 README「零第三方运行时依赖」这条**对外承诺**的**可判定形式**。
+
+> **⚠️ v1.0 的口径更强（裁定 26 · 宪法 v1.7.0）**：v1.0 **不声明任何 extra** ⇒
+> 实测 `importlib.metadata.requires("freegraph")` == **`None`**（**整个为空**，
+> 连 `extra ==` 标记的条目也没有）⇒ 判据 = 「**`Requires-Dist` 整个为空**」，
+> 比「无 marker 的条目数 == 0」**更强**。
 
 ---
 

@@ -811,12 +811,20 @@ class TestPublicSymbolSurface:
 #: 有限 · 逐个列名 · **无通配符 · 无前缀匹配**（research D-02 / D-06 实测）。
 #: 方向 = **更精确**（原为 4 个宽泛占位包名）⇒ 净效果**变严**（FR-018）。
 #:
-#: **⚠️ 版本敏感性**：extras 的版本约束是**开区间**（``pydantic>=2.0``）⇒ 上游**新增一个
+#: **⚠️ 适用版本（2026-11-08 · 宪法 v1.7.0 修订）**：v1.0 的发行元数据**零依赖包名**
+#: ⇒ `pyproject.toml` **不含** `[project.optional-dependencies]` ⇒ **v1.0 的 extras
+#: 闭包为空集** ⇒ 本条在 v1.0 是**空断言**；下表 12 个包名是 **v2.0 的目标闭包**
+#: （v2.0 的声明落在 `specs/b3f1-scaffold-ci-gates/contracts/extras-v2.toml`）⇒
+#: **v2.0 落地时本条自动变实质断言**（闭包必须**逐一命中**这 12 个名字），
+#: **门禁实现零改动**。
+#:
+#: **⚠️ 版本敏感性**：extras 的版本约束是**开区间**（`pydantic>=2.0`）⇒ 上游**新增一个
 #: 传递依赖**即会让闭包多出一个包名 ⇒ 白名单失配 ⇒ CI 变红。
-#: ⇒ 复核的**双触发点**：① **extras 的版本约束变更**（``[project.optional-dependencies]``
+#: ⇒ 复核的**双触发点**：① **extras 的版本约束变更**（`[project.optional-dependencies]`
 #: 任一条变更）· ② **CI 因闭包失配而红**（本条子集断言失败）—— **二者任一**发生即 MUST
 #: **重跑闭包实测**并追认更新白名单（**MUST NOT** 以「放宽白名单让它变绿」的方式绕过 ·
 #: FR-018；白名单的扩充只能走宪法修订）。
+
 CONSTITUTION_DEPENDENCY_WHITELIST = {
     "annotated-types",
     "greenlet",

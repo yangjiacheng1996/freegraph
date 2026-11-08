@@ -12,12 +12,13 @@
 >   并套用 Speckit 官方宪法模板（`Core Principles` / 附加章节 / `Governance` / 版本行）的结构。
 > - **待办**：宪法中 `TODO(...)` 标记的字段需要在批准日由 `/speckit.constitution` 填实。
 > - **📌 正文同步状态（2026-11-08 订正 · 重要）**：本文件的**宪法正文已与生效副本
->   `.specify/memory/constitution.md` 的规范性正文逐字同步**（**v1.6.0** · 2026-11-08）——
+>   `.specify/memory/constitution.md` 的规范性正文逐字同步**（**v1.7.0** · 2026-11-08）——
 >   即：原则 I–X 的**现行措辞**（含原则 V 的「只观测不阻断」口径 · 原则 VII 的 **C1–C27**
 >   与标识关联键约定 · 原则 X 的源文件署名头义务）、**「运行时环境基线」**章节（Python 3.11 ·
 >   typing 构件上限 3.11）、**「发布门禁（Release Gate）」**章节（含发版节奏「只发两版」）、
 >   **「质量门禁的分阶段落地与发起者追认」**通则（v1.6.0）、**「定位补充」**与
 >   **「开发层级词表（四层）」**、以及依赖白名单的 **`[png]` = `playwright`**（v1.5.0 收敛）
+>   与 **「v1.0 的依赖面 = 零 · 四个 extra 移入 v2.0」**（**v1.7.0**）
 >   **全部在内**。
 >   ⇒ **再次执行 `/speckit.constitution` MUST NOT 造成任何条款回退**；
 >   若日后宪法有新修订，**本模板 MUST 同批同步**（宪法修订记录 v1.4.1 已确立此纪律：
@@ -472,9 +473,18 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
 该报告 §3.6 的其余部分——**黑名单、配置层、网络层**——仍然有效）：
 
 - **包层白名单**：**必装运行时依赖 = 无**（基础安装**零第三方依赖**，`dependencies = []`）。
-  可选 extra：`pydantic`（`[pydantic]`）、`ormsgpack`（`[checkpoint]`）、
+  > **2026-11-08 修订（v1.7.0）—— v1.0 的依赖面收敂到「零」**：**v1.0 的发行元数据
+  > MUST NOT 出现任何依赖包名** ⇒ ① 必装运行时依赖 = **无**；② **可选 extra 在 v1.0
+  > 亦不存在**（下述四个 extra 单元**全部移入 v2.0 范围** ⇒ v1.0 的 `pyproject.toml`
+  > MUST NOT 含 `[project.optional-dependencies]`）；③ **v2.0 的 extras 声明落在仓库内**
+  > （`specs/b3f1-scaffold-ci-gates/contracts/extras-v2.toml` · **不进发行包**）⇒
+  > 门禁 **G21 / G23** 对该清单取证 ⇒ **v1.0 即完成预验证**，v2.0 落地时只需把清单
+  > 搬进 `pyproject.toml`（**门禁实现零改动**）；④ 四个 extra **均非内核的必要条件**
+  > （实测：内核与契约层零引用）⇒ 移走它们**不阻断**任何 v1.0 内核里程碑。
+  可选 extra（**v2.0 范围**）：`pydantic`（`[pydantic]`）、`ormsgpack`（`[checkpoint]`）、
   `opentelemetry-api` / `opentelemetry-sdk`（`[otel]`）、
-  **`playwright`（`[png]`，**默认关闭** · 本地 Chromium 渲染 · 许可证 Apache-2.0）**。
+  **`playwright`（`[png]`，**默认关闭** · 本地 Chromium 渲染 · 许可证 Apache-2.0
+  · **真 PNG 渲染的后端方向留待 v2.0 专项调研后决策**）**。
   > **2026-11-05 修订**：原为「`typing-extensions`（唯一建议的**必装**运行时依赖）」，
   > 现改为**必装依赖为空**——`typing-extensions` 已从基础安装剥离（见修订记录 v1.2.0）。
   > 基础安装的依赖闭包 **MUST 为空集**（由 G3 门禁断言）。

@@ -62,9 +62,13 @@ def _root_packages(root: Path) -> dict[str, Path]:
     return found
 
 
-def checked_packages(root: Path) -> list[str]:
-    """**被检查的包集合**（并集口径 · spec 裁定 25）。"""
-    project = root / "pyproject.toml"
+def checked_packages(root: Path, project: Path | None = None) -> list[str]:
+    """**被检查的包集合**（并集口径 · spec 裁定 25）。
+
+    =（**依赖声明文件**里的依赖闭包）∪（取证作用域根下扫到的
+    ``*.dist-info`` / ``*.egg-info`` 所对应的包）。
+    """
+    project = project if project is not None else root / "pyproject.toml"
     packages: set[str] = set()
     if project.is_file():
         for variant in _gatekit.enumerate_variants(project):
@@ -73,10 +77,10 @@ def checked_packages(root: Path) -> list[str]:
     return sorted(packages)
 
 
-def evaluate(root: Path) -> list[_gatekit.Violation]:
+def evaluate(root: Path, project: Path | None = None) -> list[_gatekit.Violation]:
     """判定被检根下的许可证合规性 ⇒ 违规清单（空 = 合规）。"""
     violations: list[_gatekit.Violation] = []
-    packages = checked_packages(root)
+    packages = checked_packages(root, project)
     for package in packages:
         if package in ELV2_NAMED:
             violations.append(
@@ -162,10 +166,21 @@ def main(argv: list[str] | None = None) -> int:
         default=str(REPO_ROOT),
         help="被检的环境根（许可证据的取证作用域；默认：仓库根）",
     )
+    parser.add_argument(
+        "--project",
+        default=None,
+        help=(
+            "被检的**依赖声明文件**（被检查包集合的闭包来源；"
+            "默认：<root>/pyproject.toml）。"
+            "v1.0 的发行元数据零依赖（宪法 v1.7.0）⇒ 门禁改对 **v2.0 清单**取证："
+            "specs/b3f1-scaffold-ci-gates/contracts/extras-v2.toml"
+        ),
+    )
     args = parser.parse_args(argv)
     root = Path(args.root)
-    violations = evaluate(root)
-    packages = checked_packages(root)
+    project = Path(args.project) if args.project else root / "pyproject.toml"
+    violations = evaluate(root, project)
+    packages = checked_packages(root, project)
     print(
         f"[{GATE_ID}] 被检查的包数 = {len(packages)}"
         f"（并集口径：闭包包集 ∪ 取证作用域根下扫到的 dist-info）"

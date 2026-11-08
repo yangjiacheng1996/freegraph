@@ -32,6 +32,10 @@
   **门禁** = Linux 全量（G21–G30）/ 其余平台子集（G21 · G23 · G24 · G25 · G26 · G29 · G30）
   ⇒ 二者是**两件事**，MUST NOT 混为一谈（「全量测试（含架构门禁的测试）」**≠**「全量门禁」）。
 - **⚠️ 但「依赖安装范围」是 7/7 作业**（FR-015 ⑤）——**子集**只影响**跑哪些门禁**，**不影响装什么**：G21 在子集内、且其判定是「递归展开闭包 + 未安装 ⇒ 判失败」⇒ 非 Linux 作业不装 extras 即**必红**。
+  > **⚠️ v1.0 的口径（2026-11-08 · 裁定 26 · 宪法 v1.7.0）**：v1.0 的**发行元数据零依赖包名**
+  > ⇒ 7 个作业装的那 5 个包**不是 v1.0 的依赖**，而是「**v2.0 预验证依赖**」
+  > （**不进发行包 · 不进 `Requires-Dist`**）⇒ 门禁 **G21 / G23** 对
+  > **`contracts/extras-v2.toml`** 取证 ⇒ **v1.0 即完成预验证**。
 - **arm64**：补 **Linux arm64 最低档**一个作业（裁定 15 · 兑现立项书 §3.5「x86_64 与 arm64」的支持承诺）；
   `macos-15` 的 runner **本身即 arm64** ⇒ **不另设作业**；**Windows arm64 v1 不纳入**。
 - **runner 标签 MUST 钉死到具体镜像**（FR-015 ④③）⇒ MUST NOT 用 `ubuntu-latest` / `macos-latest` /
@@ -91,9 +95,9 @@
 | 3.5 | **`uv venv --python <矩阵档位>`** | **建 venv**（**必做** —— `uv pip install` 在**无活动虚拟环境**时报 `error: No virtual environment found` 并以**退出码 2** 失败（**实测**）⇒ 无此步则**步骤 4 在 7/7 作业上直接失败**。`setup-python` 的产物与本 venv **不是同一个解释器**；真正的解释器由本步决定（用**矩阵档位**而非 `setup-python` 的解释器，以保证 Python 版本与矩阵一致） |
 | 4 | `uv pip install --python .venv --group dev` | 装**开发期依赖组**（`pytest` + `packaging` · PEP 735）—— **不进发行包**、**不进 `Requires-Dist`** ⇒ 基础闭包仍为空集（G3 不受影响）。**显式 `--python .venv`**（**跨平台** · 不依赖隐式环境变量 ⇒ 后续 step 漏传 env 也不会跑偏） |
 | 5 | `uv pip install --python .venv -e .` | 装**发行形态**（`src/` 布局 ⇒ 可编辑安装） |
-| 5.5 | `uv pip install --python .venv -e ".[pydantic,checkpoint,otel,png]"` | **四个 extras 的依赖**（只装 Python 包、不装浏览器二进制）—— **全部 7 个作业 MUST 执行**（**不再仅限 Linux 全量作业**）⇒ G21 的递归取证可完成（architecture-gates G21）；**G23 在非 Linux 作业上**也**调用**（子集含 G23 · §1）⇒ 其**依赖环境已就绪** |
+| 5.5 | `uv pip install --python .venv "pydantic>=2.0" "ormsgpack>=1.0" "opentelemetry-api>=1.20" "opentelemetry-sdk>=1.20" "playwright>=1.40"` | **v2.0 extras 的「预验证」依赖**（**不是** v1.0 的依赖 · 裁定 26 · 宪法 v1.7.0）—— 只装 Python 包、不装浏览器二进制。**全部 7 个作业 MUST 执行** ⇒ G21 / G23 对 `contracts/extras-v2.toml` 的递归取证可完成（architecture-gates G21 / G23） |
 | 6 | `uv run --no-project --python .venv python -m pytest tests/ -ra ${{ matrix.pytest_args }}`（环境变量 `FREEGRAPH_TEST_INSTALLED=1` **写在 job 的 `env:` 段**） | **全量测试套件**（平台专属用例按标记排除） |
-| 7 | **逐条**调用门禁：`uv run --no-project --python .venv python harness/scripts/gates/gate_GNN_*.py` | FR-016 · 退出码即判定 · **本步 MUST NOT 含 G22 / G27 / G28**（它们在步骤 9；**2026-11-08 分析轮订正 · M4** —— 否则 Linux 作业上 G22 / G28 会被**跑两遍**） |
+| 7 | **逐条**调用门禁：`uv run --no-project --python .venv python harness/scripts/gates/gate_GNN_*.py`（**G21 / G23 追加 `--project specs/b3f1-scaffold-ci-gates/contracts/extras-v2.toml`** · 裁定 26 ⇒ 判据对象 = v2.0 清单） | FR-016 · 退出码即判定 · **本步 MUST NOT 含 G22 / G27 / G28**（它们在步骤 9；**2026-11-08 分析轮订正 · M4** —— 否则 Linux 作业上 G22 / G28 会被**跑两遍**） |
 | 8 | 兼容矩阵 / 快照的**接线**（G8 · G16 · G19 已在第 6 步）+ 「`COMPAT.md` 未落地」的**非阻断**报告 | 裁定 13 · research D-14 |
 | 9 | **Linux only**：G22（隔离 venv）· G28（断网）· **G27 的独立可执行入口** | 见 §3 · **MUST NOT** 与步骤 7 重复 |
 
@@ -129,7 +133,7 @@
 > ⇒ **MUST 统一写在 job 的 `env:` 段**（三个平台通用），MUST NOT 把平台专属的变量前缀语法写进命令串
 > （**步骤 6 的命令串里只出现跨平台写法**）。
 
-> **⚠️ 为什么 extras 必须装（2026-11-07 分析轮补入 · 实测）**：
+> **⚠️ 为什么这 5 个包必须装（2026-11-08 · 裁定 26 修订 · **它们是「v2.0 预验证依赖」· 不是 v1.0 的依赖**）**：
 > 门禁的判据是**依赖闭包**，而闭包靠**已安装包的元数据**递归展开 ⇒ 不装 extras 时：
 > ① **G23** 取不到 `pydantic` / `ormsgpack` / `opentelemetry-*` / `playwright` 的许可证据
 >    ⇒ 按 FR-006 ②「取不到证明 ⇒ 失败并指名」**必红**；
@@ -142,7 +146,10 @@
 >    （「某个允许的依赖间接拉进 `langsmith`」这类违规抓不到）；
 > ③ **G3** 的 extras 闭包只剩 5 个**直接**依赖名 ⇒ 裁定 8 登记的 **12 名白名单永不触达**
 >    ⇒ 「净效果 = 变严」在 CI 中**得不到兑现**。
-> ⇒ **extras 的安装是 G21 / G23 / G3 可判定的前置条件，不是可选项**。
+> ⇒ **这 5 个包的安装是 G21 / G23（对 v2.0 清单）可判定的前置条件，不是可选项**。
+> **⚠️ v1.0 的发行元数据仍是零依赖**（宪法 v1.7.0）—— 本步装的包**不进发行包、
+> 不进 `Requires-Dist`**（实测：v1.0 的 `importlib.metadata.requires("freegraph")`
+> == **`None`**）。
 > **⚠️ 安装范围（2026-11-07 分析轮订正）**：四个 extras 的依赖 MUST 在**全部 7 个作业**上安装（§2 步骤 5.5），
 > **不再仅限 Linux 全量作业** —— 理由：G21 的判定要求 extras 的**传递依赖已安装**才能完成递归取证
 > （architecture-gates G21：「未安装 ⇒ 显式报『未安装 ⇒ 无法取证』并判失败」）⇒ 若非 Linux 作业不装 extras，

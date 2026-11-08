@@ -44,28 +44,19 @@ run graph-based AI workflows without LangSmith or external account dependencies.
 验收脚本是**开发辅助材料**，留在 GitHub 上供学习，不会被 `import` 引入。
 发布流水线有一道**纯度门禁**（`harness/scripts/check_dist_purity.py`）对此做断言。
 
-## 可选依赖（extras）
+## 依赖面
 
-**基础安装零第三方运行时依赖**（上表第三条承诺）**不受影响**：四个 extra **默认关闭**，
-不装即不可用；`pip install freegraph` 后 site-packages 里仍然只有 freegraph 自己。
+**v1.0 零依赖** —— 发行元数据里**没有任何依赖包名**（`Requires-Dist` 为空）：
 
-| extra | 用途 | 内容 | 许可证 |
-|---|---|---|---|
-| `freegraph[pydantic]` | 结构化状态 schema 支持 | `pydantic>=2.0` | MIT |
-| `freegraph[checkpoint]` | checkpoint 序列化 | `ormsgpack>=1.0` | Apache-2.0 OR MIT |
-| `freegraph[otel]` | 可观测性内核（OTel API + SDK） | `opentelemetry-api>=1.20` · `opentelemetry-sdk>=1.20` | Apache-2.0 |
-| `freegraph[png]` | 本地 PNG 渲染（**默认关闭**） | `playwright>=1.40` | Apache-2.0 |
+```bash
+pip install freegraph     # site-packages 里只有 freegraph 自己
+```
 
-安装方式：`pip install "freegraph[png]"`（可组合多个 extra）。
-
-> **`[png]` 的三条硬约束**（宪法「依赖白名单 / 黑名单」条）：
-> ① **默认关闭**——基础安装不拉起它的任何依赖；
-> ② **许可证闭包全绿**——`playwright` / `greenlet` / `pyee` / `typing-extensions`
-> 的实测许可证标识全部落在 {MIT, Apache-2.0, BSD-2/3, PSF} 内；
-> ③ **运行期零出站**——Chromium **本地**渲染，图片不外传。
->
-> **浏览器二进制需用户显式执行 `playwright install chromium`**（属**安装期**动作，
-> 不是运行期依赖）；不装浏览器则 `[png]` 的能力不可用，其余功能不受影响。
+> **v2.0 预告**：计划提供四个**可选 extra**（`[pydantic]` 结构化状态 schema ·
+> `[checkpoint]` checkpoint 序列化 · `[otel]` OpenTelemetry 可观测内核 ·
+> `[png]` 本地 PNG 渲染）—— 它们的声明与**许可证 / 黑名单预验证**已在仓库内完成
+> （`specs/b3f1-scaffold-ci-gates/contracts/extras-v2.toml`），**v2.0 落地时才进入
+> 发行元数据**。**四个 extra 都不是内核的必要条件** —— 内核与契约层只用标准库。
 
 ## 开发与验收
 

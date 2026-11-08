@@ -15,12 +15,22 @@
 **① 项目脚手架**——把 `pyproject.toml` 从「只有基础依赖」补成**完整的 extras 划分**，
 并确立 Python 版本矩阵：
 
-| extra | 内容 | 实测依赖闭包 | 许可证判定 |
+> **⚠️ v1.0 的依赖面 = 零（2026-11-08 · 裁定 26 · 宪法 v1.7.0 · 发起者已决）**：
+> 「freegraph v1.0 不希望看到依赖包，所有依赖包放到 v2.0」⇒
+> **v1.0 的 `pyproject.toml` 不含 `[project.optional-dependencies]`** ⇒
+> **发行元数据零依赖包名**（实测：`Requires-Dist` == `None`）；
+> 下表的四个 extra **移入 v2.0 范围**，其声明落在
+> **`contracts/extras-v2.toml`**（**不进发行包**）⇒ 门禁 **G21 / G23** 对该清单
+> **取证** ⇒ **v1.0 即完成预验证**（v2.0 落地时只需把清单搬进 `pyproject.toml`
+> ⇒ **门禁实现零改动**）。
+> ⇒ 下表因此是「**v2.0 的目标闭包**」，**不是** v1.0 的交付内容。
+
+| extra（**v2.0 范围**） | 内容 | 实测依赖闭包 | 许可证判定 |
 |---|---|---|---|
 | `[pydantic]` | 结构化状态 schema 支持 | `annotated-types` · `pydantic-core` · `typing-extensions` · `typing-inspection` | ✅ 全绿 |
 | `[checkpoint]` | checkpoint 序列化 | `ormsgpack`（闭包为空） | ✅ 全绿 |
 | `[otel]` | 可观测性内核（OTel API + SDK） | `opentelemetry-api` · `opentelemetry-sdk` · `opentelemetry-semantic-conventions` · `typing-extensions` | ✅ 全绿 |
-| `[png]` | 本地 PNG 渲染（**默认关闭** · **宪法 v1.5.0 已列明** = `playwright`） | `playwright` · `greenlet` · `pyee` · `typing-extensions` | ✅ 全绿（`Apache-2.0`） |
+| `[png]` | 本地 PNG 渲染（**默认关闭** · **宪法 v1.5.0 已列明** = `playwright`）<br>**⚠️ 渲染后端方向留待 v2.0 专项调研**（D-16） | `playwright` · `greenlet` · `pyee` · `typing-extensions` | ✅ 全绿（`Apache-2.0`） |
 
 > **⚠️ `[png]` 的后端取自宪法 v1.5.0（2026-11-08 分析轮订正）**：本 plan 的职责**只**是**核验**
 > `playwright` 的**许可证标识 ∈ 白名单**（实测 `Apache-2.0` · research D-02）与**运行期零出站**
@@ -131,9 +141,10 @@ G3 的 12 名白名单永不触达（**实测**：四个 extras 的完整闭包*
 |---|---|
 | 基础安装依赖闭包 **= 空集** | FR-001 · SC-002 |
 | `requires-python` = `>=3.11` 且**不设上限** | FR-001 · FR-003 · 裁定 1 |
-| 依赖闭包（**含全部 extras 变体**）无 `langsmith` / `langchain*` / `langgraph*` / **`deepagents`** | FR-005 ① |
+| 依赖闭包（**含全部 extras 变体**）无 `langsmith` / `langchain*` / `langgraph*` / **`deepagents`**（**v1.0 的判据对象 = `contracts/extras-v2.toml`** · 裁定 26） | FR-005 ① |
 | **验收环境**内 freegraph **不碰** `langchain`（**③① 声明级 + 导入级**在 B3F1 交付；**③② 运行期待 M2**） | FR-005 ③① · 裁定 22 |
 | 许可证 ∈ **{MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, PSF-2.0}**（**精确** · SPDX 表达式**逐叶子**判定） | FR-006 · 裁定 17/18 |
+| **v1.0 的发行元数据零依赖包名**（`Requires-Dist` **整个为空**） | 裁定 26 · 宪法 v1.7.0 |
 | 配置层：`LANGSMITH_*` / `LANGCHAIN_*` / `LANGGRAPH_CLOUD_LICENSE_KEY` / `LANGGRAPH_AUTH*` **零读取**；内核**零**环境变量读取 | FR-007 |
 | 导入图**单向**（L1→L6 递增；**同层 import 仅 L1 与 L6 允许，L2–L5 之间禁止横向依赖** · 立项书 §5.1 铁律 3；跨层只 import L1 及更低） | FR-008 |
 | 零出站：**只观测不阻断** + **第一个非标准库帧**归因 · 只对「框架出站」断言 = 0 | FR-009 ② · 裁定 19 |
