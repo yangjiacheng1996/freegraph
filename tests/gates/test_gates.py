@@ -48,6 +48,10 @@ def run_gate(
         [sys.executable, str(gates_dir / script), *args],
         capture_output=True,
         text=True,
+        # 门禁输出含中文 ⇒ **按 UTF-8 容错解码**（Windows 的管道默认 cp1252 ⇒
+        # 否则这里就会 UnicodeDecodeError ⇒ 用例本身崩，而非门禁判据失败）。
+        encoding="utf-8",
+        errors="replace",
         timeout=1800,
         cwd=str(cwd) if cwd else None,
         check=False,
@@ -60,6 +64,8 @@ def git_status(repo_root: Path) -> str:
         ["git", "-C", str(repo_root), "status", "--porcelain"],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=120,
         check=False,
     )

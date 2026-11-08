@@ -491,6 +491,31 @@ $ FREEGRAPH_TEST_INSTALLED=1 uv run --no-project --python .venv314 python -m pyt
 | G28 报「通过率 < 100%」 | —— | ✅ 实测 100%（§3.2）；清单漂移 ⇒ 指名报错（规则 G28-04） |
 | 3.11 档报 `ImportError` | —— | ✅ 两档全绿（§3.5） |
 
+### 3.10 **CI 首跑**的实测与修复（2026-11-08 · 提交 `e82a8a7`）
+
+> **首跑结果**：7 个作业中 **macOS × 2 成功**、**ubuntu × 3 与 windows × 2 失败** ⇒
+> 两个**平台性**问题（非门禁判据问题）。
+
+| 失败面 | 根因（实测） | 处置 |
+|---|---|---|
+| **ubuntu × 3** 止步于 **Gate G28（offline equivalence）** | **Ubuntu 24.04 的发行版级限制**：默认启用 AppArmor 的「限制非特权用户命名空间」策略（`kernel.apparmor_restrict_unprivileged_userns=1`）⇒ `unshare --map-root-user`（需要**用户命名空间**）对普通用户直接 `Operation not permitted` ⇒ **该步骤必红** | CI 步骤先 `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`（解除**发行版级策略**）⇒ 命名空间仍以**非特权**方式创建（`--map-root-user` · 免 `CAP_SYS_ADMIN`）⇒ **设计前提不变**；另加「命名空间创建能力自检」，失败时给出**指名**的 `::error::` 而非裸红 |
+| **windows × 2** 止步于 **Run test suite** | **Windows 的输出编码**：控制台 / 管道默认 **cp1252 / cp936** ⇒ ① **打印**中文（门禁报告 · pytest 的 skip 理由 · `harness/demo/*.py` 的验收输出）会 `UnicodeEncodeError`；② **读取**中文输出会 `UnicodeDecodeError` ⇒ **既有** `tests/facade/test_facade.py` 的两条验收脚本用例即崩（**实测**：本地用 `PYTHONIOENCODING=cp1252` 复现了同一处 `UnicodeDecodeError`） | ① CI 的 job `env:` 设 **`PYTHONUTF8=1`**（UTF-8 模式 · 三个平台统一）· ② `_gatekit.configure_stdio()` 把门禁自己的 stdout/stderr 切到 UTF-8（**脱离 CI 也能跑**）· ③ 门禁与测试里的**全部子进程**显式 `encoding="utf-8", errors="replace"` + 给子进程设 `PYTHONIOENCODING=utf-8` · ④ 既有的 `tests/contracts/test_architecture.py` / `tests/facade/_gatesupport.py` / `tests/facade/test_facade.py` 三处子进程执行器**同源加固**（**判据零改动** —— 只是解码口径） |
+
+**本地复现与验证**（不等 CI）：
+
+```text
+$ PYTHONIOENCODING=cp1252 FREEGRAPH_TEST_INSTALLED=1 uv run --no-project --python .venv python -m pytest tests/ -q
+  # 修复前：2 failed, 403 passed（UnicodeDecodeError · tests/facade/test_facade.py 的两条验收脚本用例）
+  # 修复后：405 passed, 4 skipped
+$ PYTHONIOENCODING=ascii LC_ALL=C LANG=C … pytest tests/ -q
+  405 passed, 4 skipped          ← 最严模拟（ASCII 输出 + C locale）
+$ PYTHONIOENCODING=cp1252 … gate_G21_dependencies.py   → PASS（退出码 0）
+$ PYTHONIOENCODING=ascii  … gate_G30_attribution.py    → PASS（退出码 0）
+```
+
+> **判据未被改动**：本次修复**只动「输出编码 / 命名空间创建的前置」**，**G1–G30 的任何
+> 判据句都未变**（既有门禁只改了子进程的**解码口径**，判据逻辑逐字未动）。
+
 ---
 
 ## 4. 结论
@@ -551,7 +576,7 @@ $ FREEGRAPH_TEST_INSTALLED=1 uv run --no-project --python .venv314 python -m pyt
 
 | # | 遗留 | 归属 | 状态 |
 |---|---|---|---|
-| **1** | **断网等价性的「命名空间」层未实测** —— 本机 `unshare --net --map-root-user` 不可用（容器内无 `CAP_SYS_ADMIN`）⇒ **G28 的脚本逻辑已实测**（清单读取 · 逐条 `--deselect` · 清单自校验 · 通过率 == 100%），但「全部网络接口不可用」这一层由 **CI 的 Linux 作业**承担 ⇒ **首次 CI 运行后需回填本记录**<br>**📌 发起者处置（2026-11-08）**：**本机只有一个 Ubuntu 环境** ⇒ 该层**留着**，**以后有问题再回填** ⇒ 本条**保持开放**，不阻塞合入 | CI（Linux 作业） | **留待以后**（发起者已决） |
+| **1** | **断网等价性的「命名空间」层** —— **CI 首跑（2026-11-08）证实该层在 GitHub 的 ubuntu 作业上会因 Ubuntu 24.04 的 AppArmor 策略而 `EPERM`**（⇒ 已定位并修复，见 §3.10）⇒ 修复后需**再跑一次 CI** 才能拿到「全部网络接口不可用」的实测证据<br>**📌 发起者处置（2026-11-08）**：**本机只有一个 Ubuntu 环境** ⇒ 该层**留着**，**以后有问题再回填** ⇒ 本条**保持开放**，不阻塞合入 | CI（Linux 作业） | **留待以后**（发起者已决 · 根因已定位） |
 | **2** | **T049 · G3 占位填充的发起者追认** —— 既有门禁 **G3** 的**判据句逐字未动**，但 `CONSTITUTION_DEPENDENCY_WHITELIST`（4 个占位 → **12 个确切包名**）与 extras 枚举语义（过近似 → 精确变体）被填充 ⇒ **净效果 = 变严** ⇒ 依裁定 8 属**唯一一处例外** ⇒ **MUST 由发起者追认**（**实现者不代签**） | **发起者** | ✅ **已追认（2026-11-08 · T049 · 追认文字见下）** |
 | **3** | **T057 · 三条宪法质量门禁缺口的发起者追认**（§3.6 的 ①②③） | **发起者** | ✅ **已追认（2026-11-08 · T049 · 追认文字见下）** |
 | **4** | **FR-020 · 分支保护未启用** —— 本机无 `gh` CLI、无 GitHub 令牌 ⇒ 只能交付**可照抄的设置步骤**（§3.4）；**未启用前该项在人工验证记录中标「未完成」**，MUST NOT 记为通过 | **发起者** | ✅ **已启用（2026-11-08 · 发起者确认 · 见 §3.4 ③）** |
@@ -561,7 +586,7 @@ $ FREEGRAPH_TEST_INSTALLED=1 uv run --no-project --python .venv314 python -m pyt
 | **8** | **`[otel]` 的 OTLP exporter 归 B21F1** —— `opentelemetry-exporter-otlp` 的闭包含 `certifi`（**MPL-2.0**）⇒ 不可进 `[otel]`（裁定 21） | **B21F1** | **已登记** |
 | **9** | **判据重叠（已登记 · 不合并）** —— ① 既有 `tests/facade/_gatesupport.py` 与本 feature 的 **G24 / G25 / G29 / G30** 判据大面积重叠（方向是**更严**）；② `harness/demo/acceptance.py` 的 `EgressProbe` 是仓库内**第三份**出站归因实现，用的是**已被裁定 19 否决**的旧口径 ⇒ 本 feature 的零出站证据**一律**取自 `_gatekit`；③ 既有 G3 与新 G23 的许可证口径不同（`MIT-CMU` 在 G3 通过 / 在 G23 被拒 ⇒ **G23 更严** ⇒ 总体为严） | **B25F1** 统一 | **已登记** |
 | **11** | **`[png]` 的真 PNG 渲染后端方向待 v2.0 专项调研** —— 候选与代价见 `research.md` **D-16**（`playwright` 需另装浏览器二进制 · 约 300 MB / 自研最小渲染器 · 永久零依赖 / 继续只出占位 PNG）⇒ **v1.0 只出占位 PNG**（零依赖）⇒ **不阻塞**本 feature | **v2.0 专项调研**（发起者 + 实现者互动 · research DR-8） | **待调研** |
-| **10** | **Windows / macOS 作业未在本地实测** —— 本机是 Linux ⇒ 7 个 CI 作业中的 4 个（macOS × 2 · Windows × 2）只能由 CI 实跑；命令串已按**跨平台写法**编写（只出现 venv 目录 `.venv` · 无平台专属解释器路径） | CI | **待 CI 实跑** |
+| **10** | **Windows / macOS 作业** —— **CI 首跑（2026-11-08）**：macOS × 2 **成功**（命令串的跨平台写法**已验证**）；Windows × 2 因**输出编码**失败（根因已定位并修复，见 §3.10）⇒ 需**再跑一次 CI** 确认 7/7 全绿 | CI | **待复跑确认** |
 
 ### 5.1 T049 的追认文字（G3 占位填充 · 裁定 8 的唯一一处例外 · 2026-11-08）
 

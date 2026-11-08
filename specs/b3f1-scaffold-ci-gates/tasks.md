@@ -309,6 +309,33 @@ quickstart.md（**可照抄**的验证手册）
 
 ---
 
+## Phase 9: 修订轮 · **CI 首跑的平台性失败修复**（2026-11-08）
+
+> **CI 首跑实测**：7 个作业中 **macOS × 2 成功**、**ubuntu × 3 与 windows × 2 失败** ⇒
+> 两个**平台性**问题（**非门禁判据问题**）。诊断依据 = GitHub API 的作业 / 步骤
+> 结论（`/actions/runs/{id}/jobs`）+ **本地用 `PYTHONIOENCODING=cp1252` 复现**。
+
+- [X] T067 [US5] **Ubuntu 24.04 的发行版级前置** —— 该版本默认启用 AppArmor 的
+  「限制非特权用户命名空间」策略（`kernel.apparmor_restrict_unprivileged_userns=1`）⇒
+  `unshare --map-root-user` 对普通用户 `EPERM` ⇒ **G28 步骤必红**（首跑 3 个 ubuntu
+  作业全部止步于此）⇒ CI 步骤先 `sudo sysctl -w …=0`（解除**发行版级策略** ⇒ 命名空间
+  仍以**非特权**方式创建 · 裁定 10 / research D-08 的设计前提不变）+ 加「命名空间创建
+  能力自检」（失败 ⇒ 指名的 `::error::` 而非裸红）
+- [X] T068 [US5] **Windows 的输出编码** —— 控制台 / 管道默认 **cp1252 / cp936** ⇒
+  打印中文 `UnicodeEncodeError` / 读取中文 `UnicodeDecodeError` ⇒ **CI 首跑的 2 个
+  Windows 作业止步于 pytest 步骤**（实测：既有 `tests/facade/test_facade.py` 的两条
+  验收脚本用例即崩）⇒ ① CI job `env:` 加 **`PYTHONUTF8=1`** · ② `_gatekit.configure_stdio()`
+  把门禁自己的 stdout/stderr 切 UTF-8（脱离 CI 也能跑）· ③ 门禁与测试里的**全部子进程**
+  显式 `encoding="utf-8", errors="replace"` + 子进程 `PYTHONIOENCODING=utf-8` ·
+  ④ 既有三处子进程执行器（`tests/contracts/test_architecture.py` ·
+  `tests/facade/_gatesupport.py` · `tests/facade/test_facade.py`）**同源加固**
+  （**判据零改动** —— 只动解码口径）
+- [X] T069 [US5] 文档与记录 —— `contracts/ci-matrix.md` §3.2（两条平台性前置）·
+  `quickstart.md` §4.2（Ubuntu 前置）· 人工验证记录 **§3.10**（首跑的实测与修复）
+  + §5 遗留 #1 / #10 的状态更新
+
+---
+
 ## Dependencies & Execution Order
 
 > **⚠️ 执行策略（2026-11-07 分析轮定案 · 实现阶段 MUST 遵循）**：**不逐任务人工确认**，改为

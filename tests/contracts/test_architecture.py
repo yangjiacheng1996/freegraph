@@ -147,6 +147,9 @@ def _run_python(code: str, src_dir: Path, cwd: Path) -> str:
         cwd=str(cwd),
         capture_output=True,
         text=True,
+        # 子进程输出按 UTF-8 **容错解码**（Windows 管道默认 cp1252 ⇒ 否则解码失败）
+        encoding="utf-8",
+        errors="replace",
         timeout=120,
     )
     assert proc.returncode == 0, f"子进程失败：\n{proc.stderr}"

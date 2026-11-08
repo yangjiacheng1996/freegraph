@@ -69,12 +69,19 @@ def _run_script(script: Path, root: Path) -> tuple[int, str]:
     env["PYTHONPATH"] = (
         f"{src_dir}{os.pathsep}{existing}" if existing else str(src_dir)
     )
+    # **子进程的输出含中文**（验收脚本的用例名 / 失败详情）⇒
+    # ① 强制子进程用 UTF-8 输出（Windows 默认 cp1252 ⇒ 打印中文即崩）·
+    # ② 父进程按 UTF-8 **容错解码**（否则 Windows 上解码失败 ⇒ 门禁崩）。
+    env["PYTHONUTF8"] = "1"
+    env["PYTHONIOENCODING"] = "utf-8"
     proc = subprocess.run(
         [sys.executable, str(script)],
         env=env,
         cwd=str(root),
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=300,
         check=False,
     )

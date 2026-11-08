@@ -39,6 +39,7 @@ from pathlib import Path
 
 __all__ = [
     "CROSS_LAYER",
+    "configure_stdio",
     "ClosureResult",
     "Declaration",
     "EgressRecord",
@@ -245,6 +246,28 @@ SKIP_DIR_NAMES = frozenset(
         ".eggs",
     }
 )
+
+
+def configure_stdio() -> None:
+    """把 ``stdout`` / ``stderr`` 切到 **UTF-8**（幂等）。
+
+    **为什么**：Windows 的控制台 / 管道默认编码是 **cp1252 / cp936** ⇒ 门禁报告里
+    的中文（规则文本、修复指引）会抛 ``UnicodeEncodeError`` ⇒ **作业直接崩**
+    （实测：CI 首跑的 2 个 Windows 作业即止步于此）。
+
+    CI 另外用 ``PYTHONUTF8=1`` 从环境侧兜底；本函数让脚本**脱离 CI 也能跑**。
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+        except (ValueError, OSError):  # pragma: no cover —— 某些流不可重配
+            pass
+
+
+configure_stdio()
 
 
 # ── 违规报告（data-model.md §7 · FR-016 ①）─────────────────────────────
@@ -1237,6 +1260,8 @@ def list_tracked_files(root: Path) -> list[Path]:
             ["git", "-C", str(root), "rev-parse", "--show-toplevel"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=60,
             check=False,
         )
@@ -1244,6 +1269,8 @@ def list_tracked_files(root: Path) -> list[Path]:
             ["git", "-C", str(root), "ls-files", "-z"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=60,
             check=False,
         )
@@ -1351,6 +1378,8 @@ def git_show(ref: str, path: str, cwd: Path | None = None) -> str | None:
             ["git", "-C", str(cwd or "."), "show", f"{ref}:{path}"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=60,
             check=False,
         )

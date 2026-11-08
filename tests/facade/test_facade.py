@@ -82,6 +82,8 @@ class TestImportSmoke:
             cwd=str(Path(src_dir).parent),
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=120,
         )
         assert proc.returncode == 0, f"子进程失败：\n{proc.stderr}"
@@ -334,12 +336,20 @@ class TestAcceptanceScriptsCanImportTheFacade:
         尚未接线（行为归 B6F1 / B7F2）。**2** 才说明门面还取不到。
         """
         env = {**os.environ, "PYTHONPATH": str(src_dir)}
+        # **验收脚本的输出含中文**（用例名 / 失败详情）⇒
+        # ① 子进程强制 UTF-8 输出（Windows 默认 cp1252 ⇒ 打印中文即崩）·
+        # ② 父进程按 UTF-8 **容错解码**（否则 Windows 上解码失败 ⇒ 用例崩，
+        #    而非被测行为失败）—— **实测**：CI 首跑的 2 个 Windows 作业即止步于此。
+        env["PYTHONUTF8"] = "1"
+        env["PYTHONIOENCODING"] = "utf-8"
         proc = subprocess.run(
             [sys.executable, str(repo_root / script)],
             env=env,
             cwd=str(repo_root),
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=300,
         )
         assert proc.returncode != 2, (

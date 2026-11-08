@@ -90,7 +90,14 @@ def _collect_node_ids(root: Path, extra: list[str]) -> tuple[list[str], int]:
         *extra,
     ]
     proc = subprocess.run(
-        command, cwd=str(root), capture_output=True, text=True, timeout=600, check=False
+        command,
+        cwd=str(root),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=600,
+        check=False,
     )
     node_ids = [
         line.strip()
@@ -111,7 +118,14 @@ def _run_suite(root: Path, deselect: list[str]) -> tuple[int, str]:
         *deselect,
     ]
     proc = subprocess.run(
-        command, cwd=str(root), capture_output=True, text=True, timeout=3600, check=False
+        command,
+        cwd=str(root),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=3600,
+        check=False,
     )
     return proc.returncode, proc.stdout + proc.stderr
 

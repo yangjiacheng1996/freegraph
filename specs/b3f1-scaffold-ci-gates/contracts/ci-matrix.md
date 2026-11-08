@@ -223,6 +223,17 @@ unshare --net --map-root-user uv run --no-project --python .venv python -m pytes
 
 - `--net` ⇒ **新建网络命名空间** ⇒ **没有任何网络接口**（含回环）⇒ **全部网络接口不可用**（FR-010）；
 - `--map-root-user` ⇒ **无特权**（免 `CAP_SYS_ADMIN`）⇒ 不引入特权依赖（裁定 10 · research D-08）；
+- **⚠️ Ubuntu 24.04 的发行版级前置**（**CI 首跑实测 · 2026-11-08**）：该版本默认启用 AppArmor 的
+  「**限制非特权用户命名空间**」策略（`kernel.apparmor_restrict_unprivileged_userns=1`）
+  ⇒ `unshare --map-root-user`（需要**用户命名空间**）对普通用户直接 `Operation not permitted`
+  ⇒ **该步骤必红**（首跑 3 个 ubuntu 作业全部止步于此）⇒ CI 步骤 MUST 先
+  `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`（解除**发行版级策略**，
+  命名空间仍以**非特权**方式创建 ⇒ **设计前提不变**）；
+- **⚠️ Windows 的输出编码**（**CI 首跑实测 · 2026-11-08**）：控制台 / 管道默认编码是
+  **cp1252 / cp936** ⇒ **打印中文**（门禁报告 · pytest 的 skip 理由 · `harness/demo/*.py`
+  的验收输出）会 `UnicodeEncodeError`；**读取**中文输出也会 `UnicodeDecodeError`
+  ⇒ CI 的 job `env:` MUST 设 **`PYTHONUTF8=1`**（UTF-8 模式）· 门禁与测试里的子进程
+  MUST 显式 `encoding="utf-8", errors="replace"` 且给子进程设 `PYTHONIOENCODING=utf-8`；
 - **排除清单 = `tests/gates/data/offline_exclusions.txt`**（**单文件** · **逐条带理由** · FR-010 ④⑤）——
   排除项**仅限两类**（FR-010 ③）：(a) **断网任务自身**（不可嵌套）；(b) **语义上必须能建立连接**的用例
   （含 (b1) 验证用户出站归因的用例 · (b2) 需联网安装 / 解析依赖的用例 —— 隔离 venv 一族）；

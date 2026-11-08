@@ -138,6 +138,8 @@ def _run_in_venv(
         cwd=str(cwd),
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=900,
         check=False,
     )
@@ -151,6 +153,8 @@ def _uv(*args: str, cwd: Path) -> tuple[int, str, str]:
         cwd=str(cwd),
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=900,
         check=False,
     )

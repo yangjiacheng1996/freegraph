@@ -283,6 +283,9 @@ uv run --no-project --python .venv python harness/scripts/gates/gate_G27_zero_eg
 ### 4.2 G28 · 断网等价性（**Linux 专属**）
 
 ```bash
+# ⚠️ Ubuntu 24.04 的发行版级前置：默认启用 AppArmor 的「限制非特权用户命名空间」策略
+#    ⇒ unshare --map-root-user 对普通用户直接 EPERM（CI 首跑实测）⇒ 先解除该策略
+sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 unshare --net --map-root-user uv run --no-project --python .venv python harness/scripts/gates/gate_G28_offline_equiv.py
 ```
 

@@ -26,6 +26,11 @@ jobs:
       # 三个平台通用（写在 job 的 env 段）⇒ MUST NOT 把平台专属的变量前缀
       # 语法写进命令串（契约 ci-matrix §2 步骤 6）。
       FREEGRAPH_TEST_INSTALLED: "1"
+      # **UTF-8 模式**（Python 3.7+）—— Windows 的控制台/管道默认编码是
+      # cp1252 / cp936 ⇒ **打印中文（门禁报告、pytest 的 skip 理由、
+      # `harness/demo/*.py` 的验收输出）会 UnicodeEncodeError** ⇒ 作业直接崩。
+      # ⇒ 三个平台统一开 UTF-8 模式（Linux/macOS 上是幂等的 no-op）。
+      PYTHONUTF8: "1"
     strategy:
       fail-fast: false
       matrix:
@@ -147,8 +152,21 @@ jobs:
       - name: Gate G28 (offline equivalence)
         if: matrix.os == 'Linux'
         # `--net` ⇒ 新建网络命名空间 ⇒ 没有任何网络接口（含回环）；
-        # `--map-root-user` ⇒ **无特权**（免 CAP_SYS_ADMIN）。
+        # `--map-root-user` ⇒ **无特权**（免 CAP_SYS_ADMIN · 裁定 10 · research D-08）。
         # ⚠️ 断网排除清单由 **G28 脚本自己**读 `tests/gates/data/offline_exclusions.txt`
         #    并逐条转成 `--deselect`（**单文件 · 唯一权威**）⇒ MUST NOT 照抄
         #    「不带排除清单的裸 pytest 命令」（那会在被排除的用例上**假红**）。
-        run: unshare --net --map-root-user uv run --no-project --python .venv python harness/scripts/gates/gate_G28_offline_equiv.py
+        #
+        # ⚠️ **Ubuntu 24.04 的发行版级前置**：该版本默认启用 AppArmor 的
+        # 「限制非特权用户命名空间」策略（`kernel.apparmor_restrict_unprivileged_userns=1`）
+        # ⇒ `unshare --map-root-user`（需要**用户命名空间**）对普通用户直接
+        # `Operation not permitted` ⇒ **本步必红**（实测：CI 首跑 3 个 ubuntu 作业
+        # 全部止步于此）。⇒ 解除**该发行版级策略**后，命名空间仍以**非特权**方式创建
+        # （`--map-root-user` · 免 CAP_SYS_ADMIN）⇒ **设计前提不变**。
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 2>/dev/null             || echo "::notice::该 sysctl 不可用（内核非 AppArmor？）—— 继续以非特权方式尝试"
+          if ! unshare --net --map-root-user true 2>/dev/null; then
+            echo "::error::无法创建非特权网络命名空间 —— 断网等价性无法在本作业执行"
+            exit 1
+          fi
+          unshare --net --map-root-user uv run --no-project --python .venv python harness/scripts/gates/gate_G28_offline_equiv.py
