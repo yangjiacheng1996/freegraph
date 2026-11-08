@@ -43,7 +43,7 @@
   **放行**所有连接；调用栈中出现 `freegraph/` 包路径 → 判「框架出站」，否则判「用户出站」；
   **只对前者断言 = 0**。freegraph **不安装、不启用任何出网拦截机制**——用户节点访问
   外网、调用真实模型、工具访问第三方 API 一律照常。
-- **CI 矩阵**：Linux + macOS + Windows × 最低版本（3.10）+ 最高版本（3.13）；Linux 额外跑
+- **CI 矩阵**：Linux + macOS + Windows × 最低版本（3.11）+ 最高版本（3.14）；Linux 额外跑
   完整门禁，其余平台跑子集。
 
 ### 3. 用户场景
@@ -72,9 +72,11 @@
 
 - **FR-001**：系统 MUST 提供完整 `pyproject.toml`：基础依赖**为空**（零第三方运行时依赖）、`requires-python` 为 **`>=3.11`**；
   可选 extra 至少包含 `[pydantic]` / `[checkpoint]`（`ormsgpack`）/ `[otel]`
-  （`opentelemetry-exporter-otlp`）/ `[png]`（本地渲染，默认关闭）。
+  （`opentelemetry-api` / `opentelemetry-sdk`——**MUST NOT** 含任何 OTLP exporter，见宪法
+  「包层白名单」条）/ `[png]`（**后端 = `playwright`** · 本地 Chromium 渲染 ·
+  **默认关闭** · 许可证 Apache-2.0 · 见宪法 v1.5.0「包层白名单」条）。
 - **FR-002**：系统 MUST 发布 `py.typed`（PEP 561）并使用 `src/` 布局。
-- **FR-003**：系统 MUST 声明 `requires-python = ">=3.10"`，且**不设上限**。
+- **FR-003**：系统 MUST 声明 `requires-python = ">=3.11"`，且**不设上限**。
 - **FR-004**：CI MUST 实现**依赖门禁**：递归展开 freegraph 自身声明的依赖（含全部 extras
   变体），断言无 `langsmith` / `langchain*` / `langgraph*`；并在隔离 venv 中断言
   `import freegraph` 后 `sys.modules` 无 `langsmith` / `langchain_core` / `langgraph`。
@@ -95,7 +97,7 @@
   （只读基准，改动即失败）；并预留 C4 / C8 两条回归测试的挂载点（M1 建立）。
 - **FR-011**：CI MUST 实现**API 快照检查**（B2F2 已入库的快照）与 **`COMPAT.md` 一致性
   检查**的挂载点。
-- **FR-012**：CI MUST 采用 OS 矩阵（Linux/macOS/Windows × 3.10/3.13），Linux 跑全量门禁，
+- **FR-012**：CI MUST 采用 OS 矩阵（Linux/macOS/Windows × 3.11/3.14），Linux 跑全量门禁，
   其余平台跑子集。
 - **FR-013**：CI MUST 提供**源文件署名头检查**（静态扫描 `src/**/*.py` 与仓库内脚本）：
   每个源文件顶部 MUST 含 `Copyright (c) 2026 杨家成 · MIT License · <项目地址>`；

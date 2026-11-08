@@ -11,6 +11,20 @@
 > - **来源**：由 `harness/prompts/why_this_project.md` 的 **Part A 项目章程** + **Part C 流程约束** 合并改写，
 >   并套用 Speckit 官方宪法模板（`Core Principles` / 附加章节 / `Governance` / 版本行）的结构。
 > - **待办**：宪法中 `TODO(...)` 标记的字段需要在批准日由 `/speckit.constitution` 填实。
+> - **📌 正文同步状态（2026-11-08 订正 · 重要）**：本文件的**宪法正文已与生效副本
+>   `.specify/memory/constitution.md` 的规范性正文逐字同步**（**v1.6.0** · 2026-11-08）——
+>   即：原则 I–X 的**现行措辞**（含原则 V 的「只观测不阻断」口径 · 原则 VII 的 **C1–C27**
+>   与标识关联键约定 · 原则 X 的源文件署名头义务）、**「运行时环境基线」**章节（Python 3.11 ·
+>   typing 构件上限 3.11）、**「发布门禁（Release Gate）」**章节（含发版节奏「只发两版」）、
+>   **「质量门禁的分阶段落地与发起者追认」**通则（v1.6.0）、**「定位补充」**与
+>   **「开发层级词表（四层）」**、以及依赖白名单的 **`[png]` = `playwright`**（v1.5.0 收敛）
+>   **全部在内**。
+>   ⇒ **再次执行 `/speckit.constitution` MUST NOT 造成任何条款回退**；
+>   若日后宪法有新修订，**本模板 MUST 同批同步**（宪法修订记录 v1.4.1 已确立此纪律：
+>   「否则下一次 `/speckit.constitution` 会把旧条款重新生成回宪法」）。
+>   ⇒ **同步操作**：把 `.specify/memory/constitution.md` 的 `## Core Principles` 起、
+>   到 `## Governance` 的「修订记录」之前（含版本行）的**规范性正文**整段复制到本文件的
+>   两个标记之间（**保留**本文件的版本行格式与「修订记录」缺席状态）。
 > - **调研回填状态**：Q1–Q8 调研已于 **2026-11-01** 完成并落盘于 `harness/reports/`（9 份报告）。
 >   本文件原标 `[待调研]` 的条款**已按调研结论全部回填**（对应关系见文末附表）；
 >   条款中引用的具体清单、表格与数字**均以对应报告为唯一权威来源**，本文件只做引用不做复制。
@@ -19,8 +33,6 @@
 ---
 
 <!-- CONSTITUTION-BODY-START -->
-
-# freegraph Constitution
 
 ## Core Principles
 
@@ -112,7 +124,11 @@ LangGraph 对 `langchain_core` 的 135 处引用只集中在 4 个接缝（`Runn
 **必须可见、可查、可回溯**。
 
 - 图运行时的每一次节点执行都必须产生可观测记录，**MUST** 包含：节点名、输入状态、输出状态、耗时、错误。
-- 中断与恢复（interrupt / resume）、状态回溯（time-travel）**MUST** 可用。
+- 中断与恢复（interrupt / resume）、状态回溯（time-travel）**MUST** 可用；
+  **恢复 MUST 挂 checkpointer**——**MUST NOT** 提供「不挂 checkpointer 也能恢复」的内存态
+  旁路（内存态恢复不可靠；`interrupt` 的主场景是 time travel，须跨长时间 / 跨重启可恢复；
+  SQLite 是智能体开发的事实标准，故必须采用 checkpointer）。未挂 checkpointer 时调用恢复
+  **MUST** 抛明确异常。
 - 可观测协议**MUST** 采用 OpenTelemetry 兼容的追踪协议与语义约定（semantic conventions），
   以便复用现成面板，而不是自造私有格式。属性命名**SHOULD** 对齐 OTel GenAI semconv（`gen_ai.*`）。
 - 可视化层**MUST NOT** 阻断执行；可视化不可用时，核心执行**MUST** 继续。
@@ -142,15 +158,22 @@ LangGraph 对 `langchain_core` 的 135 处引用只集中在 4 个接缝（`Runn
 自动测试通过**不等于**验收通过。每个特性**MUST** 有人工验证记录。
 
 - 人工验证记录**MUST** 落在 `harness/verification/<feature>/` 下（`manual-verification.md`）——
-  该目录为「人工验证记录」的**唯一**约定位置；`harness/features/` 只放**特征提示词初稿**，
-  两者**MUST NOT** 混放。
+  该目录为「人工验证记录」的**唯一**约定位置（见「目录约定」表）；`harness/features/` 只放
+  **feature 提示词初稿**，两者**MUST NOT** 混放。
 - 记录**MUST** 写明：验证环境、验证步骤、实际输出、结论、遗留问题。
 - MVP 验收基线**必须**跑两遍且都通过：
   1. **fake / 伪模型**跑一遍（CI 可自动化，用于回归）；
   2. **真实模型**再跑一遍（人工验收，用于确认端到端真实行为）。
 - 上述两次验证**MUST** 在**不设任何 `LANGSMITH_*` 环境变量**的干净环境下进行，
-  **并且 MUST** 有「零出站」的可判定证据：**SHOULD** 采用 socket guard 夹具
-  （拦截所有非 localhost 的 `socket.connect`，断言拦截列表为空）——Q3 调研已验证该方法可行且可复用为 CI 断言。
+  **并且 MUST** 有「零出站」的可判定证据：**SHOULD** 采用 **socket 监测夹具**——
+  **只观测、不阻断**（记录目标与调用栈后**放行**所有连接），**按调用栈归因**区分
+  「**框架出站**」（调用栈出现 `freegraph/` 包路径）与「**用户出站**」（模型调用、节点自建
+  HTTP 客户端等），**只对前者断言 = 0**；**用户出站记录在案但不判失败**，人工轮允许出现
+  「模型厂商端点」一条并**在验证记录中写明**——Q3 调研已验证该方法可行且可复用为 CI 断言。
+  > **口径来源**：立项书 §12 **D12**（2026-11-05 批准）+ §9.2「框架零出站的验证方法」。
+  > **理由**：freegraph 是**函数胶水 / 工作流框架**，承诺的是「自己不会偷偷联网」，
+  > **不是**「你的程序不许联网」；拦截式守卫会阻断用户节点的正常出网，属反直觉设计
+  > （立项书 §10 的 R11）。原则 I「自身零出站、断网可用」的实质要求**不变**。
 
 **Rationale**：本项目要替代的是「跑起来对不对」这件事，自动断言无法覆盖语义正确性；
 而 LangSmith 式的诊断能力恰恰依赖真实运行轨迹，只测不跑等于自欺。
@@ -187,14 +210,34 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
 
 - freegraph **MUST NOT** 实现 `init_chat_model`、`@tool` 装饰器、消息体系、`create_agent` 等
   LangChain 层能力；只需**能承载**它们（鸭子类型）。
+- freegraph v1 **MUST NOT** 提供**跨会话 / 跨图**的长期记忆能力（`Store`）——
+  **图 = 一个进程**（定位推导，见「项目定位与范围 · 定位补充」）。契约 **C20** 仍**冻结**
+  （它是 freechain 的设计输入），**实现后补**（v2）；`compile(store=...)` 关键字仍被接受，
+  但 v1 **背后无实现**——文档 **MUST** 显式写明，不得让用户误以为传入即生效。
 - freegraph **MUST NOT** 做多语言 / 多模型 provider 矩阵。
 - freegraph **MUST NOT** 以「与 LangChain 共存」为验收目标。
 - 跨仓库接口**MUST** 对齐「内核最小契约」，freegraph 对上（freechain）承诺接口、
-  对下（用户 / 脚本）承诺语义。**契约清单以 `harness/reports/Q8-图运行时最小契约.md` 的 C1–C26 为唯一权威**
+  对下（用户 / 脚本）承诺语义。**契约清单以 `harness/reports/Q8-图运行时最小契约.md` 的 C1–C27 为唯一权威**
   （含：状态 schema 与归约器机制、稀疏状态、节点签名与部分状态合并、路由函数与 `path_map` 双形态、
   起止标记、编译与执行、streaming mode、图结构导出、mermaid 导出与 PNG 渲染、`Command` / `interrupt` /
-  `Send`、checkpointer 与 store 接口、`context` 通道、运行配置、可观测挂钩、当前 span 上下文、节点命名别名、子图）。
+  `Send`、checkpointer 与 store 接口、`context` 通道、运行配置、可观测挂钩、当前 span 上下文、节点命名别名、
+  子图、**本地 trace 存储与查询**）。
   **MUST** 在 freechain 开工前冻结该清单，并**MUST NOT** 擅自增删条目。
+- **标识与关联键约定（2026-11-05 修订，与 C1–C27 一并冻结）**：
+  - `thread_id` = **会话**标识，由 `RunConfig` 承载；`run_id` = **单次运行**标识，
+    由运行时在每次 `invoke` / `stream` 开始时生成，**MUST NOT 可由用户指定或覆盖**
+    （**用户不设置**；`run_id` **不进** `RunConfig`——它是运行期产物而非配置项；
+    用户自带标识需求用 `thread_id` / `metadata` / `tags` 承担）；
+  - **一次运行一个 `run_id`**：该次运行的所有节点、工具、模型调用与事件共享它
+    （把每个节点视作一个微服务，则 `run_id` 是**链路监控的唯一通行证**，
+    等价于分布式追踪的 trace id）；
+  - **`run_id` MUST 可查**：它是本地 trace 查询 API（C27）的过滤器之一，
+    使「精确回查某一次运行」成为可能；
+  - **每个 span MUST 带** `thread_id` / `run_id` / 节点名 / `checkpoint_id`
+    （挂接 checkpointer 时有值，否则为空）；**缺 `run_id` 的 span 视为实现缺陷**；
+  - `stream()` 产出的事件与 `TraceSink` 收到的 span **共享同一 `run_id` / `thread_id`**，
+    MAY 按 id 合并为一条时间线。
+  → **违反上述任一条的 PR 不得合入**（这是 C27 与将来的 Studio 子包得以「不改内核」实现的前提）。
 - **freegraph 明确不做的 LangSmith 能力（Q1 / Q2 逐档裁定后固化，理由分三类）**：
   - **① 付费墙内（Plus / Enterprise）**：Deployment 的托管与水平扩缩（1-Click Deploy、Dedicated、
     Scale-to-Zero、Assistants API、Cron、鉴权）、**Engine**、Tuned Evaluators、Insights、Bulk data export
@@ -278,6 +321,16 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
   「行为等价 / 部分等价 / 不支持」的**兼容矩阵**，并注明「兼容意图为互操作，**不构成 affiliation**」。
 - **第三方归属**：任何引入的第三方代码**MUST** 进入 `THIRD_PARTY_NOTICES`（或同类清单），
   保留其原始版权与许可声明。
+- **源文件署名头**：**每一个源文件**（`src/` 下的包代码，以及仓库内的脚本）**MUST** 在文件
+  顶部携带署名头，形如：
+  `# Copyright (c) 2026 杨家成 · MIT License · https://github.com/yangjiacheng1996/freegraph`
+  （有 shebang 的脚本放在 shebang **之后**；模块 docstring 仍**MUST** 是首个语句）。
+  例外：`py.typed`（PEP 561 要求为空）与 `harness/demo/target.py`（**只读基准**，
+  宪法原则 III 禁止修改）。
+  **Rationale**：本项目是**个人作品集 / 名片**（见「项目定位与范围 · 项目性质」），
+  许可证为 **MIT**——MIT 允许**整份或单个文件被复制**（这正是采纳面最大的原因），
+  而**复制不会带走 `LICENSE`**。因此署名必须**随每个文件一起流动**，
+  否则被单独 copy 的那一段代码就与作者无关了——**署名头就是 MIT 的「名片」兑现机制**。
 
 **Rationale**：API 名称兼容在著作权上通常不侵权（版权保护的是表达，不保护接口与方法论），
 这是开源生态互操作的通行做法。但**「宣称兼容」与「暗示 affiliation」是两回事**——
@@ -285,7 +338,8 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
 这一义务的落地载体。
 
 **Requirement**：**MUST** 在每个引入新依赖、或扩展 API 兼容面的特性中更新上述两份清单；
-**MUST NOT** 在清单缺项的情况下宣布该特性完成。
+**MUST NOT** 在清单缺项的情况下宣布该特性完成；**MUST** 为新增的每一个源文件加上署名头
+（静态检查由 B3F1 的 CI 门禁落地，见 `harness/features/B3F1_项目脚手架与CI门禁.md`）。
 
 ## 项目定位与范围（Additional Context）
 
@@ -316,6 +370,30 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
 | **freegraph**（本仓库） | 图运行内核：状态模型 / 节点 / 边与路由 / 运行时 / 可观测 | 零 LangChain、零 LangSmith 依赖 |
 | **freechain**（后续项目） | 替代 LangChain 的上层：模型抽象、工具、消息、agent 构造 | 基于 freegraph 构建 |
 
+### 定位补充：freegraph 是**通用图框架**，不止于智能体开发（2026-11-05 决议）
+
+> freegraph 的初衷是把它建成一个**通用图框架**——目标场景除**智能体开发**外，还包括
+> **RPA 自动化**、**脚本编排**（在一定程度上**替代 `main` 函数**）、
+> **可视化工作流编排**。
+>
+> **由此得出的一条范围边界（决定性）**：这类场景的共同前提是「**图 = 一个进程**」——
+> 因此**跨会话 / 跨图**的能力（如长期记忆 `Store`）**不属于 v1**，属 v2 预备。
+> 该边界不是「先不做再说」的临时取舍，而是**定位推导出的硬边界**：
+> 违反它会引入进程间的状态语义（谁持有、怎么过期、如何跨进程可见），复杂度陡增且
+> **违背「通用图框架 / 单进程」的初衷**。
+>
+> **注**：本条是**定位补充**，**不改变**两条验收目标（G1 固定脚本可跑 / G2 本地可诊断）。
+>
+> **项目性质（2026-11-05 补充）**：本项目是**个人开源项目**——同时是**作品集 / 名片 /
+> 能力证明**（个人项目在求职与商务合作中的展示物），**非以盈利为直接目的**。
+> 该性质直接决定了**许可证选择**：**MIT**（D3 已决，2026-11-05）——MIT 的**单向兼容性**
+> 使本项目的代码可被嵌入**任意**许可族的下游项目，最大化采纳面；而 Apache-2.0 的
+> 额外条款（专利授权 / 商标隔离 / 贡献者再授权 / NOTICE / §9 收费承接支持）**对本项目
+> 均属空条款**（无专利组合、无自有商标资产、无外部贡献者、原则 X 已用
+> `THIRD_PARTY_NOTICES` 覆盖归属义务、明确不做 SaaS 变现）。
+> 由此也意味着：**本仓库本身（宪法 / 调研报告 / 验收脚本 / feature 规格）就是作品集主体**——
+> 「可审计的契约」与「充分的人工验证」既是质量底线，也是能力证明。
+
 ### 非目标
 
 - 不在 freegraph 内重建 LangChain 层。
@@ -324,6 +402,34 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
 - **不做 LangSmith 的托管 / 自治 / 评测平台能力**——具体清单与理由分类见原则 VII。
 
 ### 术语约定
+
+#### 本项目的开发层级词表（四层，**互斥、不可混用**）
+
+> **2026-11-05 统一（宪法 v1.4.0）**。此前「Phase」与 speckit 的「feature」同名不同义，
+> 且本项目的「Feature」层级与 speckit 的「feature」层级同名不同义——
+> 一词二义是本项目最持久的概念混淆源。本表是**唯一权威**。
+
+| 层级 | 中文 | English | ID 形式 | 数量 | 含义 |
+|---|---|---|---|---|---|
+| 1 | **层** | `layer` | `L1`–`L6` | 6 | **代码归属层**（依赖层级，取值封闭） |
+| 2 | **领域** | `area` | `A1`–`A8` | 8 | **交付分组**（粗粒度；体量表见立项书 §4.4） |
+| 3 | **功能块** | `block` | `B1`–`B25` | 25 | **交付单元**（一个可独立验收的垂直切片；含 1–3 个 feature） |
+| 4 | **feature** | `feature` | `B<n>F<m>` | 31 | **最小开发单位 = speckit 的一次闭环**（一次 `/speckit.implement` 闭环） |
+
+- **MUST NOT** 把「功能块」与「feature」混用：前者是**交付单元**（多个 feature 的分组），
+  后者是**最小开发单位**（一次闭环 = 一个 feature）。
+- **MUST NOT** 把「层」与「领域」混用：「层」是**代码归属**（L1–L6），
+  「领域」是**交付分组**（A1–A8）——一个领域可跨多层，一个层可含多个领域。
+- **MUST NOT** 把「领域」与「作用域（scope）」混用：「领域」= 交付分组；
+  「作用域」= 依赖红线/配置层/网络层的适用边界（立项书 §9.2）。
+- **ID 形式互不冲突**：`L<n>` / `A<n>` / `B<n>` / `B<n>F<m>` /
+  `E`/`S`/`R`/`D`/`C`（事实/指标/风险/决策/契约）——四套命名空间的分配规则见立项书 §4.4。
+- **参考**：`harness/features/` = feature 提示词初稿；
+  `harness/verification/<feature>/manual-verification.md` = 该 feature 的人工验证记录；
+  `specs/<feature-id>-<short-name>/` = speckit 的 feature 目录（**直接用规划 ID**，
+  **不带** Speckit 的三位序号——见 `harness/prompts/guide.md` §4.7）。
+
+#### 官方术语对照
 
 「三大基础功能」「六大概念」「tool 循环智能体」均为**发起者自造表述，非官方术语**。
 官方术语对照表以 `harness/reports/Q4-LangSmith对LangChain的实际影响程度.md` **§3.4** 为唯一权威。
@@ -350,8 +456,8 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
 | `harness/prompts/` | 提示词（调研任务书、宪法等） |
 | `harness/reports/` | 调研报告（每题一份 + 汇总报告） |
 | `harness/proposals/` | 设计提案（调研结论转化的规格来源） |
-| `harness/features/<feature>/` | 特征提示词初稿（每特性一份 `/speckit.specify` 提示词） |
-| `harness/verification/<feature>/` | 每个特性的人工验证记录（`manual-verification.md`；原则 V 人工门禁） |
+| `harness/features/` | **feature 提示词初稿**（`B<n>F<m>_*.md`，每 feature 一份 `/speckit.specify` 提示词）+ 导航文件 `README.md`（开发顺序） |
+| `harness/verification/` | **人工验证记录**（原则 V 人工门禁）——按 feature 分目录：`<feature>/manual-verification.md`（`<feature>` = feature ID，如 `B1F1`）；含 `README.md` 说明该目录的约定 |
 | `harness/demo/target.py` | MVP 验收契约（**只读**） |
 | `harness/docs/` | 同步下来的官方文档快照（**只读**） |
 | `THIRD_PARTY_NOTICES` | 第三方代码归属与许可声明清单（原则 X） |
@@ -360,12 +466,28 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
 ### 依赖白名单 / 黑名单
 
 每个特性**MUST** 复核依赖清单。白 / 黑名单以 `harness/reports/Q3-LangGraph的开源边界.md` §3.6
-与 `harness/reports/Q7-开源边界地图与许可证合规.md` §3.1 的结论为准：
+与 `harness/reports/Q7-开源边界地图与许可证合规.md` §3.1 的结论为准——
+**但必装依赖一项以本宪法正文为准**（Q3 §3.6 原建议「必装 `typing-extensions`」
+已被本宪法修订记录 **v1.2.0** 取代：必装依赖 = **无**；
+该报告 §3.6 的其余部分——**黑名单、配置层、网络层**——仍然有效）：
 
-- **包层白名单**：**必装运行时依赖 = 无**（基础安装零第三方依赖；原「`typing-extensions` 唯一必装」
-  已于宪法 v1.2.0 · 2026-11-05 剥离——最低 Python 抬至 3.11 后 `Self` / `NotRequired` 等均在标准库内）。
+- **包层白名单**：**必装运行时依赖 = 无**（基础安装**零第三方依赖**，`dependencies = []`）。
   可选 extra：`pydantic`（`[pydantic]`）、`ormsgpack`（`[checkpoint]`）、
-  `opentelemetry-api` / `opentelemetry-sdk`（`[otel]`）、mermaid 相关（`[png]`，**默认关闭**）。
+  `opentelemetry-api` / `opentelemetry-sdk`（`[otel]`）、
+  **`playwright`（`[png]`，**默认关闭** · 本地 Chromium 渲染 · 许可证 Apache-2.0）**。
+  > **2026-11-05 修订**：原为「`typing-extensions`（唯一建议的**必装**运行时依赖）」，
+  > 现改为**必装依赖为空**——`typing-extensions` 已从基础安装剥离（见修订记录 v1.2.0）。
+  > 基础安装的依赖闭包 **MUST 为空集**（由 G3 门禁断言）。
+  > **2026-11-08 修订（v1.5.0）**：原写「mermaid 相关（`[png]`）」——**类别式表述不可判定**
+  > （无确切包名 ⇒ 无法核验许可证、无法枚举闭包、无法写入门禁白名单），且与本条其余各 extra
+  > 「逐包名列」的取法不一致（`[otel]` 已是逐包名列）⇒ 收敛为**唯一实测可行的后端 `playwright`**
+  > （Apache-2.0；完整闭包 `playwright` / `greenlet` / `pyee` / `typing-extensions` 实测全绿）。
+  > `[png]` extra 的三条硬约束 **MUST** 同时成立：
+  > **(a) 默认关闭**（不装即不可用，基础安装 MUST NOT 拉起其依赖）；
+  > **(b) 依赖闭包 MUST 全部落在原则 IX 的许可证白名单 {MIT, Apache-2.0, BSD-2/3, PSF} 内**；
+  > **(c) 零出站**（MUST NOT 依赖任何远程渲染服务——`mermaid.ink` 仍在网络层黑名单内）。
+  > 浏览器二进制由用户**显式**执行 `playwright install chromium` 获取（属**安装期**动作）
+  > ⇒ **基础安装的零第三方运行时依赖承诺不受影响**（四个 extra 均默认关闭）。
 - **包层黑名单**：`langsmith`（含 `langsmith[otel]` / `langsmith[sandbox]`）、`langchain`、
   `langchain-core`、`langchain-classic`、`langchain-protocol`、`langgraph*` 全系列、
   `deepagents`，以及全部 provider 包（`langchain-anthropic` / `langchain-openai` /
@@ -381,6 +503,56 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
 - **核心层黑名单**：import `langchain` / `langchain-core`（原则 II），
   且**依赖声明中亦不得出现**（`import` 不出现 ≠ 依赖树干净）。
 
+### 运行时环境基线（Python 版本与 typing 构件上限）
+
+本项目**MUST** 在 **Python 3.11** 上运行与开发，且**MUST NOT** 使用任何
+**3.11 之后**才进入标准库的 typing 构件。本条与「依赖白名单」同属**硬约束**——
+它决定「什么样的代码能被写出来」，而不只是「能装什么包」。
+
+- **最低版本 = 3.11**：``requires-python`` MUST 为 ``>=3.11``。
+  理由（依据：修订记录 v1.2.0 · `research.md` D-21）：3.11 一次性补齐 **7 项**
+  typing 构件（`Self` / `NotRequired` / `Required` / `TypeVarTuple` / `Unpack` /
+  `LiteralString` / `dataclass_transform`），使**基础安装零第三方依赖**成为可能；
+  而 3.12 与 3.13 各只补 2 项，性价比更低；3.10 已于 2026-10 结束安全支持。
+- **typing 构件上限 = 3.11**：源码 **MUST NOT** 出现下列 3.12+ / 3.13+ 构件——
+  | 构件 | 进入 stdlib | 所属版本 |
+  |---|---|---|
+  | `TypeAliasType`（PEP 695 `type X = ...` 语法与 `typing.TypeAliasType`） | 3.12 | ❌ 禁用 |
+  | `override`（PEP 698） | 3.12 | ❌ 禁用 |
+  | `ReadOnly`（PEP 705，`TypedDict` 的只读键） | 3.13 | ❌ 禁用 |
+  | `TypeIs`（PEP 742） | 3.13 | ❌ 禁用 |
+  | PEP 695 `type` 语句语法本身 | 3.12 | ❌ 禁用 |
+  同样 **MUST NOT** 使用 3.12+ 的**语法**（如 PEP 695 `type` 语句）与
+  3.11+ 的**其他**标准库新增（`asyncio.timeout`、`tomllib`、`StrEnum` 等
+  **运行时**构件虽不属 typing，但同样须按「只用 3.11」的纪律判断，见下方判定口径）。
+- **判定口径（MUST 可自动判定）**：
+  1. **主判定 = CI 最低档**：CI 矩阵的**最低版本档 MUST 为 3.11**，
+     且**全量**跑测试（含架构门禁）——任何 3.12+ 构件在该档**天然不可用**
+     （`ImportError` / `AttributeError` / `SyntaxError`）。
+  2. **辅判定 = AST 静态断言**：架构门禁 **G9** MUST 以 `ast` 扫描
+     `src/freegraph/**/*.py`，显式点名上表的禁用构件并给出可读报错
+     （报错信息 MUST 指明「你用了 3.12+ 的 X」），而非让开发者对着
+     一个 `ImportError` 猜原因。
+  3. **人工判定**：新引入的第三方构件或标准库构件时，
+     MUST 确认其**首次进入 stdlib 的版本 ≤ 3.11**；不确定时以
+     `hasattr(typing, "<name>")` 在 3.11 上实测为准。
+- **违反后果**：属**阻断性缺陷**——MUST NOT 合入。
+  「本机 Python 是 3.12/3.13 所以能用」**不是**理由：
+  本地能跑的代码在 3.11 上会直接崩，而 3.11 是本项目的**承诺下限**。
+- **与原则 II 的关系**：原则 II 要求「内核纯净（零 langchain）」，
+  本条要求「内核**只用 3.11 以内的标准库构件**」——
+  二者叠加的结果是：**契约层与内核 MUST NOT 需要任何第三方包即可运行**。
+
+**Rationale**：Python 的 typing 是个**只增不减**的演进序列，每代都往标准库里塞新构件。
+若不设上限，开发者会不知不觉地用上本机新版本才有的构件（`Self`、`TypeAliasType`、
+`override`……），把「3.11 是下限」这条承诺在**代码里**悄悄破掉——而这种破坏
+**不会在开发机上暴露**，只在用户装包时才炸。设上限 + 可自动判定，
+是把承诺**钉进代码**而不是钉进文档。
+
+**Requirement**：本条 MUST 由 **G9 静态断言**与 **CI 最低版本档**双重落地（见上方判定口径）；
+`requires-python` MUST 保持 `>=3.11`；CI 矩阵最低档 MUST 为 3.11；
+任何违反视为阻断性缺陷。
+
 ### 质量门禁
 
 每个特性在合入前**MUST** 全部通过：
@@ -390,13 +562,84 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
    无 `LANGSMITH_*` / `LANGCHAIN_*` 读取，无 `*.langchain.com` / `mermaid.ink` 出站，
    无第三方商标资产（原则 I / II / IX）。
    **MUST** 以可自动执行的断言落地（递归展开 `importlib.metadata.requires()` + 许可证白名单校验）。
+   **基础安装（不含 extras）的依赖闭包 MUST 为空集**——零第三方运行时依赖是本项目的
+   对外承诺之一（README「零第三方运行时依赖」），**MUST** 可被断言判定。
 3. **契约门禁**：`harness/demo/target.py` 原样可跑（原则 III），
    **MUST** 包含 C4（稀疏状态）与 C8（条件边 fresh 状态）两条独立回归测试（原则 II）。
 4. **自动门禁**：CI 全绿，且包含 fake 模型跑通验收基线的一轮（原则 V），
-   **SHOULD** 附带 socket guard 的零出站断言（原则 V）。
+   **SHOULD** 附带 socket 监测夹具的零出站断言（**只观测不阻断 + 按发起方归因**，
+   断言「框架出站 = 0」，原则 V + 立项书 §9.2）。
 5. **人工门禁**：`harness/verification/<feature>/manual-verification.md` 下有完整人工验证记录，含真实模型一轮（原则 V）。
 6. **证据门禁**：新增结论均有来源标记，术语准确（原则 VIII）。
 7. **文档合规门禁**：`THIRD_PARTY_NOTICES` 已登记、API 兼容矩阵已更新（原则 X）。
+
+### 质量门禁的分阶段落地与发起者追认（2026-11-08 决议 · v1.6.0）
+
+> **背景（结构性张力）**：上面「质量门禁」要求**每个特性在合入前 MUST 全部通过**；
+> 但 **M0 地基类** feature **不交付内核功能** ⇒ 凡**依赖内核运行时**的门禁项
+> （门禁 **3** 的 C4 / C8 两条独立回归 · 门禁 **4** 的 fake 模型跑通验收基线一轮 ·
+> 门禁 **5** + 原则 V 的真实模型一轮）在该 feature **物理不可达成**
+> —— 硬写进去 = 一条**永久红**的 CI（且违反「feature 必须能独立通过门禁」）。
+> 本条是该张力的**唯一通用处置规则**（**首次适用 = B3F1**：其 `spec.md` **裁定 22** /
+> `plan.md` **登记项 R-4** / `tasks.md` **T057**）。
+
+- **适用范围（窄口径 · MUST）**：某条**质量门禁**中的**某一部分**在当前 feature **物理不可达成**，
+  且**不可达成的根因**是「**该 feature 按里程碑不交付其前置能力**」
+  （例：「MVP 验收基线的跑通需要内核运行时，而内核运行时按 立项书 §6.2 属 **M2**」）⇒ **属本条**。
+  - **被延后的 MUST 是「门禁项中依赖内核运行时的那一部分」，MUST NOT 是「整条门禁」**——
+    例：门禁 **5** 的「人工验证记录存在且五段式齐全」**MUST** 照常落地，
+    被延后的只是其中的「**真实模型一轮**」（无图可跑）。
+  - **不属本条**：「本 feature 还没做」/「做起来成本高」/「暂时不方便」/「判据不好写」/「先放过，以后再说」。
+- **处置方式（唯一 · 二者缺一不可）**：**偏离登记 + 发起者追认**。
+  1. **偏离登记**（MUST 在 feature 文档内可审计）：
+     ① 被偏离的**具体门禁项** · ② **不可达成的根因**（含里程碑依据）·
+     ③ **判据未被放宽**的论证（红线判据一律照常执行）·
+     ④ **承接方**（目标 feature ID + 里程碑）与**承接机制**
+     （承接条款 MUST 写入目标 feature 的提示词初稿 ⇒ 由其 spec 落成 **FR + 裁定** ⇒ 其 tasks 与契约同步接线，
+     **只接线、MUST NOT 新增门禁编号**）·
+     ⑤ 落点 = feature 的 `plan.md`（登记项 / Complexity Tracking）**+** `tasks.md`
+     （一条**阻断合入**的追认任务）。
+  2. **发起者追认**（MUST 由**发起者**本人作出）：**追认文字 + 发起者确认 + 日期**
+     MUST 落在 `harness/verification/<feature>/manual-verification.md`；
+     **未追认前 MUST NOT 合入**；**MUST NOT** 由实现者代签。
+- **红线（本条 MUST NOT 做什么）**：
+  - MUST NOT 以本条**放宽或稀释任何门禁判据** —— **原则 I / II / IX 的红线不适用本条**：
+    依赖红线（`langsmith` / `langchain*` / `langgraph*`）· 许可证红线 · 商标红线 · 零出站红线
+    **MUST** 在**每个** feature 落地（可延后的只有**依赖内核运行时**的**能力型**门禁项）。
+  - MUST NOT 写**永久红**的 CI；被偏离的门禁 MUST 落**挂载点**并**明确标记「未落地」**
+    （MUST NOT 伪装成「已通过」）。
+  - MUST NOT 把本条当作**长期豁免**：承接项 MUST 有**具名的承接方与里程碑**，
+    MUST NOT 无期限悬空；**MUST NOT** 以本条为由删改宪法正文。
+  - MUST NOT 用本条**规避**「本 feature 必须能独立通过其可适用门禁」的要求。
+- **登记与复核**：每一条被偏离的门禁 MUST 在**人工验证记录**中登记（可审计）；
+  本条的使用情况 MUST 在**下一次宪法修订**时复核 —— 若同类偏离**反复出现** ⇒
+  MUST 重新评估**该门禁项的判据本身**（或调整里程碑切分），**MUST NOT** 继续依赖本条兜底。
+
+### 发布门禁（Release Gate）
+
+**发布 / 分发发行包时**（而非逐特性合入时）**MUST** 通过下列门禁；它与上面的
+「质量门禁」相互独立，**MUST NOT** 互相替代：
+
+0. **发版节奏**：v1 期间**只发两版**——「全部 31 个 feature 开发完成」发 `0.1.0`，
+   「充分调试 + 内测 + 健壮性加固」之后发 `v1.0.0`；**中间 MUST NOT** 发任何
+   预发布版（**中间版本不可删除、只能 yank**，每发一版即一条永久记录；且 `0.0.x`
+   的定位是「占位版」，功能落地后须一次性离开它）。依据：立项书 §12 **D13** +
+   §6.2.1。**MUST NOT** 在未达成该节列出的触发条件时擅自发版。
+
+1. **发行产物纯度门禁**：构建产物的内容 **MUST** 仅含**包代码**（`src/<pkg>/`）与
+   **必要元数据**（README / LICENSE / pyproject.toml / PKG-INFO）。
+   **MUST NOT** 含任何**仓库内容**——`harness/`（调研报告 / 提示词 / 立项书 / 验收脚本）、
+   `.specify/`（宪法与 spec 模板）、`.opencode/`（speckit 命令）、`node_modules/` 等
+   均属**开发辅助材料**：它们**留在 GitHub 上供读者学习本项目的全部原理**，
+   但**不得**进入发行包（否则会被他人 `import` 引入）。
+   **MUST** 以可自动执行的断言落地，并在发布流水线中于**上传之前**强制执行
+   （`harness/scripts/check_dist_purity.py`）；断言不通过时 **MUST** 中止发布——
+   PyPI 上的版本一旦发布**不可删除**（只能 yank），故**MUST** 在上传前拦截。
+
+> **为什么单列为发布门禁而非质量门禁**：质量门禁是「逐特性合入前」的检查，
+> 作用于源码；发布门禁是「产物出厂前」的检查，作用于**打包结果**——
+> 后者无法由源码审查替代（同一份源码在不同打包配置下产出的内容不同）。
+> 「GitHub 上看全部原理」与「PyPI 上的包是干净的」**必须同时成立**，本门禁是后者的兜底。
 
 ## Governance
 
@@ -419,12 +662,11 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
   - 新增原则 IX（许可证与商标红线，NON-NEGOTIABLE）与原则 X（文档合规义务，门禁项）
     ——两者按严重度拆分：只有不可逆的法律红线（依赖许可证白名单 / Elastic-2.0 组件 / 第三方商标）
     标 NON-NEGOTIABLE；可补正的文档登记义务（归属清单 / 兼容矩阵）单列为门禁项；
-  - 原则 IV 选定路线 B；原则 VII 冻结 C1–C26 并固化「不做」清单；
+  - 原则 IV 选定路线 B；原则 VII 冻结 C1–C27 并固化「不做」清单（2026-11-05 由 C1–C26 扩为 C1–C27）；
   - 原则 III 补入 PNG 离线路径与 7 项同名清单；原则 VIII 补入 DOM 级解析纪律。
 - **新调研的效力**：后续新增调研结论若与本宪法冲突，**MUST** 先走修订流程，
   **MUST NOT** 以「调研报告更新了」为由绕过宪法。
-
-**Version**: 0.0.1 | **Ratified**: TODO(RATIFICATION_DATE) | **Last Amended**: TODO(LAST_AMENDED_DATE)
+**Version**: 1.6.0 | **Ratified**: 2026-11-05（发起者批准；首次批准即定版为 1.0.0） | **Last Amended**: 2026-11-08
 
 <!-- CONSTITUTION-BODY-END -->
 
@@ -442,7 +684,7 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
 | IV. 可诊断性 | `Q6` §3.1（21 项能力清单）、§2.1（自托管部署成本对比）、§3.3（路线 A/B 工作量）、§4.2（对比表） | ✅ 已回填（选定路线 B + 三件套范围 + 后端对接政策） |
 | V. 人工验收 | 无（流程性条款）；方法补自 `Q3` 实跑 E3 / E4 | ✅ 已回填（补 socket guard 零出站证据要求） |
 | VI. 规格驱动 | 无（流程性条款） | ✅ 已定 |
-| VII. 职责边界 | `Q8` §3.4（C1–C26）、`Q7` §3.1、`Q1` §3.3 / `Q2` §3.4（三类「不做」理由） | ✅ 已回填（冻结契约清单 + 固化不做清单） |
+| VII. 职责边界 | `Q8` §3.4（C1–C27 · 2026-11-05 由 C1–C26 扩为 C1–C27）、`Q7` §3.1、`Q1` §3.3 / `Q2` §3.4（三类「不做」理由） | ✅ 已回填（冻结契约清单 + 固化不做清单） |
 | VIII. 证据与术语 | `Q4` §3.4（权威术语表）、`Q1` §2.3（DOM 级解析方法） | ✅ 已回填（补 DOM 级解析纪律） |
 | IX. 依赖许可证与商标红线 | `Q7` §3.1（许可证矩阵）、§3.2（ELv2 托管禁令）、§3.3.3（官方品牌指南） | ✅ **本版新增原则**（NON-NEGOTIABLE） |
 | X. 文档合规义务 | `Q7` §3.3.1（MIT 保留声明义务）、§5.7（兼容矩阵） | ✅ **本版新增原则**（门禁项，可补正） |
@@ -455,7 +697,7 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
 | 类型 | 变更 | 依据 |
 |---|---|---|
 | **新增** | 原则 IX（许可证与商标红线，NON-NEGOTIABLE）+ 原则 X（文档合规义务） | `Q7` 全面结论（初稿完全未涉及许可证） |
-| **精确化** | 原则 IV 技术路线（路线 B）、原则 VII 契约清单（C1–C26）与不做清单、原则 III 的 7 项同名清单 | `Q3` / `Q6` / `Q8` |
+| **精确化** | 原则 IV 技术路线（路线 B）、原则 VII 契约清单（C1–C27）与不做清单、原则 III 的 7 项同名清单 | `Q3` / `Q6` / `Q8` |
 | **修正错误** | 原则 II 的工具契约（`args` / `id` 属 tool_call 字典，非工具对象属性） | `Q8` §3.2.4 实测 |
 | **补强** | 原则 I 网络黑名单（`mermaid.ink`）、原则 IV 后端对接政策（不得内嵌 Elastic-2.0 后端）、原则 V 零出站证据要求、原则 VIII DOM 级解析纪律 | `Q3` 实跑 / `Q6` / `Q7` |
 | **回填** | 全部 `[待调研]` 标记（6 处 = 正文 3 处 + 附表 3 处） | 本文件 Governance 条款强制要求 |

@@ -108,6 +108,7 @@ print("OK: 基础安装依赖闭包为空（零第三方运行时依赖）")
 #    白名单 = 宪法「依赖白名单」：必装无；可选 extra pydantic / ormsgpack /
 #    opentelemetry-api / opentelemetry-sdk（[png] 的 mermaid 相关包
 #    由 B3F1 定点后补入本清单）。
+#    （2026-11-08 追记 · 不改写原文）：「mermaid 相关」已被宪法 v1.5.0 收敛为确切包名 `playwright`。
 WHITELIST = {"pydantic", "ormsgpack",
               "opentelemetry-api", "opentelemetry-sdk"}
 extras = closure("freegraph", with_extras=True) - base

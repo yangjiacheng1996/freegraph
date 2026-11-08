@@ -94,6 +94,9 @@ python -c "import freegraph.contracts, sys; print(sorted(m for m in sys.modules 
 
 > **口径（基础安装 vs extras 变体）**：SC-002 只约束**基础安装**的闭包 —— 宪法依赖白名单允许
 > `pydantic` / `ormsgpack` / `opentelemetry-*` / mermaid 相关作为**可选 extra**（B3F1 引入），
+> **（2026-11-08 追记 · 不改写原文）**：「mermaid 相关」这一**类别式**表述已被**宪法 v1.5.0**（2026-11-08）
+> 收敛为**确切包名 `playwright`**（`[png]` extra）⇒ 判据以宪法 v1.5.0 的包层白名单条为准
+> （落地见 `specs/b3f1-scaffold-ci-gates/` 的 spec 裁定 11 / 21 与 `contracts/dependency-gate.md` §2.1）；
 > 故 extras 变体的闭包**另按白名单校验**（只允许白名单内的包，不得出现传染性许可证）。
 > **基础安装的必装依赖白名单自宪法 v1.2.0 起为空**。
 > **判定时须剥离 extras marker**：解析 `Requires-Dist` 时丢弃 `; extra == "..."` 条件，
@@ -112,6 +115,7 @@ requires("freegraph")                       → 顶层声明（空）
 
 **依赖白名单**（宪法）：**必装依赖 = 无**（自宪法 v1.2.0 起）；
 可选 extras `pydantic` / `ormsgpack` / `opentelemetry-*` / mermaid 相关（本 feature **不新增**任何 extra）。
+> **（2026-11-08 追记 · 不改写原文）**：「mermaid 相关」已被**宪法 v1.5.0** 收敛为**确切包名 `playwright`**（`[png]` extra）。
 
 **红线等价性**（宪法原则 I 的推论）：`langchain-core` 硬依赖 `langsmith`，故「依赖树无 `langsmith`」⟺「依赖树无 `langchain-core`」——二者是同一条红线，**不得只挡一层**。
 
