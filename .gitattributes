@@ -1,0 +1,14 @@
+# 换行符策略 —— 全仓文本文件在**工作树**里统一用 **LF**（跨平台一致）。
+#
+# **为什么必需**（CI 首跑实测 · 2026-11-08）：Windows 上的 Git 默认
+# `core.autocrlf=true` ⇒ 检出时把 **LF 转成 CRLF** ⇒ 破坏了既有门禁
+# **G16**（API 快照**逐字节**比对）与快照文本合规判据
+# （`tests/facade/test_api_snapshot.py::TestSnapshotTextCompliance::test_line_endings_are_lf`
+# —— 快照 MUST 用 LF 换行）⇒ 2 个 Windows 作业因此变红。
+#
+# 本文件把该口径**固定在仓库里**（不依赖每个开发者的本地 git 配置）⇒
+# 三个平台的检出结果**逐字节一致** ⇒ 快照类「逐字节比对」的判据在任何平台都成立。
+#
+# `text=auto` ⇒ git **自动识别**二进制文件并跳过它们（不做换行归一）
+# ⇒ 无需为二进制文件单独列条目。
+* text=auto eol=lf
