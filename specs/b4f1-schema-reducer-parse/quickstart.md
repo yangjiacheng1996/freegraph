@@ -279,7 +279,7 @@ try:
 except TypeError as e:
     print('channels 只读         :', type(e).__name__)
 try:
-    dataclasses.replace(a.channels['n'], key='zzz')
+    a.channels['n'].key = 'zzz'
 except Exception as e:
     print('字段不可改            :', type(e).__name__)
 "
@@ -287,6 +287,15 @@ except Exception as e:
 
 **期望输出**：`两次解析相等: True` · `投影可 JSON 序列化: True` · `投影含内存地址: False` ·
 `channels 只读: TypeError` · `字段不可改: FrozenInstanceError`。
+
+> **📌 修订记（2026-11-08 · 实现者实测发现 · 判据未变）**：本节原用
+> `dataclasses.replace(a.channels['n'], key='zzz')` 演示「字段不可改」——
+> 但 `dataclasses.replace` 的语义是「**基于现有实例构造一个新实例**」，
+> 它**不**（也**不应当**）抛异常 ⇒ 该段**没有任何输出**，与上面的「期望输出」
+> 不一致 ⇒ **会让正确的实现看起来是坏的**。
+> ⇒ 改为**直接赋值**（`a.channels['n'].key = 'zzz'`）—— 这才是不可变的
+> **正确**演示手段（frozen dataclass ⇒ `FrozenInstanceError`）。
+> ⚠️ **判据一字未改**（SC-005 · FR-010 · I-7）；本次修订**只换演示手段**。
 **判据**：SC-005（可比较 + 可序列化 + 无地址）· FR-010 · FR-011（research D-01 / D-02 / D-05 / D-06）。
 
 ---

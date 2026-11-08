@@ -402,7 +402,7 @@ try:
 except TypeError as e:
     print('channels 只读         :', type(e).__name__)
 try:
-    dataclasses.replace(a.channels['n'], key='zzz')
+    a.channels['n'].key = 'zzz'
 except Exception as e:
     print('字段不可改            :', type(e).__name__)
 "
@@ -410,23 +410,25 @@ except Exception as e:
 投影可 JSON 序列化    : True
 投影含内存地址        : False
 channels 只读         : TypeError
+字段不可改            : FrozenInstanceError
 ```
 
-> **⚠️ 与 quickstart §6 的「期望输出」有一处不一致（**实现者实测发现 · 非缺陷**）**：
-> quickstart §6 的最后一段用 `dataclasses.replace(...)` 来演示「字段不可改」，
+> **📌 quickstart §6 的文案已同步修订（2026-11-08 · 实现者实测发现）**：
+> 该节原用 `dataclasses.replace(a.channels['n'], key='zzz')` 演示「字段不可改」，
 > 但 `dataclasses.replace` 的语义是「**基于现有实例构造一个新实例**」——
-> 它**不**（也**不应当**）抛异常 ⇒ 该段**没有任何输出**（上表即真实输出，
-> 「字段不可改」一行**未出现**）。
-> ⇒ 「不可变」的**可判定**证据由**直接赋值**给出（**修正版** · 见下），
-> 并由 `tests/runtime/test_parse_contract.py::test_channel_spec_is_immutable`
-> （`pytest.raises(FrozenInstanceError)`）自动守护。
-> ⇒ 该 quickstart **文案**问题登记在 §5 遗留 #2。
+> 它**不**（也**不应当**）抛异常 ⇒ 该段**没有任何输出**，与该节的「期望输出」
+> 不一致 ⇒ **会让正确的实现看起来是坏的**。
+> ⇒ 已改为**直接赋值**（`a.channels['n'].key = 'zzz'`）—— 这才是不可变的
+> **正确**演示手段（frozen dataclass ⇒ `FrozenInstanceError`），
+> 上表即修订后的**真实输出**（与 quickstart §6 的「期望输出」**逐行一致**）。
+> ⚠️ **判据一字未改**（SC-005 · FR-010 · I-7）；本次修订**只换演示手段**。
+> ⇒ 该修订记同步落在 `specs/b4f1-schema-reducer-parse/quickstart.md` §6。
 
-**§6 修正版（直接赋值 + 不可哈希）**
+**追加证据：两个产物类型**显式不可哈希**（I-8 · research D-01 / D-02）**
 
 ```console
 $ uv run --no-project --python .venv python -c "
-import dataclasses, json, operator
+import operator
 from typing import Annotated, TypedDict
 from freegraph.runtime import parse_state_schema
 
@@ -436,10 +438,6 @@ class S(TypedDict):
 
 a = parse_state_schema(S)
 try:
-    a.channels['n'].key = 'zzz'
-except Exception as e:
-    print('字段不可改（直接赋值）  :', type(e).__name__)
-try:
     hash(a)
 except TypeError as e:
     print('产物显式不可哈希        :', type(e).__name__)
@@ -448,7 +446,6 @@ try:
 except TypeError as e:
     print('通道规格显式不可哈希    :', type(e).__name__)
 "
-字段不可改（直接赋值）  : FrozenInstanceError
 产物显式不可哈希        : TypeError
 通道规格显式不可哈希    : TypeError
 ```
@@ -565,20 +562,20 @@ $ awk '/^```/{f=!f; next} !f && /^#{2,3} /{print NR": "$0}' harness/verification
 290: ### 3.5 · §4 非法 schema（快速失败 + 结构化错误）
 331: ### 3.6 · §5 判定表逐条比对（A2 · SC-004）
 381: ### 3.7 · §6 纯数据（不可变 / 可比较 / 投影无地址）
-456: ### 3.8 · §7 必填性（只记录不执行）
-479: ### 3.9 · §8 依赖与 I/O 纪律
-526: ### 3.10 · §9 层纪律与署名头
-550: ### 3.11 · §10 人工验证记录本身
-588: ### 3.12 · 全量测试套件（既有门禁零破坏）
-607: ### 3.13 · 最高档 venv（**CPython 3.14.7**）复跑
-623: ## 4. 结论
-625: ### 4.1 验收判据 A1–A3（spec §6 / 立项书 §5.2 · FR-018 · SC-013）
-633: ### 4.2 逐条成功标准（SC-001 ~ SC-018）
-659: ### 4.3 ✅ 发起者追认（T053 · plan 登记项 **R-1**）
-693: ### 4.4 门禁与纪律复核小结
-710: ## 5. 遗留问题
-724: ## 6. 来源覆盖表（宪法原则 VIII · FR-018 · SC-013）
-758: ## 7. 移交后续 feature
+453: ### 3.8 · §7 必填性（只记录不执行）
+476: ### 3.9 · §8 依赖与 I/O 纪律
+523: ### 3.10 · §9 层纪律与署名头
+547: ### 3.11 · §10 人工验证记录本身
+585: ### 3.12 · 全量测试套件（既有门禁零破坏）
+604: ### 3.13 · 最高档 venv（**CPython 3.14.7**）复跑
+620: ## 4. 结论
+622: ### 4.1 验收判据 A1–A3（spec §6 / 立项书 §5.2 · FR-018 · SC-013）
+630: ### 4.2 逐条成功标准（SC-001 ~ SC-018）
+656: ### 4.3 ✅ 发起者追认（T053 · plan 登记项 **R-1**）
+690: ### 4.4 门禁与纪律复核小结
+707: ## 5. 遗留问题
+721: ## 6. 来源覆盖表（宪法原则 VIII · FR-018 · SC-013）
+755: ## 7. 移交后续 feature
 ```
 
 > **📌 五段式齐全**（环境 §1 / 步骤 §2 / 实际输出 §3 / 结论 §4 / 遗留问题 §5）
@@ -712,7 +709,7 @@ $ .venv314/bin/python -m pytest tests/ -ra
 | # | 事项 | 归属 / 状态 |
 |---|---|---|
 | **1** | ~~**发起者追认（plan 登记项 R-1）未完成**~~ —— ✅ **已关闭**（2026-11-08）：发起者已追认，追认栏见 §4.3 ⇒ 执行闸口 A5 通过 | **已完成**（tasks **T053** · §4.3） |
-| **2** | **quickstart §6 的文案问题**：该节用 `dataclasses.replace(...)` 演示「字段不可改」，但 `replace` 的语义是「**构造新实例**」⇒ 实际**不抛异常**（§3.7 的真实输出中该行未出现，与 quickstart 的「期望输出」不一致）。**实现无缺陷**（不可变性由直接赋值 ⇒ `FrozenInstanceError` 证明，并被 `test_channel_spec_is_immutable` 自动守护） | `specs/b4f1-schema-reducer-parse/quickstart.md` §6 的**文案**（**实现者未改动 spec 目录工件** —— 留待发起者决定是否同步修订） |
+| **2** | ~~**quickstart §6 的文案问题**~~ —— ✅ **已关闭**（2026-11-08）：该节的演示手段已由 `dataclasses.replace(...)` 改为**直接赋值**（`replace` 的语义是「构造新实例」⇒ 本就不该抛异常）⇒ 修订后**真实输出**与该节「期望输出」**逐行一致**（§3.7）· **判据一字未改**（SC-005 · FR-010 · I-7） | **已完成**（tasks **T060** · 修订记落在 quickstart §6） |
 | **3** | **`typing_extensions` 的可得性是「偶然」的**（非任何声明依赖 · v1.0 依赖面 = 零）⇒ 在**未装**该包的 CI 档，SC-018 会被 `pytest.importorskip` **skip** ⇒ **skip ≠ pass** | **B3F1 步骤 5.5**（v2.0 预验证包的传递带入 · **偶然**可得）· 本机**未 skip**（§3.2） |
 | **4** | **多版本实测覆盖两档**：**CPython 3.11.16**（最低档 · typing 构件上限档）与 **3.14.7**（最高档）**均已实跑并全绿**（§3.12 / §3.13）；**3.12 / 3.13** 两档**本轮未跑** | **CI 矩阵**（`.github/workflows/ci.yml` 的 7 作业 · 3 平台 × 2 版本 + arm64 最低档）自动覆盖 —— 本记录**不**代跑 |
 | **5** | **上游实时对照未做**（`langgraph` 不在本 feature 的依赖面 · 澄清 Q5）⇒ 判定表是上游行为的**固化快照**；**换上游版本时 MUST 重新核实** | **B5F2 / B8F1** 的差分夹具（research **DR-1**） |

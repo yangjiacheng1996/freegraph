@@ -240,6 +240,7 @@ description: "B4F1 · 状态 schema 解析 + 归约器提取（TypedDict + Annot
   > `pytest` 单独跑成一段脚本」）对本 feature **成立**（判据是纯计算 · 零依赖）⇒
   > README 的「无此类脚本的 feature」举例（B3F1 / B4F1）**随之更新**（见 T059）。
 - [X] T059 **同步** `harness/verification/README.md`（文档合规 · 原则 X）：① 「验收脚本」索引表的 **B4F1** 行补上 `acceptance.py` 链接与「**89 条断言全绿**」的实测结论；② 「`acceptance.py` 可选」一节的举例**去掉 B4F1**（本 feature **已落**该脚本）⇒ 判定依据（判据能否脱离 `pytest` 单独跑成一段脚本）对 B4F1 **成立** ⇒ 仍保留 **B3F1** 作为「无此类脚本」的举例 —— ⚠️ **零改动**该 README 的**目录约定**与**五段式**定义（宪法原则 V 的落点）
+- [X] T060 **修订 quickstart §6 的演示手段**（**实现者实测发现 · 发起者确认后执行 · 2026-11-08**）：该节原用 `dataclasses.replace(a.channels['n'], key='zzz')` 演示「字段不可改」，但 `dataclasses.replace` 的语义是「**基于现有实例构造一个新实例**」⇒ 它**不**（也**不应当**）抛异常 ⇒ 该段**没有任何输出**，与该节的「期望输出」**不一致** ⇒ **会让正确的实现看起来是坏的** ⇒ 改为**直接赋值**（`a.channels['n'].key = 'zzz'` · frozen dataclass ⇒ `FrozenInstanceError`）—— ⚠️ **判据一字未改**（SC-005 · FR-010 · I-7），本次修订**只换演示手段** ⇒ 并在该节留**修订记**（含原写法的问题与实测结论）—— ⚠️ `quickstart.md` **不是**跨 feature 的**冻结契约**（无 `<!-- authority: yes -->` 标记）⇒ 改它**不触碰**任何冻结面 ⇒ 人工验证记录 §3.7 同步贴出修订后的**真实输出**（与「期望输出」逐行一致）· §5 遗留 #2 **关闭**
 
 ---
 
