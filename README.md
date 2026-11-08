@@ -82,6 +82,11 @@ uv run --no-project --python .venv python harness/scripts/gates/gate_G21_depende
 > **无从属、授权或合作关系**，亦未使用其商标、logo、品牌色或官方文案。
 > 本表逐符号标注 freegraph 与上游的等价程度，是**活文档**（随每个 feature 新增的公开面更新，
 > 由 B24F1 补全与定稿）。
+>
+> **「公开面」的判定口径**（2026-11-08 · B4F1 分析轮澄清）：**公开面 = 契约层 18 个符号
+> + 门面 `freegraph/graph.py` 的 7 个符号** ⇒ **内核子包**（如 `freegraph.runtime` 的
+> `parse_state_schema` / `ChannelSpec` / `SchemaSpec` / `InvalidSchemaError`）属 **L2 内部 API**
+> （用户可 import，但**不承诺稳定**）⇒ **不进本表**（相关 feature 的兼容矩阵**零新增行**）。
 
 | freegraph 符号 | 对应上游符号 | 等价程度 | 差异说明 |
 |---|---|---|---|

@@ -8,14 +8,25 @@
 harness/verification/
 ├── README.md                      ← 本文件
 └── <feature>/
-    ├── acceptance.py              ← 该 feature 的**可运行验收脚本**
-    └── manual-verification.md     ← 该 feature 的人工验证记录
+    ├── acceptance.py              ← 该 feature 的**可运行验收脚本**（**可选**）
+    └── manual-verification.md     ← 该 feature 的人工验证记录（**必落** · 宪法门禁 5）
 ```
 
 - **`<feature>` = feature ID**（= `B<n>F<m>`，与 `harness/features/B<n>F<m>_*.md` 一一对应），
   例如 `B1F1` / `B2F1` / `B3F1` / `B24F1`。
 - **文件名固定** —— `acceptance.py`（脚本）与 `manual-verification.md`（记录），
   便于按统一路径检索与批处理。
+- **`manual-verification.md` 必落** —— 宪法「质量门禁 5」与原则 V 要求**每个 feature** 都有
+  人工验证记录 ⇒ **无一例外**。
+- **`acceptance.py` 可选** —— 只在该 feature 有**可独立运行**的验收脚本时才落
+  （如 `B1F1` / `B2F1` / `B2F2` / `B4F1`）；**无此类脚本的 feature 不必强行补**
+  （如 `B3F1` —— 其判据以 `pytest` 断言 + `manual-verification.md` 承载）。
+  ⇒ 判定某 feature 是否需要 `acceptance.py` 的依据 = 「该 feature 的判据能否脱离
+  `pytest` 单独跑成一段脚本」，**不是**「目录里必须凑齐两个文件」。
+  > **📌 B4F1 的追加（2026-11-08 · 发起者要求）**：B4F1 原按本条判为「不落」
+  > ⇒ 人工验收环节发起者要求「**一条命令跑完全部验收**」⇒ **补落** `acceptance.py`
+  > （89 条断言 · 单文件 · 零第三方依赖）⇒ 本条的判定依据对 B4F1 **成立**
+  > （判据是纯计算 · 零依赖）。
 - **一个 feature 一个目录** —— 同一 feature 若需补记（如「后续 feature 注意事项」），
   追加到该文件相应小节，**不另起文件**。
 
@@ -69,6 +80,7 @@ python3 harness/verification/<feature>/acceptance.py --require-installed # 要�
 | **B1F1** | [B1F1/manual-verification.md](B1F1/manual-verification.md) | [B1F1/acceptance.py](B1F1/acceptance.py) | ✅ 契约层骨架（四个核心类型 + 异常体系）—— 47 条断言全绿 |
 | **B2F1** | [B2F1/manual-verification.md](B2F1/manual-verification.md) | [B2F1/acceptance.py](B2F1/acceptance.py) | ✅ **已回填实测输出**（5 个协议 + 5 个纯数据类）—— 119 条断言全绿；3.11 / 3.13 / 3.14 三档多版本实测**未执行**（本机仅 CPython 3.12.3），已记入该记录的 §7 遗留问题 |
 | **B2F2** | [B2F2/manual-verification.md](B2F2/manual-verification.md) | [B2F2/acceptance.py](B2F2/acceptance.py) | ✅ **已回填实测输出**（公开 API 门面 7 符号 + API 签名快照 + 顶层包惰性）—— 76 条断言全绿；隔离 venv（CPython **3.11.16**）实测通过，3.13 / 3.14 档**未执行**，已记入该记录的 §5 遗留问题 |
+| **B4F1** | [B4F1/manual-verification.md](B4F1/manual-verification.md) | [B4F1/acceptance.py](B4F1/acceptance.py) | ✅ **已回填实测输出**（状态 schema 解析 + 归约器提取 · 二元性判定表逐条比对）—— **pytest 90 条新断言全绿**（CPython **3.11.16** / **3.14.7** 两档）+ **验收脚本 89 条断言全绿**；⚠️ **T053 发起者追认（plan 登记项 R-1）待办 ⇒ 阻断合入**，详见该记录 §4.3 |
 
 ## 相关
 
