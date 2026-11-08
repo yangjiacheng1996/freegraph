@@ -44,6 +44,47 @@ run graph-based AI workflows without LangSmith or external account dependencies.
 验收脚本是**开发辅助材料**，留在 GitHub 上供学习，不会被 `import` 引入。
 发布流水线有一道**纯度门禁**（`harness/scripts/check_dist_purity.py`）对此做断言。
 
+## 可选依赖（extras）
+
+**基础安装零第三方运行时依赖**（上表第三条承诺）**不受影响**：四个 extra **默认关闭**，
+不装即不可用；`pip install freegraph` 后 site-packages 里仍然只有 freegraph 自己。
+
+| extra | 用途 | 内容 | 许可证 |
+|---|---|---|---|
+| `freegraph[pydantic]` | 结构化状态 schema 支持 | `pydantic>=2.0` | MIT |
+| `freegraph[checkpoint]` | checkpoint 序列化 | `ormsgpack>=1.0` | Apache-2.0 OR MIT |
+| `freegraph[otel]` | 可观测性内核（OTel API + SDK） | `opentelemetry-api>=1.20` · `opentelemetry-sdk>=1.20` | Apache-2.0 |
+| `freegraph[png]` | 本地 PNG 渲染（**默认关闭**） | `playwright>=1.40` | Apache-2.0 |
+
+安装方式：`pip install "freegraph[png]"`（可组合多个 extra）。
+
+> **`[png]` 的三条硬约束**（宪法「依赖白名单 / 黑名单」条）：
+> ① **默认关闭**——基础安装不拉起它的任何依赖；
+> ② **许可证闭包全绿**——`playwright` / `greenlet` / `pyee` / `typing-extensions`
+> 的实测许可证标识全部落在 {MIT, Apache-2.0, BSD-2/3, PSF} 内；
+> ③ **运行期零出站**——Chromium **本地**渲染，图片不外传。
+>
+> **浏览器二进制需用户显式执行 `playwright install chromium`**（属**安装期**动作，
+> 不是运行期依赖）；不装浏览器则 `[png]` 的能力不可用，其余功能不受影响。
+
+## 开发与验收
+
+> **合入前 CI 必须全绿** —— 7 个作业（3 平台 × 2 个 Python 档 + Linux arm64 最低档）
+> 覆盖全量测试套件与 10 条质量门禁（G21–G30）；任一作业变红即不得合入。
+> 分支保护（必过检查 = 7 个 `gates (...)` 作业）的**可照抄设置步骤**见
+> `harness/verification/B3F1/manual-verification.md`。
+
+门禁脚本本身在 `harness/scripts/gates/`（**不进发行包**），逐条可独立执行：
+
+```bash
+uv venv --python 3.11
+uv pip install --python .venv --group dev
+uv pip install --python .venv -e .
+uv pip install --python .venv -e ".[pydantic,checkpoint,otel,png]"
+uv run --no-project --python .venv python -m pytest tests/ -ra
+uv run --no-project --python .venv python harness/scripts/gates/gate_G21_dependencies.py
+```
+
 ## API 兼容矩阵
 
 > **兼容意图为互操作，不构成 affiliation** —— freegraph 与 LangChain / LangGraph / LangSmith

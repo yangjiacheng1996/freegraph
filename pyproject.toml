@@ -42,10 +42,66 @@ classifiers = [
 # （由 tests/contracts/test_architecture.py 的 G3 门禁断言）。
 dependencies = []
 
+# 可选依赖（extras）—— B3F1（spec FR-004 · 裁定 1 / 21）。
+#
+# 四个 extra **各自独立可选**：不装即不可用；**基础安装 MUST NOT** 拉起任何
+# extra 的依赖（基础安装的依赖闭包 MUST 为空集 · SC-002 · 由 G3 / G22 断言）。
+#
+# 三条纪律：
+#   1. 内容 MUST 取自宪法「依赖白名单 / 黑名单」· 包层白名单条原文所列
+#      （宪法 v1.5.0 已把 `[png]` 的「mermaid 相关」类别式表述收敛为确切包名
+#      `playwright`）⇒ 四个 extra **全部逐包名列**；
+#   2. 完整递归闭包 **恰好 12 个包**（annotated-types · greenlet ·
+#      opentelemetry-api · opentelemetry-sdk · opentelemetry-semantic-conventions ·
+#      ormsgpack · playwright · pydantic · pydantic-core · pyee · typing-extensions ·
+#      typing-inspection）⇒ 许可证标识 **全部落在** {MIT, Apache-2.0, BSD-2-Clause,
+#      BSD-3-Clause, PSF-2.0} 内（research D-02 实测）⇒ 与 G3 的白名单逐一命中；
+#   3. `[otel]` **MUST NOT** 含 `opentelemetry-exporter-otlp`——其闭包含
+#      `certifi`（MPL-2.0）⇒ 必被 G23 拒（裁定 21）⇒ exporter 归 B21F1。
+[project.optional-dependencies]
+pydantic = ["pydantic>=2.0"]
+checkpoint = ["ormsgpack>=1.0"]
+otel = ["opentelemetry-api>=1.20", "opentelemetry-sdk>=1.20"]
+png = ["playwright>=1.40"]
+
 [project.urls]
 Homepage = "https://github.com/yangjiacheng1996/freegraph"
 Repository = "https://github.com/yangjiacheng1996/freegraph"
 Issues = "https://github.com/yangjiacheng1996/freegraph/issues"
+
+# 开发期依赖组（PEP 735 · dependency-groups）—— **不进发行包**。
+#
+# 用途：跑测试套件 + 门禁脚本。`pytest` 是测试运行时；`packaging>=24.2` 供 G23 的
+# SPDX 表达式解析（`packaging.licenses` 模块自 24.2 才存在 · research D-05 实测）。
+#
+# 三条纪律：
+#   1. **不是 extra** ⇒ 不进 `Requires-Dist` ⇒ 基础安装闭包仍为空集（宪法 v1.2.0 · G3）
+#      **且不参与 extras 变体枚举**（dependency-gate.md §2.2）⇒ 不影响 G3 的 12 名白名单；
+#   2. **不进发行包** —— hatchling 不把 dependency-groups 写进 wheel/sdist 的元数据
+#      ⇒ 发行产物纯度门禁（harness/scripts/check_dist_purity.py）不受影响；
+#   3. 安装方式：`uv pip install --group dev`（实测 uv 0.12.7 支持 · 2026-11-07）。
+[dependency-groups]
+dev = [
+    "pytest>=7.4",
+    "packaging>=24.2",
+]
+
+[tool.pytest.ini_options]
+# 收集范围**钉死**在 `tests/` ⇒ 裁定 16 的「核心用例 = 全量测试套件」有确定含义
+# （harness/ 下的脚本与门禁**不是**测试用例；tests/ 下的三个目录各自是一层门禁）。
+testpaths = ["tests"]
+# `-ra` ⇒ 汇总输出所有非通过结果（含 skip / xfail / 失败原因）。
+addopts = "-ra"
+# 严格 xfail：被标记为 xfail 的用例若意外通过 ⇒ **判失败**（防止「假绿」）。
+xfail_strict = true
+# 平台专属用例的过滤依据（tasks T001 · 契约 ci-matrix §1）。
+#   linux_only    —— 需 Linux 隔离环境 / 网络命名空间（G22 · G28 一族）；
+#   full_install —— 需装齐四个 extras 的完整安装环境（**当前无使用者**·预留）。
+# 非 Linux 作业的 pytest 步骤用 `-m "not linux_only and not full_install"` 排除。
+markers = [
+    "linux_only: 需 Linux 隔离环境 / 网络命名空间",
+    "full_install: 需装齐四个 extras 的完整安装环境",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/freegraph"]

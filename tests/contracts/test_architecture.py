@@ -805,11 +805,31 @@ class TestPublicSymbolSurface:
 #: ``typing-extensions`` 已于宪法 **v1.2.0** 从必装依赖剥离——最低 Python 版本
 #: 抬至 3.11 后，``Self`` / ``NotRequired`` / ``Required`` / ``TypeVarTuple`` /
 #: ``Unpack`` / ``LiteralString`` / ``dataclass_transform`` 全部进入标准库。
+#:
+#: **B3F1 填充实测闭包（tasks T003 · 裁定 8 的唯一一处例外 · 判据句零改动）**：
+#: 下面是**四个 extra 的完整递归闭包**的**确切包名集合**（**12 个**）——
+#: 有限 · 逐个列名 · **无通配符 · 无前缀匹配**（research D-02 / D-06 实测）。
+#: 方向 = **更精确**（原为 4 个宽泛占位包名）⇒ 净效果**变严**（FR-018）。
+#:
+#: **⚠️ 版本敏感性**：extras 的版本约束是**开区间**（``pydantic>=2.0``）⇒ 上游**新增一个
+#: 传递依赖**即会让闭包多出一个包名 ⇒ 白名单失配 ⇒ CI 变红。
+#: ⇒ 复核的**双触发点**：① **extras 的版本约束变更**（``[project.optional-dependencies]``
+#: 任一条变更）· ② **CI 因闭包失配而红**（本条子集断言失败）—— **二者任一**发生即 MUST
+#: **重跑闭包实测**并追认更新白名单（**MUST NOT** 以「放宽白名单让它变绿」的方式绕过 ·
+#: FR-018；白名单的扩充只能走宪法修订）。
 CONSTITUTION_DEPENDENCY_WHITELIST = {
-    "pydantic",
-    "ormsgpack",
+    "annotated-types",
+    "greenlet",
     "opentelemetry-api",
     "opentelemetry-sdk",
+    "opentelemetry-semantic-conventions",
+    "ormsgpack",
+    "playwright",
+    "pydantic",
+    "pydantic-core",
+    "pyee",
+    "typing-extensions",
+    "typing-inspection",
 }
 
 #: 许可证白名单（宪法质量门禁第 2 条）。
@@ -842,6 +862,15 @@ def dependency_closure(
 
     ``with_extras=False`` 时**剥离 extras marker**（否则基础安装的闭包
     会被可选依赖污染）。
+
+    **B3F1 修正枚举语义（tasks T003 · 裁定 8 的唯一一处例外 · 判据句零改动）**：
+    ``with_extras=True`` 时**只枚举 freegraph 自身的 extras 变体**——
+    **传递依赖一律按其「基础依赖」展开**（**不**展开传递依赖自己的 extras）。
+    理由：extra 是「**freegraph 对用户的承诺**」，不是「传递依赖的私有细节」
+    （dependency-gate.md §2.3）。
+    修正前的语义会把 ``pydantic`` 的 ``email`` extra 拉进闭包（过近似）⇒
+    闭包多出 ``email-validator`` 等**不在**白名单内的包名 ⇒ 子集断言变红。
+    方向 = **更正确** ⇒ 净效果**变严**（FR-018）。
     """
     seen = seen if seen is not None else set()
     for name, is_extra in _split_requires(requires(pkg)):
@@ -852,7 +881,8 @@ def dependency_closure(
             continue
         seen.add(key)
         try:
-            dependency_closure(name, seen, with_extras)
+            # 传递依赖**只展开其基础依赖** ⇒ 递归时不带 extras 标志。
+            dependency_closure(name, seen, False)
         except Exception:  # noqa: BLE001 —— 未安装的依赖无元数据，跳过即可
             pass
     return seen
@@ -924,7 +954,7 @@ class TestDependencyClosure:
     def test_extras_closure_is_within_constitution_whitelist(self) -> None:
         """extras 变体闭包 MUST 只含宪法依赖白名单内的包。
 
-        （extras 由 B3F1 引入——本 feature 无 extras，该条为空断言。）
+        （extras 由 B3F1 引入——**该条在 B3F1 起变为实质断言**。）
         """
         _require_installed()
         base = dependency_closure("freegraph")
@@ -936,9 +966,9 @@ class TestDependencyClosure:
 
         取不到许可证信息时该断言 ``skip`` 并提示——不得默认「闭包小就安全」。
 
-        **当前基础安装闭包为空**（零第三方依赖），故本断言暂为空转；
-        它在 **B3F1 引入 extras** 后立即变为实质断言——
-        故此处**同时覆盖 extras 闭包**，以免那条路径失去校验。
+        **基础安装闭包为空**（零第三方依赖），**extras 闭包非空**——
+        extras 由 **B3F1** 引入 ⇒ 该断言自 B3F1 起为**实质断言**
+        （前提：四个 extras 的依赖已安装 · 契约 ci-matrix §2 步骤 5.5）。
         """
         _require_installed()
         base = dependency_closure("freegraph")

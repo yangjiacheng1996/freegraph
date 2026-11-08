@@ -1,0 +1,26 @@
+# 断网排除清单（offline exclusions）—— B3F1 · 契约 G28 §3 / FR-010 ④⑤
+#
+# 判据（**仅两类**可排除 · FR-010 ③）：
+#   (a) **断网任务自身**（不可嵌套 —— 断网任务 MUST NOT 把自己也排除掉）；
+#   (b) **语义上必须能建立连接**的用例，含：
+#       (b1) 验证**用户出站归因**的用例（必须真的连一次，才能证明归因区分得开）；
+#       (b2) **需联网安装 / 解析依赖**的用例（如隔离 venv 一族 —— `uv venv` + `uv pip install`）。
+#
+# 格式（每行一条）：`用例标识 :: 排除理由`
+#
+# **用例标识 MUST 用 pytest node ID**（`tests/gates/test_gates.py::<函数名>`）——
+# G28 门禁脚本把它逐条转成 pytest 的 `--deselect` 参数（contracts/ci-matrix.md §3.2）
+# ⇒ 标识形式一旦不一致 ⇒ 清单与 `--deselect` 展开式**漂移** ⇒ 排除**静默失效**
+# （实测 pytest 7.4.4 / 9.2.0 对「指向不存在 node id 的 `--deselect`」均**不报错**）
+# ⇒ 被排除的用例在断网下**假红**（SC-004）。
+#
+# **新测试的入册判据（FR-010 ⑤）**：新增用例若满足上述 (a) / (b) 两类之一，
+# MUST 在**本文件**中登记一行（含理由）⇒ 断网任务才可通过；
+# **MUST NOT** 靠临时跳过 / 运行时打桩 / 在测试体内 ``pytest.skip`` 绕过。
+#
+# 本清单是**唯一权威**（单文件）⇒ MUST NOT 另立第二份清单，
+# MUST NOT 用未注册的 marker 过滤（否则两处口径漂移）。
+
+tests/gates/test_gates.py::test_egress_attribution_records_user_egress :: 需要建立一次真实连接以验证「用户出站」归因（FR-010 ③(b1)）；断网下该连接必然失败（属假红，非 freegraph 缺陷）
+tests/gates/test_gates.py::test_g22_isolated_env_closure_is_empty :: 需联网安装隔离 venv 并解析依赖（FR-010 ③(b2)）；断网下 `uv venv` + `uv pip install` 必然失败（属假红，非 freegraph 缺陷）
+tests/gates/test_gates.py::test_g22_isolated_env_negative_case :: 需联网安装隔离 venv 并解析依赖（FR-010 ③(b2)）；断网下 `uv venv` + `uv pip install` 必然失败（属假红，非 freegraph 缺陷）

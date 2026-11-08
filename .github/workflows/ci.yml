@@ -1,0 +1,150 @@
+name: ci
+
+# CI 矩阵（B3F1 · 契约 `specs/b3f1-scaffold-ci-gates/contracts/ci-matrix.md`）。
+#
+# **7 个作业**（矩阵 7 档）—— 形状、runner 标签、分层（Linux 全量 / 其余子集）
+# 与分支保护的**必过检查名**全部由该契约冻结 ⇒ 本文件 MUST NOT 各自另定。
+#
+# **job 名 MUST 逐字等于契约 §4.1 的 7 个检查名**（`gates (<runner>, <Python>)`）
+# —— GitHub 的 required check 按 job 的 `name:` **精确匹配** ⇒ 名字不符则
+# **分支保护静默失效**（FR-020 ③ 的「已启用」名存实亡）。
+
+on:
+  push: { branches: [main] }
+  pull_request: { branches: [main] }
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  gates:
+    name: gates (${{ matrix.runner }}, ${{ matrix.python }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    env:
+      # 三个平台通用（写在 job 的 env 段）⇒ MUST NOT 把平台专属的变量前缀
+      # 语法写进命令串（契约 ci-matrix §2 步骤 6）。
+      FREEGRAPH_TEST_INSTALLED: "1"
+    strategy:
+      fail-fast: false
+      matrix:
+        # ⚠️ `pytest_args` 承载「按平台条件追加 marker 过滤」——
+        # GitHub Actions 的 `run:` 无法在命令行中间条件性追加参数 ⇒ MUST 用
+        # 矩阵变量承载（契约 ci-matrix §2 步骤 6 的实现配方）。
+        # Linux 三档为空串（**不过滤** ⇒ 跑全部用例，含 `linux_only`）；
+        # 非 Linux 四档排除平台专属用例。
+        # ⚠️ MUST NOT 把过滤条件写进 `pyproject.toml` 的 `addopts`
+        # （那会让 Linux 档也过滤 ⇒ `linux_only` 用例永不执行 ⇒ 门禁静默失效）。
+        include:
+          - { runner: ubuntu-24.04,    python: "3.11", os: Linux,   pytest_args: "" }
+          - { runner: ubuntu-24.04,    python: "3.14", os: Linux,   pytest_args: "" }
+          - { runner: macos-15,        python: "3.11", os: macOS,   pytest_args: '-m "not linux_only and not full_install"' }
+          - { runner: macos-15,        python: "3.14", os: macOS,   pytest_args: '-m "not linux_only and not full_install"' }
+          - { runner: windows-2025,    python: "3.11", os: Windows, pytest_args: '-m "not linux_only and not full_install"' }
+          - { runner: windows-2025,    python: "3.14", os: Windows, pytest_args: '-m "not linux_only and not full_install"' }
+          - { runner: ubuntu-24.04-arm, python: "3.11", os: Linux,  pytest_args: "" }
+
+    steps:
+      # 1 ── 取源码（**钉版本**）
+      - uses: actions/checkout@v7
+
+      # 2 ── Python（版本**钉死**到矩阵档位）
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      # 3 ── uv（**钉版本**；与既有 publish.yml 一致）
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: true
+
+      # 3.5 ── **建 venv**（必做：`uv pip install` 在无活动虚拟环境时报
+      #      `error: No virtual environment found` 并以退出码 2 失败 ⇒
+      #      无此步则安装步骤在 7/7 作业上直接失败）
+      # ⚠️ 命令串里**只出现 venv 目录 `.venv`** ⇒ 三个平台逐字相同 ⇒
+      #    MUST NOT 出现平台专属的解释器子路径（POSIX 的 bin/ 布局 /
+      #    Windows 的 Scripts\ 布局）—— 否则 windows-2025 的 2 个作业
+      #    每一条命令路径失效 ⇒ 必红（违反 PR-4）。
+      - name: Create virtualenv
+        run: uv venv --python ${{ matrix.python }}
+
+      # 4 ── 开发期依赖组（pytest + packaging）—— 不进发行包、不进 Requires-Dist
+      - name: Install dev dependency group
+        run: uv pip install --python .venv --group dev
+
+      # 5 ── 发行形态（`src/` 布局 ⇒ 可编辑安装）
+      - name: Install package
+        run: uv pip install --python .venv -e .
+
+      # 5.5 ── 四个 extras 的依赖（**全部 7 个作业**都装 · FR-015 ⑤）
+      #       只装 Python 包、不装浏览器二进制（`playwright install chromium`
+      #       由用户显式执行 · 属安装期动作）。
+      #       **不是可选项**：G21 的递归取证、G23 的许可证据、G3 的 12 名白名单
+      #       都以「传递依赖已安装」为前提 ⇒ 不装则非 Linux 作业的 G21 **必红**。
+      - name: Install extras
+        run: uv pip install --python .venv -e ".[pydantic,checkpoint,otel,png]"
+
+      # 6 ── **全量测试套件**（含架构门禁的测试 G1–G20 ⇒ 最低档 3.11 是
+      #      「typing 构件上限 = 3.11」的**主判定** · FR-015 ①）
+      #      既有门禁 G9（typing 构件上限静态断言）**随本步在 7/7 作业执行**
+      #      （FR-017 · 只接线 · 判据零改动）。
+      - name: Run test suite
+        run: uv run --no-project --python .venv python -m pytest tests/ -ra ${{ matrix.pytest_args }}
+
+      # 7 ── **逐条**调用门禁（退出码即判定 · FR-016）
+      #      **本步 MUST NOT 含 G22 / G27 / G28**（它们在步骤 9 · Linux only）
+      #      ⇒ 否则 Linux 作业上会被跑两遍。
+      #      ⚠️ 调用 MUST 用跨平台写法（`uv run --no-project --python .venv python …`）
+      #         —— `--no-project` ⇒ uv 不解析项目、不同步环境 ⇒ MUST NOT 让它
+      #         把已装的四个 extras 依赖卸掉。
+      - name: Gate G21 (dependency blacklist)
+        run: uv run --no-project --python .venv python harness/scripts/gates/gate_G21_dependencies.py
+      - name: Gate G23 (license whitelist)
+        run: uv run --no-project --python .venv python harness/scripts/gates/gate_G23_licenses.py
+      - name: Gate G24 (config layer)
+        run: uv run --no-project --python .venv python harness/scripts/gates/gate_G24_config_layer.py
+      - name: Gate G25 (import graph)
+        run: uv run --no-project --python .venv python harness/scripts/gates/gate_G25_import_graph.py
+      - name: Gate G26 (network static)
+        run: uv run --no-project --python .venv python harness/scripts/gates/gate_G26_network_static.py
+      - name: Gate G29 (contract carrier)
+        run: uv run --no-project --python .venv python harness/scripts/gates/gate_G29_contract_carrier.py
+      - name: Gate G30 (attribution + brand assets)
+        run: uv run --no-project --python .venv python harness/scripts/gates/gate_G30_attribution.py
+
+      # 8 ── 兼容矩阵 / API 快照的**接线**：G8 / G16 / G19 已在第 6 步跑过；
+      #      本步只补「终版 COMPAT.md」的**分层报告**（**非阻断** · 裁定 13）。
+      #      `COMPAT.md` 不存在 ⇒ 输出「未落地」且退出码 0；
+      #      存在 ⇒ **自动转为严格比对**（有不一致才非 0 · MUST NOT 仅因
+      #      「文件存在」而非 0 ⇒ 否则后续 feature 建出 COMPAT.md 后该步骤
+      #      **永久红** · 违宪 v1.6.0 红线）。
+      - name: Compat matrix layered report
+        run: uv run --no-project --python .venv python harness/scripts/gates/gate_G29_contract_carrier.py --check-compat
+
+      # 发行产物纯度**先行检查**（SC-005 · 宪法「发布门禁」第 1 条）
+      # —— `publish.yml` **零改动**（发布流水线的最终拦截归 B24F1）。
+      - name: Verify artifact purity
+        run: |
+          uv build
+          uv run --no-project --python .venv python harness/scripts/check_dist_purity.py dist/
+
+      # 9 ── **Linux only**：G22（隔离 venv）· G27 的独立入口 · G28（断网）
+      #      非 Linux 作业 MUST NOT 跑这三条（契约 ci-matrix §1 的「子集」定义）。
+      #      ⚠️ G27 的**平台分工**：**独立入口** = Linux only（本步）；
+      #         **pytest 夹具断言** = 全平台（在第 6 步的测试套件内 ⇒
+      #         MUST NOT 打 `@pytest.mark.linux_only`）⇒ 二者**不是**同一条命令。
+      - name: Gate G22 (isolated environment)
+        if: matrix.os == 'Linux'
+        run: uv run --no-project --python .venv python harness/scripts/gates/gate_G22_isolated_env.py
+      - name: Gate G27 (zero egress, standalone entry)
+        if: matrix.os == 'Linux'
+        run: uv run --no-project --python .venv python harness/scripts/gates/gate_G27_zero_egress.py
+      - name: Gate G28 (offline equivalence)
+        if: matrix.os == 'Linux'
+        # `--net` ⇒ 新建网络命名空间 ⇒ 没有任何网络接口（含回环）；
+        # `--map-root-user` ⇒ **无特权**（免 CAP_SYS_ADMIN）。
+        # ⚠️ 断网排除清单由 **G28 脚本自己**读 `tests/gates/data/offline_exclusions.txt`
+        #    并逐条转成 `--deselect`（**单文件 · 唯一权威**）⇒ MUST NOT 照抄
+        #    「不带排除清单的裸 pytest 命令」（那会在被排除的用例上**假红**）。
+        run: unshare --net --map-root-user uv run --no-project --python .venv python harness/scripts/gates/gate_G28_offline_equiv.py

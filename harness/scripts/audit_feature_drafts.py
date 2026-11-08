@@ -1,3 +1,4 @@
+# Copyright (c) 2026 杨家成 · MIT License · https://github.com/yangjiacheng1996/freegraph
 """harness/features 提示词初稿的**质量审计器**。
 
 为什么需要它

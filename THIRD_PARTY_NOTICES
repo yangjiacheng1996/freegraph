@@ -28,22 +28,49 @@
 |---|---|---|---|---|
 | （暂无条目） | — | — | — | — |
 
-**基础安装零第三方运行时依赖**（`dependencies = []`）——
+**基础安装的依赖闭包仍为空集**（`dependencies = []`）——
 `pip install freegraph` 后 site-packages 里只有 freegraph 自己。
+⇒ **必装**运行时依赖 = **无** ⇒ 上表**无数据行**（原则 X 的登记义务是登记
+**实际存在**的依赖；登记一个并未必装的包同样是登记不准）。
 
+> **2026-11-08 修订（B3F1 · extras 划分落地）· 四个可选 extra 的依赖登记**：
+>
+> B3F1 引入**四个可选 extra**（**默认关闭** · 不装即不可用 · **不是必装依赖**
+> ⇒ **MUST NOT** 登记进上表）⇒ 其依赖在此以**说明文字**登记，并附**逐包实测**
+> 的许可证标识 —— **全部**落在宪法原则 IX 的白名单 {MIT, Apache-2.0, BSD-2/3, PSF}
+> 内（SPDX 表达式**逐叶子**判定）：
+>
+> * **`[pydantic]`**（结构化状态 schema 支持）：`pydantic`（`MIT`）·
+>   `pydantic-core`（`MIT`）· `annotated-types`（`MIT`）· `typing-inspection`（`MIT`）·
+>   `typing-extensions`（`PSF-2.0`）。
+> * **`[checkpoint]`**（checkpoint 序列化）：`ormsgpack`（`Apache-2.0 OR MIT`
+>   —— **两叶皆白名单**）。
+> * **`[otel]`**（可观测性内核 · OTel API + SDK）：`opentelemetry-api`（`Apache-2.0`）·
+>   `opentelemetry-sdk`（`Apache-2.0`）· `opentelemetry-semantic-conventions`
+>   （`Apache-2.0`）· `typing-extensions`（`PSF-2.0`）。
+> * **`[png]`**（本地 PNG 渲染 · **默认关闭**）：`playwright`（`Apache-2.0`）·
+>   `greenlet`（`MIT AND PSF-2.0` —— **两叶皆白名单**）· `pyee`（`MIT`）·
+>   `typing-extensions`（`PSF-2.0`）。**浏览器二进制需用户显式执行
+>   `playwright install chromium`**（属**安装期**动作，不是运行期依赖）。
+>
+> ⇒ **基础安装的零第三方依赖承诺不受影响**（四个 extra **默认关闭**）。
+> ⇒ 门禁：**G23**（4 级证据链 · 5 个精确 SPDX id · fail-on-missing）逐包判定；
+> 既有 **G3** 断言 extras 闭包 ⊆ **12 名**白名单（**判据句零改动**）。
+> ⇒ **`[otel]` MUST NOT** 含 `opentelemetry-exporter-otlp`——其闭包含
+> `certifi`（**MPL-2.0**，不在白名单）⇒ exporter 归 **B21F1**。
+>
 > **2026-11-05 修订（宪法 v1.2.0）**：本节原登记 `typing-extensions`（`>=4.7.0`），
-> 现已**从基础安装剥离**，故登记项清空。
+> 现已**从基础安装剥离**，故**必装**登记项清空。
 >
 > **剥离理由**：该依赖当初被列为必装，理由是「`typing.Self` 在 3.10 起可用」——
 > 但 **`typing.Self` 是 3.11 才进入标准库的**（实测 Python 3.10.21 无 `Self`），
 > 那个前提**不成立**。实测 3.11 / 3.12 的标准库足以支撑 v1 全部 31 个 Phase 的
 > typing 需求（31 份 Phase 提示词用到的 typing 构造只有 `Annotated` / `Protocol` /
 > `TypedDict` / `runtime_checkable` / `get_type_hints`，**全部是标准库成员**），
-> 故最低 Python 版本抬至 **3.11**、依赖改为**零**。
+> 故最低 Python 版本抬至 **3.11**、**必装**依赖改为**零**。
 >
-> **本表自此为「零依赖」登记**：若将来引入任何**必装**运行时依赖，MUST 当场在此登记；
-> **可选** extra（`pydantic` / `ormsgpack` / `opentelemetry-*` 等，由 F3P1 引入）
-> 同样登记，并须通过宪法原则 IX 的许可证白名单校验。
+> **本表自此为「必装依赖 = 无」登记**：若将来引入任何**必装**运行时依赖，MUST 当场在此登记；
+> **可选** extra 的依赖同样登记（见上），并须通过宪法原则 IX 的许可证白名单校验。
 
 **依赖 ≠ 引入代码**：依赖是我们**不复制、不修改**其源码地使用它，
 故它只出现在本节（依赖登记），不出现在 §1（代码归属）。
