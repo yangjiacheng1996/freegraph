@@ -97,7 +97,17 @@ jobs:
       #      既有门禁 G9（typing 构件上限静态断言）**随本步在 7/7 作业执行**
       #      （FR-017 · 只接线 · 判据零改动）。
       - name: Run test suite
-        run: uv run --no-project --python .venv python -m pytest tests/ -ra ${{ matrix.pytest_args }}
+        # `--junitxml` ⇒ 产出一份**机器可读**的测试报告（存成 artifact）⇒
+        # 失败时**不必**翻日志即可定位到具体的失败用例（诊断通道）。
+        run: uv run --no-project --python .venv python -m pytest tests/ -ra ${{ matrix.pytest_args }} --junitxml=pytest-report.xml
+      - name: Upload pytest report
+        # `if: always()` ⇒ **失败时也上传** ⇒ 失败报告永远拿得到。
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-report-${{ matrix.runner }}-${{ matrix.python }}
+          path: pytest-report.xml
+          if-no-files-found: ignore
 
       # 7 ── **逐条**调用门禁（退出码即判定 · FR-016）
       #      **本步 MUST NOT 含 G22 / G27 / G28**（它们在步骤 9 · Linux only）
