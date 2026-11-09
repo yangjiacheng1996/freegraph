@@ -19,7 +19,7 @@ harness/verification/
 - **`manual-verification.md` 必落** —— 宪法「质量门禁 5」与原则 V 要求**每个 feature** 都有
   人工验证记录 ⇒ **无一例外**。
 - **`acceptance.py` 可选** —— 只在该 feature 有**可独立运行**的验收脚本时才落
-  （如 `B1F1` / `B2F1` / `B2F2` / `B4F1`）；**无此类脚本的 feature 不必强行补**
+  （如 `B1F1` / `B2F1` / `B2F2` / `B4F1` / `B5F1`）；**无此类脚本的 feature 不必强行补**
   （如 `B3F1` —— 其判据以 `pytest` 断言 + `manual-verification.md` 承载）。
   ⇒ 判定某 feature 是否需要 `acceptance.py` 的依据 = 「该 feature 的判据能否脱离
   `pytest` 单独跑成一段脚本」，**不是**「目录里必须凑齐两个文件」。
@@ -27,6 +27,9 @@ harness/verification/
   > ⇒ 人工验收环节发起者要求「**一条命令跑完全部验收**」⇒ **补落** `acceptance.py`
   > （89 条断言 · 单文件 · 零第三方依赖）⇒ 本条的判定依据对 B4F1 **成立**
   > （判据是纯计算 · 零依赖）。
+  > **📌 B5F1 的追加（2026-11-09 · 同一依据）**：B5F1 的判据（通道语义 · 映射 ·
+  > 纯净性 · 冻结面审计）**全部是纯计算 · 零依赖** ⇒ **落** `acceptance.py`
+  > （**149 条断言** · 单文件 · 零第三方依赖 · 退出码 **0 / 1 / 2** 三态）。
 - **一个 feature 一个目录** —— 同一 feature 若需补记（如「后续 feature 注意事项」），
   追加到该文件相应小节，**不另起文件**。
 
@@ -82,6 +85,7 @@ python3 harness/verification/<feature>/acceptance.py --require-installed # 要�
 | **B2F2** | [B2F2/manual-verification.md](B2F2/manual-verification.md) | [B2F2/acceptance.py](B2F2/acceptance.py) | ✅ **已回填实测输出**（公开 API 门面 7 符号 + API 签名快照 + 顶层包惰性）—— 76 条断言全绿；隔离 venv（CPython **3.11.16**）实测通过，3.13 / 3.14 档**未执行**，已记入该记录的 §5 遗留问题 |
 | **B3F1** | [B3F1/manual-verification.md](B3F1/manual-verification.md) | （无 —— 判据以 `pytest` 断言 + 门禁脚本承载） | ✅ **项目脚手架 + extras 划分 + CI 门禁** —— **10 条新门禁 G21–G30**（**逐条**退出码 0）+ **8 条强制反向用例**全绿 + 7 作业 CI 矩阵（**7/7 作业全绿** · 含 Windows / macOS / arm64）；交付时全量 **402 passed / 4 skipped**（3.11 / 3.14 两档）；**T049 / T057 两条发起者追认均已作出**（§3.6 / §5.1）；⚠️ 遗留 #5「禁止色值清单待取证」· #6「自有品牌资产白名单待登记」**仍未关闭** |
 | **B4F1** | [B4F1/manual-verification.md](B4F1/manual-verification.md) | [B4F1/acceptance.py](B4F1/acceptance.py) | ✅ **已回填实测输出**（状态 schema 解析 + 归约器提取 · 二元性判定表逐条比对）—— **pytest 90 条新断言全绿**（CPython **3.11.16** / **3.14.7** 两档）+ **验收脚本 89 条断言全绿**；⚠️ **T053 发起者追认（plan 登记项 R-1）待办 ⇒ 阻断合入**，详见该记录 §4.3 |
+| **B5F1** | [B5F1/manual-verification.md](B5F1/manual-verification.md) | [B5F1/acceptance.py](B5F1/acceptance.py) | ✅ **已回填实测输出**（通道抽象 + 三类通道 · 契约守卫逐条比对）—— **pytest 315 条新断言全绿**（CPython **3.11.16**）+ **验收脚本 149 条断言全绿**（**一条命令**跑完 A1–A3 + 全部 SC + 覆盖率取证 + 10 条门禁 · 退出码 0 / 1 / 2 三态自测通过）+ **覆盖率行 / 分支 100%**（`channel.py` / `mapping.py` 全文）；✅ **T042 发起者追认已作出**（plan 登记项 R-1 · **2026-11-09**）⇒ 执行闸口 **A5 通过** · **可合入**，详见该记录 §4.3 |
 
 ## 相关
 
