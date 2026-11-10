@@ -498,6 +498,48 @@ import OK
 
 ⇒ **V1–V12 全绿** + **V13（一键验收入口）全绿**。
 
+### 2.15 · ★ **CI 实跑取证**（run `42741813029` · 2026-11-10 · **SC-014 的 CI 侧证据**）
+
+**run**：`https://github.com/yangjiacheng1996/freegraph/actions/runs/42741813029`
+· `head_sha = de79bd6` · `status = completed` · **`conclusion = success`** · **7/7 作业全绿**。
+
+**逐作业的机器可读结论**（取自 GitHub REST API 的 `jobs` 端点）：
+
+| 作业 | 总体 | **步骤 5.6**（`Install differential group`） | `Run test suite` | `Gate G28`（断网等价性） |
+|---|---|---|---|---|
+| **gates (ubuntu-24.04, 3.11)** | ✅ success | ✅ **success** | ✅ success | ✅ success |
+| **gates (ubuntu-24.04, 3.14)** | ✅ success | ✅ **success** | ✅ success | ✅ success |
+| **gates (ubuntu-24.04-arm, 3.11)** | ✅ success | ⏭ skipped（未装该组） | ✅ success | ✅ success |
+| **gates (macos-15, 3.11)** | ✅ success | ⏭ skipped（未装该组） | ✅ success | ⏭ skipped（非 Linux） |
+| **gates (macos-15, 3.14)** | ✅ success | ⏭ skipped（未装该组） | ✅ success | ⏭ skipped（非 Linux） |
+| **gates (windows-2025, 3.11)** | ✅ success | ⏭ skipped（未装该组） | ✅ success | ⏭ skipped（非 Linux） |
+| **gates (windows-2025, 3.14)** | ✅ success | ⏭ skipped（未装该组） | ✅ success | ⏭ skipped（非 Linux） |
+
+⇒ **SC-014 成立**（差分夹具**真实执行**）—— **推导链**（**每一步都有机器可读信号**）：
+
+1. **步骤 5.6 = success**（ubuntu-24.04 的 **3.11 / 3.14** 两档）⇒ 该作业的 venv 里
+   **上游已安装** ⇒ `pytest.importorskip("langgraph")` **不 skip** ⇒
+   **依赖上游的 3 条差分用例真实执行**（其余 9 条不依赖上游 ⇒ 恒执行）⇒
+   该段 **12 条全部执行**（**skipped == 0**）；
+2. **`Run test suite` = success** ⇒ 该段**全部通过**（不是 error / 不是 skip）；
+3. ⇒ **「真实执行」次数 ≥ 1**（实际 = **2 个作业 × 12 条**）⇒ **SC-014 可达且已达成**。
+
+⇒ **「零新增 job 名」的旁证**：7 个作业名与 `ci-matrix` §4.1 的 **7 个 required check 名**
+**逐字一致**（`gates (<runner>, <Python>)`）⇒ **分支保护零变更**。
+
+⇒ **G28（断网等价性）在 3 个 Linux 档全绿** ⇒ **差分用例在断网下真实执行且通过**
+（T035 的实测项：``langgraph`` 在断网下**可 import 且可跑**）⇒ **MUST NOT** 纳入
+G28 的可机读排除清单（`tests/gates/data/offline_exclusions.txt` **零改动**）。
+
+⇒ **附带结论（SC-009 的多平台面）**：其余 **5 个作业未装** `differential` 组 ⇒
+该段差分用例**被跳过**而**套件仍全绿** ⇒ 「**skip ≠ fail**」在
+**Linux arm64 / macOS ×2 / Windows ×2** 五个平台上**由 CI 实证**（此前只有本地隔离 venv 一处）。
+
+⚠️ **未逐条粘贴的部分**（**不伪造**）：该 run 的 **`pytest-report-*.xml`**（junitxml artifact，
+共 7 份）与**作业日志**的**逐段计数**（`tests/differential` 段的 `passed` / `skipped` 明细）
+**需登录 GitHub 才能下载** ⇒ 本机**未取到** ⇒ 本节只登记**上表的机器可读结论**
+（作业 / 步骤级 `conclusion`）**与由它推出的结论** ⇒ 逐段明细则**待人工补录**。
+
 ---
 
 ## 3. 与上游的逐条对照
@@ -568,10 +610,10 @@ local_read({}, ch, {}, Task(), ["a"], fresh=True)
 
 | # | 未实跑项 | 原因 | 承接方 | 处置 |
 |---|---|---|---|---|
-| **1** | **macOS 3.11 / 3.14 两档**的 `langgraph==1.2.11` 安装与可导入性 | 本机为 **Linux x86_64** ⇒ **无法实跑** | **CI**（macOS 作业） | 该档**不装** `differential` 组 ⇒ 差分用例 **skip**（**非失败**）⇒ **MUST NOT** 静默不跑；CI 实测通过后 MUST 补装 |
+| **1** | **macOS 3.11 / 3.14 两档**的 `langgraph==1.2.11` 安装与可导入性 | 本机为 **Linux x86_64** ⇒ **无法实跑** | **CI**（macOS 作业） | 该档**不装** `differential` 组 ⇒ 差分用例 **skip**（**非失败**）⇒ **MUST NOT** 静默不跑；CI 实测通过后 MUST 补装。⚠️ **仍开放**：CI 那两档**未装**该组 ⇒ **未**测到「能不能装」⇒ 若要补装需发起者另行拍板 |
 | **2** | **Windows 3.11 / 3.14 两档**同上 | 同上 | **CI**（Windows 作业） | 同上 |
 | **3** | **Linux arm64 3.11 档**同上 | 本机为 **x86_64** ⇒ **无法实跑** | **CI**（arm64 作业） | 同上 |
-| **4** | **CI 的步骤 5.6 的实际执行日志**（`tests/differential` 段 `passed ≥ 1` 且 `skipped == 0`） | **CI 未在本会话运行** ⇒ 该证据**不存在** ⇒ **回填即伪造** | **CI**（下一次推送后） | **待 CI 跑过后**回填 §2.13 与本表 ⇒ 在此之前 **SC-014 的 CI 侧证据缺失**（本地已用 §2.5 / §2.13 的等价实测顶替） |
+| **4** | ~~**CI 的步骤 5.6 的实际执行日志**~~ | ✅ **已闭合（2026-11-10 · CI run `42741813029`）** ⇒ 见 **§2.15** | —— | **已闭合** ⇒ 该段由「**未实测**」改为「**CI 已验证**」（§2.15） |
 | **5** | **G28 的网络命名空间隔离层**（本机 `unshare --net --map-root-user` 不可用 ⇒ 命名空间由外层施加） | **平台性限制**（容器 **AppArmor**）⇒ **非本 feature 的缺陷** | **CI**（Linux 作业） | 已实测**脚本本体**（`[G28] PASS` · `799 passed, 3 skipped, 3 deselected`）⇒ 隔离层归 CI |
 | **6** | **「真实模型一轮」**（宪法质量门禁 5） | 本 feature **无图可跑** ⇒ **物理不可达成** | **B7F3 / B25F1** | **登记项 R-1** ⇒ 见 §6 |
 | **7** | **「fake 模型跑通验收基线的一轮」**（宪法质量门禁 4） | 同上 | **B7F2 / B7F3** | **登记项 R-1** ⇒ 见 §6 |
@@ -636,7 +678,7 @@ local_read({}, ch, {}, Task(), ["a"], fresh=True)
 | SC-011 | 冻结面零变更（14 / 18 / 7 · 层注册表 · 门禁编号 30） | T010 / T030 / T034 / T040 | §2.8 / §2.10 | ✅ |
 | SC-012 | 读取入口的**实现点数 == 1** | T028 / T029 | `test_the_state_reading_entry_points_have_exactly_one_implementation` | ✅ |
 | SC-013 | 差分覆盖「有归约器 + 无归约器 + 空 key」 | T009 / T018 / T020 | §2.5（**空 key** 在入参与输出状态里**均出现**） | ✅ |
-| SC-014 | 差分夹具在 CI 里**真实执行** | T035 / T036 / T038 | ⚠️ **CI 侧证据待 CI 跑过**（§4 #4）⇒ 本地等价实测（§2.5 / §2.13） | ⚠️ **待 CI** |
+| SC-014 | 差分夹具在 CI 里**真实执行** | T035 / T036 / T038 | §2.15（run `42741813029` · **7/7 作业全绿** · 步骤 5.6 在 **2 档 = success** ⇒ 该段 **12 条真实执行**） | ✅ |
 | SC-015 | C4 挂载点 `landed` · C8 **不变** | T014 / T034 / T048 | §2.2 | ✅ |
 | SC-016 | 零出站 / 零环境变量（子进程三断言） | T027 | §2.4 / §2.8（G27） | ✅ |
 | SC-017 | 节点**纯本地**（零网络） | T009 | **人工审查**（§5.4） | ✅ |
