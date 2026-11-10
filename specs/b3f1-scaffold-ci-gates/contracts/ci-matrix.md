@@ -96,7 +96,8 @@
 | 4 | `uv pip install --python .venv --group dev` | 装**开发期依赖组**（`pytest` + `packaging` · PEP 735）—— **不进发行包**、**不进 `Requires-Dist`** ⇒ 基础闭包仍为空集（G3 不受影响）。**显式 `--python .venv`**（**跨平台** · 不依赖隐式环境变量 ⇒ 后续 step 漏传 env 也不会跑偏） |
 | 5 | `uv pip install --python .venv -e .` | 装**发行形态**（`src/` 布局 ⇒ 可编辑安装） |
 | 5.5 | `uv pip install --python .venv "pydantic>=2.0" "ormsgpack>=1.0" "opentelemetry-api>=1.20" "opentelemetry-sdk>=1.20" "playwright>=1.40"` | **v2.0 extras 的「预验证」依赖**（**不是** v1.0 的依赖 · 裁定 26 · 宪法 v1.7.0）—— 只装 Python 包、不装浏览器二进制。**全部 7 个作业 MUST 执行** ⇒ G21 / G23 对 `contracts/extras-v2.toml` 的递归取证可完成（architecture-gates G21 / G23） |
-| 6 | `uv run --no-project --python .venv python -m pytest tests/ -ra ${{ matrix.pytest_args }}`（环境变量 `FREEGRAPH_TEST_INSTALLED=1` **写在 job 的 `env:` 段**） | **全量测试套件**（平台专属用例按标记排除） |
+| 5.6 | `uv pip install --python .venv --group differential` | **差分夹具的依赖组**（PEP 735 · `langgraph` · **不进发行包**、**不进 `Requires-Dist`**）—— 使差分夹具在 CI 中**真实执行**（非 skip）⇒ 避免「永远 skip ⇒ 假绿」。<br>⚠️ **作业范围（2026-11-09 · B5F2 契约修订 · R-2）**：**至少 1 个作业 MUST 执行**（**实测通过**的那档 · Linux 全量档优先）· 其余作业 **MAY** 执行 ⇒ 若某档装不上上游（**3.14 / Windows / arm64** · **未实测**），该档**不装**该组并**登记** ⇒ 该档的差分用例 **skip**（**非失败**）· **MUST NOT** 静默不跑。<br>⚠️ **实测结论回填（2026-11-10 · B5F2 实现期 · T035）**：**Linux x86_64 的 3.11 与 3.14 两档实测通过**（`langgraph==1.2.11` **可安装 · 可导入** · 差分用例 **12 条全绿**）⇒ 这两档**装**该组；**macOS / Windows / arm64 四档未实测**（本机无该平台）⇒ **不装**并**登记**（`harness/verification/B5F2/manual-verification.md` §4）。<br>⚠️ **位置约束（2026-11-09 · B5F2 契约修订 · R-2）**：本步 MUST 位于**步骤 6（全量测试套件）之前** —— 否则差分用例在步骤 6 执行时**尚未装上游** ⇒ **永远 skip** ⇒ 差分证据退化为「主张」。<br>⚠️ **步骤 5.5 一字不动**（保持「只做 v2.0 extras 预验证」的**单一语义**）· §1 的 **7 个作业形状**与 §4.1 的 **7 个 required check 名零变更**（⇒ **分支保护零变更**） |
+| 6 | `uv run --no-project --python .venv python -m pytest tests/ -ra ${{ matrix.pytest_args }}`（环境变量 `FREEGRAPH_TEST_INSTALLED=1` **写在 job 的 `env:` 段**） | **全量测试套件**（平台专属用例按标记排除）· ⚠️ 本步 MUST 在**步骤 5.6 之后**执行（否则差分夹具永远 skip） |
 | 7 | **逐条**调用门禁：`uv run --no-project --python .venv python harness/scripts/gates/gate_GNN_*.py`（**G21 / G23 追加 `--project specs/b3f1-scaffold-ci-gates/contracts/extras-v2.toml`** · 裁定 26 ⇒ 判据对象 = v2.0 清单） | FR-016 · 退出码即判定 · **本步 MUST NOT 含 G22 / G27 / G28**（它们在步骤 9；**2026-11-08 分析轮订正 · M4** —— 否则 Linux 作业上 G22 / G28 会被**跑两遍**） |
 | 8 | 兼容矩阵 / 快照的**接线**（G8 · G16 · G19 已在第 6 步）+ 「`COMPAT.md` 未落地」的**非阻断**报告 | 裁定 13 · research D-14 |
 | 9 | **Linux only**：G22（隔离 venv）· G28（断网）· **G27 的独立可执行入口** | 见 §3 · **MUST NOT** 与步骤 7 重复 |
@@ -175,6 +176,16 @@
 > **`FREEGRAPH_TEST_INSTALLED=1`**：仓库既有的 `tests/contracts/conftest.py` 与
 > `tests/facade/conftest.py` **已为此预留开关**（其 docstring 明写「供 **B3F1** 的 CI
 > 『先 `pip install .` 再跑 pytest』用」）⇒ **沿用，零改动**。
+
+### 2.1 修订记录
+
+| 日期 | 修订 | 触发 | 冻结面影响 |
+|---|---|---|---|
+| **2026-11-09** | **§2 步骤表新增「步骤 5.6」一行** —— `uv pip install --python .venv --group differential`（PEP 735 依赖组 `differential` · **不进发行包** · **不进 `Requires-Dist`**）⇒ 差分夹具在 CI 中**真实执行**（非 skip）⇒ 避免「永远 skip ⇒ 假绿」。<br>⚠️ **位置约束**：该步 MUST 位于**步骤 6（全量测试套件）之前** —— 否则差分用例在步骤 6 执行时**尚未装上游** ⇒ **永远 skip** ⇒ 差分证据退化为「主张」。<br>⚠️ **作业范围**：**至少 1 个作业 MUST 执行**（实测通过的那档）· 其余 **MAY** 执行 ⇒ 装不上的档（3.14 / Windows / arm64）**不装**并登记 ⇒ 该档差分用例 **skip**（非失败）。 | **B5F2**（M1）· 登记项 **R-2**（`ci-matrix` 契约的修订需求 · 方案 **α′**）· spec **裁定 25 / 裁定 30** | **零影响** —— §1 的 **7 个作业形状一字未动** · §4.1 的 **7 个 required check 名一字未动** ⇒ **分支保护零变更**；**步骤 5.5 一字未动**（保持「只做 v2.0 extras 预验证」的**单一语义**）⇒ 本次修订面 = **步骤表 1 行 + 本记录 1 行**。 |
+
+> **⚠️ 修订的追认要求**：本修订属**冻结面**（矩阵的形状与分层即实现契约）的**最小修订** ⇒ MUST 由
+> **发起者**追认（落点：`specs/b5f2-sparse-state-read/tasks.md` 的 **T038** · 追认文字 MUST 落在
+> `harness/verification/B5F2/manual-verification.md`）· MUST **NOT** 代签。
 
 ---
 

@@ -2,7 +2,7 @@
 
 """freegraph 的 **L2 执行内核层** —— 状态 schema 解析 · 通道实现。
 
-本包承载两个 feature 的交付物：
+本包承载三个 feature 的交付物：
 
 **B4F1（状态 schema 解析）**
 
@@ -30,6 +30,14 @@
   **显式失败**信号（结构化字段 ``key`` / ``received_count`` /
   ``expected_count``）。
 
+**B5F2（状态读取）**
+
+* :func:`freegraph.runtime.read_channels` —— **稀疏读**：只返回「**当前有值**」
+  的通道（**C4** 的载荷 · 无值通道的 key **MUST NOT** 出现）；
+* :func:`freegraph.runtime.local_read` —— 「**当前值 + 本任务本次写入**」的
+  视图（``fresh=True`` ⇒ C8 的读取原语）· **零污染**（通道的**绑定与可用性
+  判定**读取前后**不变**）。
+
 ⚠️ **本包是 L2 内部 API，不是公开门面**——用户**可以** import，但
 freegraph **不承诺**其稳定性。由 **B5F2**（读取层）· **B6F1**
 （``StateGraph`` 构建器）· **B7F1**（调度层）消费。
@@ -54,6 +62,7 @@ from __future__ import annotations
 from .channel import BinaryOperatorAggregate, Channel, EphemeralValue, LastValue
 from .errors import EmptyChannelError, InvalidChannelUpdateError, InvalidSchemaError
 from .mapping import build_channel, build_channels
+from .read import local_read, read_channels
 from .schema import ChannelSpec, SchemaSpec, parse_state_schema
 
 __all__ = [
@@ -68,5 +77,7 @@ __all__ = [
     "SchemaSpec",
     "build_channel",
     "build_channels",
+    "local_read",
     "parse_state_schema",
+    "read_channels",
 ]

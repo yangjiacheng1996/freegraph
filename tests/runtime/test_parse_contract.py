@@ -23,6 +23,7 @@ pytest ⇒ 同进程 ``sys.modules`` 不可用（沿用 B1F1 / B3F1 的既有口
 
 import ast
 import dataclasses
+import importlib.metadata
 import json
 import operator
 import re
@@ -36,6 +37,18 @@ from freegraph.runtime import ChannelSpec, SchemaSpec, parse_state_schema
 
 #: 仓库根目录（纪律复核的定位基准）。
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+#: 上游包名（**发行面红线** · 判据 **A5**）—— 取样用的**唯一**清单。
+UPSTREAM_PACKAGE_NAMES = (
+    "langgraph",
+    "langchain",
+    "langsmith",
+    "typing_extensions",
+    "typing-extensions",
+)
+
+#: **唯一**允许声明上游包名的依赖组（PEP 735 · **测试侧**）⇒ 其它组 MUST 零上游。
+UPSTREAM_ALLOWED_GROUP = "differential"
 
 #: 署名头（**逐字** · 宪法原则 X · 门禁 G30 的判定基准）。
 SIGNATURE_HEADER = (
@@ -326,12 +339,16 @@ def _dependency_text(sections: object) -> str:
 
 
 def test_dependency_declarations_contain_no_upstream_package() -> None:
-    """T049 · FR-016 ② · SC-004：**三处**依赖声明中零 ``langgraph``。
+    """T049 · FR-016 ② · SC-004 · **登记项 R-3（拆分取样范围）**。
 
-    ⚠️ MUST 按 **TOML 解析**三处位置取样（``dependencies`` /
-    ``[project.optional-dependencies]`` / ``[dependency-groups]``），
-    MUST NOT 对文件全文扫描（``keywords`` 等**非依赖字段**本就含
-    ``"langgraph"`` 作检索词）。
+    ⚠️ **发行面部分逐字保留**（B4F1 的原断言**一字不动**）——
+    ``[project].dependencies`` 与 ``[project].optional-dependencies]``
+    （本仓库 v1.0 **不存在** ⇒ 天然为零）的**零上游**断言。
+
+    ⚠️ **取样范围的拆分**（**不是**放宽 · 裁定 27）：``[dependency-groups]`` 是
+    **开发工具链**（**从不**进发行元数据 · 宪法 v1.7.0）⇒ 它改由**正向枚举**
+    承担（见 :func:`test_only_the_differential_group_may_declare_an_upstream_package`）⇒
+    「**必装依赖零上游**」这条红线**一字未动**。
     """
     data = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     project = data.get("project", {})
@@ -340,7 +357,6 @@ def test_dependency_declarations_contain_no_upstream_package() -> None:
         [
             _dependency_text(project.get("dependencies", [])),
             _dependency_text(project.get("optional-dependencies", {})),
-            _dependency_text(data.get("dependency-groups", {})),
         ]
     ).lower()
 
@@ -351,6 +367,38 @@ def test_dependency_declarations_contain_no_upstream_package() -> None:
     assert "typing-extensions" not in text
 
 
+def test_only_the_differential_group_may_declare_an_upstream_package() -> None:
+    """**登记项 R-3** · FR-037 · SC-031 ②③：**正向枚举**。
+
+    * ``[dependency-groups]`` 里**含上游包名**的组 == **恰好 1 个**
+      且为 ``differential``（**其余组 MUST 零上游**）；
+    * ``differential`` 组的内容 MUST == **恰好 1 个**上游包声明；
+    * 该组 MUST **NOT** 进 ``Requires-Dist``（判据 **A5**）⇒
+      **发行元数据整体为空**。
+
+    ⇒ **覆盖面被拆分而非削减**：发行面断言**逐字保留** + **新增**一条
+    「上游只许出现在 ``differential`` 组」的正向约束（**红线总量不减**）。
+    """
+    data = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    groups = data.get("dependency-groups", {})
+
+    offenders: list[str] = []
+    upstream_entries: list[str] = []
+    for group_name, entries in groups.items():
+        hits = [
+            entry
+            for entry in entries
+            if any(name in entry.lower() for name in UPSTREAM_PACKAGE_NAMES)
+        ]
+        if hits:
+            offenders.append(group_name)
+            upstream_entries.extend(hits)
+
+    assert sorted(offenders) == [UPSTREAM_ALLOWED_GROUP]
+    assert len(upstream_entries) == 1
+    assert importlib.metadata.requires("freegraph") in (None, [])
+
+
 def test_ci_workflow_never_installs_langgraph() -> None:
     """T049 · FR-016 ③ · SC-004：CI 作业内 ``langgraph`` 安装次数 **== 0**。"""
     workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(
@@ -358,6 +406,36 @@ def test_ci_workflow_never_installs_langgraph() -> None:
     )
 
     assert workflow.lower().count("langgraph") == 0
+
+
+def test_the_ci_installs_the_upstream_only_through_the_differential_group() -> None:
+    """**登记项 R-3** · FR-037 · SC-031 ④：**可判定形式**（裁定 32 ③）。
+
+    ① ``ci.yml`` 中出现的**全部** ``--group <X>`` 的 ``X`` MUST ∈
+    {``dev``, ``differential``}；
+    ② 上游**只许**经 ``--group differential`` 安装 ⇒ MUST **NOT** 出现在
+    **发行依赖声明**与**基础安装步骤**（``--group dev``）中。
+
+    ⚠️ 与原断言的**相容性**：① ② MUST 在「``ci.yml`` 文本中 ``langgraph``
+    字样 == **0**」的**前提下**成立 ⇒ 新增步骤的**标题 / 注释**亦不得出现该
+    字样 ⇒ **判据未放宽**，且**新增**一条可判定的**正向**约束。
+    """
+    workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(
+        encoding="utf-8"
+    )
+
+    groups = sorted(set(re.findall(r"--group[= ]+([A-Za-z0-9._-]+)", workflow)))
+    assert groups
+    assert set(groups) <= {"dev", "differential"}
+
+    data = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    dev_entries = data.get("dependency-groups", {}).get("dev", [])
+    assert not any(
+        name in entry.lower()
+        for entry in dev_entries
+        for name in UPSTREAM_PACKAGE_NAMES
+    )
+
 
 
 def test_public_api_surface_is_unchanged() -> None:

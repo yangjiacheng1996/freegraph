@@ -79,6 +79,27 @@ dev = [
     "packaging>=24.2",
 ]
 
+# **差分测试夹具**的依赖组（PEP 735 · **不进发行包**）—— 属 **B5F2**。
+#
+# 用途：让 `tests/differential/` 的差分夹具能**真实执行**（同一份图规格分别在
+# `langgraph` 与 `freegraph` 上跑 ⇒ 比对「节点入参 / 输出状态 / 事件序列」三项投影）。
+#
+# 四条纪律：
+#   1. **不是 extra** ⇒ 不进 `Requires-Dist` ⇒ 发行元数据**整体为空**（宪法 v1.7.0 · G3 / G21）
+#      ⇒ 基础安装闭包仍为空集；
+#   2. **不进发行包** —— hatchling 不把 dependency-groups 写进 wheel/sdist 的元数据
+#      ⇒ 发行产物纯度门禁不受影响；
+#   3. **钉版本** —— `langgraph==1.2.11` 与 `contracts/upstream-parity.md` 的**核实版本**逐字一致
+#      ⇒ 换版本 MUST **重新核实全部行号**（宪法原则 VIII）；
+#   4. **仅测试侧** —— MUST NOT 进 `[project].dependencies` / `[project.optional-dependencies]`
+#      ⇒ 内核路径对上游的导入次数恒为 **0**。
+#
+# ⚠️ **缺席即 skip**（FR-019 · 裁定 11）：未装该组的环境里，差分用例被**标记跳过**
+# ⇒ **不是失败**（CI 的步骤 5.6 装上该组 ⇒ 差分用例**真实执行** ⇒ SC-014 可达）。
+differential = [
+    "langgraph==1.2.11",
+]
+
 [tool.pytest.ini_options]
 # 收集范围**钉死**在 `tests/` ⇒ 裁定 16 的「核心用例 = 全量测试套件」有确定含义
 # （harness/ 下的脚本与门禁**不是**测试用例；tests/ 下的三个目录各自是一层门禁）。

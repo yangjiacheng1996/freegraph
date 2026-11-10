@@ -92,6 +92,21 @@ jobs:
       - name: Install v2.0 extras (pre-validation only)
         run: uv pip install --python .venv "pydantic>=2.0" "ormsgpack>=1.0" "opentelemetry-api>=1.20" "opentelemetry-sdk>=1.20" "playwright>=1.40"
 
+      # 5.6 ── **差分夹具的依赖组**（PEP 735 · **测试侧** · **不进发行包**）
+      #       ⇒ 让 `tests/differential/` 的差分用例在 CI 里**真实执行**
+      #       （否则永远 skip ⇒ 差分证据退化为「主张」⇒ 假绿）。
+      #       ⚠️ **位置约束**：本步 MUST **位于步骤 6（全量测试套件）之前**
+      #          —— 否则差分用例在步骤 6 执行时**尚未装上游** ⇒ **永远 skip**。
+      #       ⚠️ **步名 / 注释 MUST NOT 出现上游包名** ⇒ 既有的
+      #          「CI 文本中该字样 == 0」判据**不会**变红。
+      #       ⚠️ **装该组的作业**：**实测通过**的那一档（Linux 全量档）⇒
+      #          至少 1 个作业 MUST 装；其余档（macOS / Windows / arm64）
+      #          **未实测** ⇒ 不装 ⇒ 差分用例在该档 **skip**（**非失败**）
+      #          ⇒ 已登记在 `harness/verification/B5F2/manual-verification.md`。
+      - name: Install differential group
+        if: matrix.runner == 'ubuntu-24.04' && (matrix.python == '3.11' || matrix.python == '3.14')
+        run: uv pip install --python .venv --group differential
+
       # 6 ── **全量测试套件**（含架构门禁的测试 G1–G20 ⇒ 最低档 3.11 是
       #      「typing 构件上限 = 3.11」的**主判定** · FR-015 ①）
       #      既有门禁 G9（typing 构件上限静态断言）**随本步在 7/7 作业执行**

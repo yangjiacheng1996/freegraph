@@ -39,6 +39,16 @@
   list 形态则是「允许的目标集合」（返回值直接就是目标节点名）。
 - **差分夹具复用**：本 feature 是 C8 回归测试的落点，同时**复用** B5F2 建立的差分
   测试夹具（同一图规格双实现比对）。
+- **夹具接口口径（B5F2 → B8F1 · M1）**：B5F2 交付的夹具**已预留条件边字段**
+  （B5F2 交付时该字段恒空 · 夹具不据此分支）⇒ **本 feature 只需填值即可复用同一夹具**；
+  MUST NOT 重造夹具接口（MUST NOT 使 B5F2 已产出的差分证据作废）。
+  该口径由 B5F2 的 `specs/b5f2-sparse-state-read/spec.md`（FR-015 / 裁定 15）落成。
+- **`local_read` 的调用口径（B5F2 → B8F1 · M1 · FR-031 ② / SC-023）**：
+  **B8F1 MUST 在使用 `local_read` 时显式传 `fresh=True`**（`fresh` 的缺省是 `False`）
+  · MUST **NOT** 依赖缺省 · MUST **NOT** 假设上游的 `managed` 语义
+  （research **DR-3** · 上游 `local_read` 的第四类入参 freegraph **不实现**）。
+  该口径由 B5F2 的 `specs/b5f2-sparse-state-read/spec.md`（FR-031 / 裁定 33 ③）落成
+  · 契约见 `specs/b5f2-sparse-state-read/contracts/read-contract.md` §1.1。
 
 ### 3. 用户场景
 
@@ -104,8 +114,9 @@
 | `END` | 终止标记（`'__end__'`） | **C9** |
 | 路由通道 | `EphemeralValue`，每 super-step 清空 | C7 / C8 |
 
-> **口径提醒**：fresh 读的**读取原语**在 B5F2；本 feature 交付的是「在路由求值这个
-> 具体时机使用它」的语义 + 独立回归测试。
+> **口径提醒**：fresh 读的**读取原语**在 B5F2（`freegraph.runtime.local_read`）；
+> 本 feature 交付的是「在路由求值这个具体时机使用它」的语义 + 独立回归测试。
+> 差分夹具的**接口口径**见 §2「夹具接口口径（B5F2 → B8F1）」。
 
 ### 8. 边界（本 feature 明确不做）
 

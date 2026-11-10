@@ -38,6 +38,12 @@
   1,480 行是全项目最大的 feature，涉及「版本号语义 + 触发判定 + 写入合并」三者的交互。
 - **并发写**语义：同一 super-step 内多个节点写同一通道时，**必须按归约器语义合并**，
   而不是后写覆盖先写——这是「静默破坏」的典型来源。
+- **承接条款（B5F2 → B7F1 · M1）**：B5F2 已交付稀疏状态读取与 **C4 独立回归测试**
+  （断言对象 = 读取原语产出的那个 dict · 用例住在 `tests/runtime/` 下 · 挂载点
+  `tests/contracts/test_contract_regressions.py` 的 `GATE-MOUNT: C4` 已翻成 `landed`）。
+  **本 feature MUST 把该 C4 用例改为断言真实节点收到的入参** —— C4 的契约边界是
+  **节点入参**，只在读取层断言等于把这条防线守在半个位置。
+  该承接条款由 B5F2 的 `specs/b5f2-sparse-state-read/spec.md`（FR-031 / 裁定 18）落成。
 
 ### 3. 用户场景
 
@@ -124,14 +130,16 @@ super-step，从而**独立验收**调度内核。
 - **依赖门禁（阻断，红线）**：无 `langsmith` / `langchain*` / `langgraph*`。
 - **零出站 / 零环境变量**。
 - **ARCH-1**：L2 只依赖 L1；MUST NOT import L3 图定义层。
-- **契约门禁**：C4 回归测试常驻；本 feature 不得破坏 B5F2 建立的稀疏语义。
+- **契约门禁**：C4 回归测试常驻；本 feature 不得破坏 B5F2 建立的稀疏语义；
+  **并 MUST 把该 C4 用例从「读取层口径」推进到「真实节点入参口径」**
+  （B5F2 的承接条款 · 见 §2「承接条款（B5F2 → B7F1）」）。
 - **人工门禁**：`harness/verification/<feature>/manual-verification.md`。
 - **证据门禁**：与 LangGraph 的语义对应须标注源码行号（`_algo.py` / `_loop.py`）。
 
 ### 10. 交付物与后续
 
 - **交付物**：super-step 调度循环、触发判定与版本号机制、写入合并、单元测试 +
-  人工验证记录。
+  人工验证记录、**C4 回归测试推进到真实节点入参**（B5F2 承接条款 · 见 §2）。
 - **后续解锁**：**B9F1**（`Command`）→ **B12F1**（并发与错误传播）→ **B7F3**
   （`invoke` 对外 API）。
 - **风险提示**：本 feature 是全项目**最高风险的单个 feature**（立项书 §7.5 建议预留 +1 天）。

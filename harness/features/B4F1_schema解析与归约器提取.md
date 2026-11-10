@@ -37,6 +37,26 @@
   非二元 callable 被误当作归约器，运行时才炸。
 - **Pydantic schema** 属可选支持（`[pydantic]` extra），本 feature 以 `TypedDict` 为主路径，
   Pydantic 路径若纳入须在 spec 中写明支持到什么程度。
+- **承接条款（B5F2 → B4F1 · M1 · 既有依赖判据的**取样范围拆分**）**：B5F2 交付**差分测试夹具**时引入
+  **第一个上游 dev / test 依赖**（`langgraph` · PEP 735 的 `differential` 依赖组 · **不进** `Requires-Dist`）
+  ⇒ 本 feature 落的两条依赖判据
+  （`tests/runtime/test_parse_contract.py` 的 `test_dependency_declarations_contain_no_upstream_package`
+  与 `test_ci_workflow_never_installs_langgraph`）原把「零上游」的取样范围**覆盖到 `[dependency-groups]`**
+  ⇒ MUST **拆分取样范围**为：① **`[project].dependencies` 零上游**（原断言**逐字保留 · 一字未弱化**）；
+  ② `[project.optional-dependencies]`（本仓库 v1.0 **不存在**）天然为零；
+  ③ `[dependency-groups]` 改**正向枚举** —— 含上游包名的组 == **恰好 1 个**且为 `differential`，
+  且该组 MUST **NOT** 进 `Requires-Dist`；
+  ④ **CI 判据的原文逐字保留**（`ci.yml` 文本中 `langgraph` 字样 == 0）**并新增**一条**正向断言** ——
+  若出现上游安装，则**只许**经 `--group differential`；上游**不得**出现在**发行依赖声明**与
+  **基础安装步骤**中。
+  ⇒ **MUST NOT** 以「删断言 / 放宽断言」的方式消除红灯（**发行面断言一字未弱化** + **新增**等效正向约束
+  ⇒ 覆盖面被**拆分**而非**削减** · **红线总量不减**）。
+  修订由 **B5F2** 的 tasks **T041 / T042** 落地 + 发起者追认（**T043** · 登记项 **R-3**）⇒
+  **本文件只接线 · 逐条最小改动**（宪法 v1.8.0「跨 feature 承接的接线通则」的**只接线**红线）。
+  ⚠️ **定性（B5F2 裁定 27 · 2026-11-09 clarify 第四轮）**：本条 = 「**取样范围 bug 修复** + **发起者追认**」
+  ⇒ **不属**宪法 v1.6.0 的门禁偏离（其窄口径根因 = 「该 feature 按里程碑**不交付其前置能力**」）·
+  **不属**宪法 v1.8.0 的跨 feature 承接（其触发条件 = 「指名**下一棒** feature」· **B4F1 是上一棒**）
+  ⇒ **无需宪法修订**（宪法正文与门禁编号 **G1–G30** 一字不动）。
 
 ### 3. 用户场景
 
