@@ -2,7 +2,7 @@
 
 """freegraph 的 **L2 执行内核层** —— 状态 schema 解析 · 通道实现。
 
-本包承载三个 feature 的交付物：
+本包承载四个 feature 的交付物：
 
 **B4F1（状态 schema 解析）**
 
@@ -21,7 +21,7 @@
 * :class:`freegraph.runtime.BinaryOperatorAggregate` —— **归约型**通道
   （C2 · 有归约器 ⇒ ``reducer(current, new)``）；
 * :class:`freegraph.runtime.EphemeralValue` —— **路由型**通道
-  （C7 / C8 · 每 super-step 清空）；
+  （C7 / C8 · **步末只清「本轮未被写入的」路由型通道** —— FR-014 · 裁定 10）；
 * :func:`freegraph.runtime.build_channel` /
   :func:`freegraph.runtime.build_channels` —— **schema → 通道**的**唯一**
   映射入口；
@@ -37,6 +37,21 @@
 * :func:`freegraph.runtime.local_read` —— 「**当前值 + 本任务本次写入**」的
   视图（``fresh=True`` ⇒ C8 的读取原语）· **零污染**（通道的**绑定与可用性
   判定**读取前后**不变**）。
+
+**B7F1（调度内核 · super-step）**
+
+* :class:`freegraph.runtime.GraphSpec` —— **手写图规格**（通道映射 + **保序**
+  节点表 + 边表 + **预留的条件边字段**）· 校验在**构造时**执行；
+* :class:`freegraph.runtime.NodeSpec` —— **节点规格**（订阅集**既管触发、也管
+  入参** · 节点函数 ``f(state: dict) -> dict``）；
+* :class:`freegraph.runtime.SchedulerState` —— **调度状态**（「已消费版本」+
+  轮次计数 · **由调用方持有** ⇒ 同一份图规格可安全跑多次）；
+* :class:`freegraph.runtime.SuperStepResult` —— **单轮结果**（执行记录 /
+  待写入 / 合并后状态 / 轮数 · 五阶段产物**逐项可观测**）；
+* :func:`freegraph.runtime.run_super_step` —— **单轮入口**（跑**一轮**
+  super-step）；
+* :func:`freegraph.runtime.run_super_steps` —— **多轮入口**（跑到收敛或触到
+  步数上限 · 缺省 **25**）。
 
 ⚠️ **本包是 L2 内部 API，不是公开门面**——用户**可以** import，但
 freegraph **不承诺**其稳定性。由 **B5F2**（读取层）· **B6F1**
@@ -64,6 +79,14 @@ from .errors import EmptyChannelError, InvalidChannelUpdateError, InvalidSchemaE
 from .mapping import build_channel, build_channels
 from .read import local_read, read_channels
 from .schema import ChannelSpec, SchemaSpec, parse_state_schema
+from .superstep import (
+    GraphSpec,
+    NodeSpec,
+    SchedulerState,
+    SuperStepResult,
+    run_super_step,
+    run_super_steps,
+)
 
 __all__ = [
     "BinaryOperatorAggregate",
@@ -71,13 +94,19 @@ __all__ = [
     "ChannelSpec",
     "EmptyChannelError",
     "EphemeralValue",
+    "GraphSpec",
     "InvalidChannelUpdateError",
     "InvalidSchemaError",
     "LastValue",
+    "NodeSpec",
+    "SchedulerState",
     "SchemaSpec",
+    "SuperStepResult",
     "build_channel",
     "build_channels",
     "local_read",
     "parse_state_schema",
     "read_channels",
+    "run_super_step",
+    "run_super_steps",
 ]

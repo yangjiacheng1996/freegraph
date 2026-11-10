@@ -32,7 +32,7 @@
 | 5 | **B4F1** | [B4F1_schema解析与归约器提取.md](B4F1_schema解析与归约器提取.md) | L2 | M1 | B2F2 | 940 | `Annotated[list, operator.add]` 被正确识别为二元归约器 | |
 | 6 | **B5F1** | [B5F1_Channel抽象与三类通道.md](B5F1_Channel抽象与三类通道.md) | L2 | M1 | B4F1 | 1,060 | 归约器 `operator(current, new)` 语义一致；无归约器 key 被覆盖 | |
 | 7 | **B5F2** | [B5F2_稀疏状态读取.md](B5F2_稀疏状态读取.md) | L2 | M1 | B5F1 | 860 | C4 独立回归测试通过（`"llm_calls" not in node_input` 且 `.get("llm_calls", 0) == 0`）；差分测试夹具建立 | |
-| 8 | **B7F1** | [B7F1_任务准备与super-step循环.md](B7F1_任务准备与super-step循环.md) | L2 | M1 | B5F1,B5F2 | **1,480** | 单 super-step 可执行；状态按归约器合并；**可脱离构建器验收**；**C4 回归测试推进到真实节点入参**（承接 B5F2） | |
+| 8 | **B7F1** | [B7F1_任务准备与super-step循环.md](B7F1_任务准备与super-step循环.md) | L2 | M1 | B5F1,B5F2 | **1,480** | 单 super-step 可执行；状态按归约器合并；**可脱离构建器验收**；**C4 回归测试推进到真实节点入参**（承接 B5F2）；**步末只清路由型 + 写入只由调度层发起 + 通道映射可变**（承接 B5F1）；**稀疏读唯一实现**（承接 B5F2） | |
 | 9 | **B9F1** | [B9F1_Command原语.md](B9F1_Command原语.md) | L2 | M1 | B7F1 | 880 | `Command` 跳转 + 状态更新同时生效 | |
 | 10 | **B12F1** | [B12F1_并发执行与错误传播.md](B12F1_并发执行与错误传播.md) | L2 | M1 | B7F1,B9F1 | 1,080 | 并行节点不串行化；首个异常正确抛出 | |
 | 11 | **B10F1** | [B10F1_interrupt与resume.md](B10F1_interrupt与resume.md) | L2 | M1 | B9F1 | 1,160 | HITL 中断/恢复闭环；从节点起点重跑 | |
@@ -41,7 +41,7 @@
 | 14 | **B6F1** | [B6F1_StateGraph构建器.md](B6F1_StateGraph构建器.md) | L3 | M2 | B4F1 | 1,320 | 构建器 API 与 LangGraph 同名同签名 | ★ |
 | 15 | **B7F2** | [B7F2_compile编译.md](B7F2_compile编译.md) | L3 | M2 | B6F1 | 1,200 | 图可编译；`compile()` 无参可调用 | ★ |
 | 16 | **B7F3** | [B7F3_invoke返回完整状态.md](B7F3_invoke返回完整状态.md) | L2 | M2 | B7F1,B12F1 | 980 | `invoke` 返回 `{'messages': [...], 'llm_calls': N}` 完整状态 | ★ |
-| 17 | **B8F1** | [B8F1_条件边路由与fresh读.md](B8F1_条件边路由与fresh读.md) | L2 | M2 | B5F2,B7F1 | 1,100 | C8 独立回归测试通过：路由函数看到本节点刚写入的值；差分夹具比对路由判定；**复用 B5F2 差分夹具**（条件边字段已预留） | ★ |
+| 17 | **B8F1** | [B8F1_条件边路由与fresh读.md](B8F1_条件边路由与fresh读.md) | L2 | M2 | B5F2,B7F1 | 1,100 | C8 独立回归测试通过：路由函数看到本节点刚写入的值；差分夹具比对路由判定；**复用 B5F2 差分夹具**（条件边字段已预留）；**B7F1 侧已预留 `GraphSpec.conditional_edges`**（本轮恒空 · 填值即失败 ⇒ B8F1 **只需填值**即可复用，不新造第三套） | ★ |
 | 18 | **B8F2** | [B8F2_stream多模式流式.md](B8F2_stream多模式流式.md) | L2 | M2 | B7F3 | 1,180 | 多模式流式输出 | |
 | 19 | **B22F1** | [B22F1_get_graph与draw_mermaid.md](B22F1_get_graph与draw_mermaid.md) | L3 | M2 | B7F2 | 1,140 | `draw_mermaid()` 离线必然成功、零出站 | ★ |
 | 20 | **B23F1** | [B23F1_draw_mermaid_png离线不阻断.md](B23F1_draw_mermaid_png离线不阻断.md) | L3 | M2 | B22F1 | 1,080 | PNG 路径离线不抛阻断性异常 | ★ |

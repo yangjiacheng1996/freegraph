@@ -144,6 +144,24 @@
 - **★ MVP 六项最小交付集**：本 feature 是其中第 1 项；六项齐备时
   `harness/demo/target.py` 才能跑通 fake 模型轮（M2 验收点，串行口径第 20 个 feature /
   第 60 天）。
+- **承接条款（门禁 3 的固定脚本 · B7F1 → B6F1 · M2）**：宪法质量门禁 3 的
+  「`harness/demo/target.py` **原样可跑**」在 **B6F1 / B7F2 / B7F3 / B8F1 / B22F1 /
+  B23F1** 齐备前**物理不可达成**（根因：**本 feature 按里程碑只交付「建图」环节**）⇒
+  **本 feature MUST** 交付其中的「建图」环节（`StateGraph` 构建器），
+  **MUST NOT** 改动固定脚本的**任何一行**（`target.py` 是**只读基准**）⇒
+  承接机制 = **B3F1 的裁定 22** 已把该承接条款写入各目标 feature 的提示词初稿。
+- **承接条款（B7F1 → B6F1 · M2 · 调度契约的跨 feature 接口）**：B7F1 已交付**调度内核**
+  并**冻结**了跨 feature 的接口口径 ⇒ **本 feature MUST** 照它写：
+  - **图规格形态**：`GraphSpec`（通道映射 + **保序**节点表 + 边表 + **预留**的条件边字段）
+    · `NodeSpec`（**订阅集** · 节点函数 `f(state: dict) -> dict`）⇒ **本 feature MUST**
+    把 L3 的声明式规格**适配**成本 feature 的手写图规格形态（MUST NOT 另造第三套形态）；
+  - **校验时机**：图规格的校验 MUST 在**构造时**执行（非空值 ⇒ 显式失败）⇒ 本 feature
+    的适配器 MUST 依赖此口径；
+  - **节点入参口径**（裁定 26）：入参 MUST 等于 `read_channels(子映射)` 的结果，子映射 MUST
+    按「**通道映射的顺序**」构造 ⇒ **本 feature MUST NOT** 改写 key 顺序。
+  该口径由 B7F1 的 `specs/b7f1-superstep-loop/spec.md`（FR-012 / FR-033 / 裁定 26 /
+  裁定 32）落成 · 契约见
+  `specs/b7f1-superstep-loop/contracts/superstep-contract.md` §1 / §2.1 / §2.1.1。
 - **风险提示**：构建器 API 的**参数形态**一旦与 LangGraph 有偏差，验收脚本就会失败。
   建议本 feature 的 spec 直接把 §7 的「逐项比对表」作为 FR 附件列全，避免 plan 阶段
   凭记忆补参数。

@@ -41,9 +41,37 @@
 - **承接条款（B5F2 → B7F1 · M1）**：B5F2 已交付稀疏状态读取与 **C4 独立回归测试**
   （断言对象 = 读取原语产出的那个 dict · 用例住在 `tests/runtime/` 下 · 挂载点
   `tests/contracts/test_contract_regressions.py` 的 `GATE-MOUNT: C4` 已翻成 `landed`）。
-  **本 feature MUST 把该 C4 用例改为断言真实节点收到的入参** —— C4 的契约边界是
+  **本 feature MUST 把该 C4 用例从「读取层口径」推进到「真实节点入参口径」** —— C4 的契约边界是
   **节点入参**，只在读取层断言等于把这条防线守在半个位置。
+  ⚠️ **2026-11-11 追补订正**：本条逐字原为「**改为**断言真实节点收到的入参」⇒ 与 B5F2 的
+  **「读取层口径并存」**相左（B5F2 **裁定 18** · Q16）⇒ **B7F1 的 spec 裁定 13** 定为
+  「**并存 + 追加**」（**MUST NOT** 删除原有的读取层口径断言）⇒ 本条以 **spec 裁定 13** 为准。
   该承接条款由 B5F2 的 `specs/b5f2-sparse-state-read/spec.md`（FR-031 / 裁定 18）落成。
+- **承接条款（B5F1 → B7F1 · M1 · 通道层口径交接）**：B5F1 已冻结通道层的**四个操作**
+  与**四个只读属性**，其中三条口径由 **B7F1** 承接：
+  ① **步末清空范围**：super-step 步末 MUST **只**对**路由型**通道调用 `clear()`
+     （覆盖型 / 归约型 MUST **保留**其值 —— 否则「末值保留」与「累积保留」被抹掉
+     ⇒ 与上游分叉）—— 落点：`specs/b5f1-channels/contracts/channel-contract.md` **B-2** ·
+     `contracts/upstream-parity.md` **S-05** / **P-12**；
+     ⚠️ **2026-11-11 追补订正**：本条以 **spec FR-014** 为准 ⇒ 步末**只清「本轮未被写入的」路由型**
+     （本轮写过的路由型 MUST 保留其值到下一轮）⇒ 措辞**不得弱于** FR-014；
+  ② **写入只有一条路径 + `update()` 的返回值口径**：通道的写入 MUST **只**由调度层发起
+     （用户代码 MUST NOT 直接写通道对象）；`update()` 的返回值 MUST 表示
+     「**本次调用是否写入了值**」（非空 ⇒ 恒真，哪怕归约后的新值与旧值**逐字相等**）
+     ⇒ 触发判定 MUST 依据**写入版本**，MUST NOT 依据「值是否变化」
+     —— 落点：`specs/b5f1-channels/spec.md` FR-023 ① +「澄清轮 Q5」；
+  ③ **`build_channels()` 的返回类型 = 可变 `dict`**：调度层 MUST 能在通道映射之上
+     **增补内部通道**（如路由型通道）⇒ 通道映射 MUST 为**可变**映射
+     —— 落点：`specs/b5f1-channels/research.md` **D-14**。
+- **承接条款（B5F2 → B7F1 · M1 · 稀疏读唯一实现）**：B5F2 已冻结**两个稀疏入口**
+  （`read_channels` / `local_read`）**逐字相等**的契约 ⇒ 节点入参 MUST 由**同一处**
+  稀疏语义产出（调度层 MUST NOT 另写一份过滤）—— 落点：
+  `specs/b5f2-sparse-state-read/spec.md` FR-038 / SC-033 ·
+  `contracts/read-contract.md` §4 **I-11**。
+  > ⚠️ **口径备注（2026-11-11 追补）**：上面两条（B5F1 / B5F2 的口径交接）在上游原文中
+  > **只指名了 feature ID、未指名里程碑** ⇒ 严格按宪法 **v1.8.0** 的**窄口径**触发条件
+  > （「指名下一棒 feature（**ID + 里程碑**）」）本不在其 MUST 适用范围 ⇒ 本 feature
+  > 按**更严口径**承接（登记项 **R-5** · 见 `specs/b7f1-superstep-loop/plan.md`）。
 
 ### 3. 用户场景
 

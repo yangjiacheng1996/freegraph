@@ -37,6 +37,21 @@
   持有并驱动 L2 的运行时。
 - **编译期校验**：编译是「最后的机会」做静态检查的时点（如路由函数返回值不在
   `path_map` 中、节点不可达等）。
+- **承接条款（B7F1 → B7F2 · M2 · 调度契约的跨 feature 接口）**：B7F1 已交付**调度内核**
+  （手写图规格 + super-step 循环），并**冻结**了跨 feature 的接口口径：
+  - **图规格形态**：`GraphSpec`（通道映射 + **保序**节点表 + 边表 + **预留**的条件边字段）
+    · `NodeSpec`（**订阅集** · 节点函数 `f(state: dict) -> dict`）⇒ **本 feature MUST
+    把 L3 的声明式规格**适配**成本 feature 的手写图规格形态（MUST NOT 另造第三套形态）；
+  - **节点入参口径**（裁定 26）：入参 MUST 等于 `read_channels(子映射)` 的结果，子映射 MUST
+    按「**通道映射的顺序**」构造 ⇒ **本 feature MUST NOT** 改写 key 顺序；
+  - **调度状态口径**（裁定 27）：`run_super_step(spec, state)` **MUST 显式**接收调度状态 ·
+    `run_super_steps(spec, state=None, *, max_steps=25)` **MAY 省略**（缺省新建一个）⇒
+    **本 feature MUST NOT** 改写这两个入口的接收口径；
+  - **校验时机**：图规格的校验 MUST 在**构造时**执行（非空值 ⇒ 显式失败）⇒ 本 feature
+    的适配器 MUST 依赖此口径（**构造期**即暴露问题，而非跑到一半才炸）。
+  该口径由 B7F1 的 `specs/b7f1-superstep-loop/spec.md`（FR-033 / 裁定 25 / 裁定 26 /
+  裁定 27 / 裁定 32）落成 · 契约见
+  `specs/b7f1-superstep-loop/contracts/superstep-contract.md` §1 / §2.1 / §2.1.1。
 
 ### 3. 用户场景
 

@@ -43,6 +43,15 @@
   （B5F2 交付时该字段恒空 · 夹具不据此分支）⇒ **本 feature 只需填值即可复用同一夹具**；
   MUST NOT 重造夹具接口（MUST NOT 使 B5F2 已产出的差分证据作废）。
   该口径由 B5F2 的 `specs/b5f2-sparse-state-read/spec.md`（FR-015 / 裁定 15）落成。
+- **条件边字段口径（B7F1 → B8F1 · M2）**：B7F1 交付的手写图规格
+  `GraphSpec` **已预留一个「条件边」字段** `conditional_edges`，本轮（**B7F1**）
+  **恒为空**、**填值即显式失败**（内置 `ValueError` · 校验规则 **V-8**）⇒
+  **B8F1 只需填值**即可复用，**无需改造 B7F1 的调度内核**。
+  ⚠️ **两侧各自填值**即可（B7F1 的 `GraphSpec.conditional_edges` **+** B5F2 差分夹具的
+  同名字段）⇒ **不新造第三套**图规格形态。
+  该口径由 B7F1 的 `specs/b7f1-superstep-loop/spec.md`（FR-033 / 裁定 25 · 下游承接
+  **D-1**）落成 · 契约见
+  `specs/b7f1-superstep-loop/contracts/superstep-contract.md` §1 / §2.1。
 - **`local_read` 的调用口径（B5F2 → B8F1 · M1 · FR-031 ② / SC-023）**：
   **B8F1 MUST 在使用 `local_read` 时显式传 `fresh=True`**（`fresh` 的缺省是 `False`）
   · MUST **NOT** 依赖缺省 · MUST **NOT** 假设上游的 `managed` 语义

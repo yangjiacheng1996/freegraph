@@ -35,6 +35,22 @@
   才实现——本 feature 负责 `goto` / `update` 两条语义。
 - `Command.PARENT` 用于**子图向父图跳转**；v1 不实现子图（C26 仅保签名兼容），
   因此本 feature 只需保证常量**存在且被正确识别**，其跨层传播语义属 v2。
+- **承接条款（B7F1 → B9F1 · M1 · 调度契约的跨 feature 接口）**：B7F1 已交付**调度内核**
+  并**冻结**了跨 feature 的接口口径 ⇒ **本 feature MUST** 照它写：
+  - **跳转语义的落点**：`Command` 的 `goto` 表达的是「**下一个要执行的节点**」⇒ 它 MUST
+    落在 B7F1 的**触发源**体系内（B7F1 已冻结**通道触发源**与**边触发源**两个空间，
+    标识 MUST 用**两个空间**分离）⇒ **本 feature MUST NOT** 另造第三种跳转语义；
+  - **更新语义的落点**：`Command.update` 的内容 MUST 与**节点的普通返回值**走**同一条写入
+    路径**（B7F1 已冻结「写入**只由调度层发起**」+「`update()` 的返回值 = 本次是否写入了值」
+    ⇒ 触发判定 MUST 依据**写入版本**，MUST NOT 依据「值是否变化」）⇒ **本 feature MUST NOT**
+    绕过通道的写入语义；
+  - **节点入参口径**（裁定 26）：入参 MUST 等于 `read_channels(子映射)` 的结果，子映射 MUST
+    按「**通道映射的顺序**」构造 ⇒ **本 feature MUST NOT** 改写 key 顺序；
+  - **调度状态口径**（裁定 27）：`run_super_steps` 的 `state` **MAY 省略**（缺省新建一个）
+    ⇒ **本 feature MUST NOT** 依赖「调用方复用同一个调度状态」。
+  该口径由 B7F1 的 `specs/b7f1-superstep-loop/spec.md`（FR-002 / FR-003 / FR-008 / 裁定 26 /
+  裁定 27）落成 · 契约见
+  `specs/b7f1-superstep-loop/contracts/superstep-contract.md` §1 / §3.1 / §3.2 / §3.3。
 
 ### 3. 用户场景
 

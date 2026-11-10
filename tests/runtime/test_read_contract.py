@@ -22,7 +22,7 @@
 * **依赖隔离**（FR-018 / FR-020 · SC-008 / SC-010）—— 内核路径对上游的导入
   次数 == **0** · ``Requires-Dist`` **整体为空**；
 * **冻结面断言**（FR-021 / FR-026 · SC-011 / SC-029）—— ``freegraph.runtime``
-  的 ``__all__`` == **14** · ``freegraph.contracts`` == **18** ·
+  的 ``__all__`` == **20** · ``freegraph.contracts`` == **18** ·
   ``freegraph.graph`` == **7**。
 
 **签名头**（宪法原则 X）：本文件带署名头且模块 docstring 是首个语句。
@@ -76,8 +76,8 @@ CONTRACT_SYMBOL_COUNT = 18
 #: 门面（``freegraph.graph``）的**冻结符号数**。
 FACADE_SYMBOL_COUNT = 7
 
-#: L2 内部 API（``freegraph.runtime``）的**导出面**（12 → **14**）。
-RUNTIME_SYMBOL_COUNT = 14
+#: L2 内部 API（``freegraph.runtime``）的**导出面**（12 → **14** → **20**）。
+RUNTIME_SYMBOL_COUNT = 20
 
 
 class SampleSchema(TypedDict):
@@ -540,8 +540,8 @@ def test_the_project_declares_no_optional_dependency_extra() -> None:
 # ── T030 · 冻结面断言 ─────────────────────────────────────────────────
 
 
-def test_the_runtime_export_surface_holds_fourteen_symbols() -> None:
-    """FR-021 · SC-029：``freegraph.runtime.__all__`` == **14** 且含两个读取入口。"""
+def test_the_runtime_export_surface_holds_twenty_symbols() -> None:
+    """FR-023 · SC-016：``freegraph.runtime.__all__`` == **20** 且含两个读取入口。"""
     import freegraph.runtime as runtime
 
     assert len(runtime.__all__) == RUNTIME_SYMBOL_COUNT
@@ -553,15 +553,21 @@ def test_the_runtime_export_surface_holds_fourteen_symbols() -> None:
         "ChannelSpec",
         "EmptyChannelError",
         "EphemeralValue",
+        "GraphSpec",
         "InvalidChannelUpdateError",
         "InvalidSchemaError",
         "LastValue",
+        "NodeSpec",
+        "SchedulerState",
         "SchemaSpec",
+        "SuperStepResult",
         "build_channel",
         "build_channels",
         "local_read",
         "parse_state_schema",
         "read_channels",
+        "run_super_step",
+        "run_super_steps",
     }
 
 
