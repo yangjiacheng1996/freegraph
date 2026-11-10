@@ -482,6 +482,46 @@ grep -c "承接条款" harness/features/B6F1_StateGraph构建器.md \
 2
 ```
 
+### 3.14 · ★ **CI 实跑取证**（run `42981503299` · 2026-11-11 · SC-014 的 CI 侧证据）
+
+**run**：`https://github.com/yangjiacheng1996/freegraph/actions/runs/42981503299`
+· `head_sha = c327445` · `event = push` · `status = completed` · **`conclusion = success`**
+
+**逐作业的机器可读结论**（取自 GitHub REST API 的 `jobs` 端点）：
+
+| 作业 | 总体 | `Run test suite` | 7 条本地门禁 | 3 条 Linux only 门禁 |
+|---|---|---|---|---|
+| **gates (ubuntu-24.04, 3.11)** | ✅ success | ✅ success | ✅ 全 success | ✅ 全 success |
+| **gates (ubuntu-24.04, 3.14)** | ✅ success | ✅ success | ✅ 全 success | ✅ 全 success |
+| **gates (ubuntu-24.04-arm, 3.11)** | ✅ success | ✅ success | ✅ 全 success | ✅ 全 success |
+| **gates (macos-15, 3.11)** | ✅ success | ✅ success | ✅ 全 success | ⏭ **skipped**（非 Linux） |
+| **gates (macos-15, 3.14)** | ✅ success | ✅ success | ✅ 全 success | ⏭ **skipped**（非 Linux） |
+| **gates (windows-2025, 3.11)** | ✅ success | ✅ success | ✅ 全 success | ⏭ **skipped**（非 Linux） |
+| **gates (windows-2025, 3.14)** | ✅ success | ✅ success | ✅ 全 success | ⏭ **skipped**（非 Linux） |
+
+⇒ **7/7 作业全绿** · **零跳号门禁**（G21 / G23 / G24 / G25 / G26 / G29 / G30 在**全部 7 档**
+实跑并全 success）· **分支保护零变更**（作业名与 `ci-matrix` §4.1 的 **7** 个 required check
+名**逐字一致**）⇒ **SC-014 成立**。
+
+**本 feature 在各档的档位归属**（与 B5F2 的同款口径）：
+
+| 档位 | 上游（`differential` 组） | 结论 |
+|---|---|---|
+| **Linux x86_64（3.11 / 3.14）** | **已装** ⇒ 差分组**真实执行** | ✅ |
+| **Linux arm64（3.11）** | **未装**（`Install differential group` 步骤 **skipped**）⇒ 差分组 **skip**（**非失败**） | ✅ |
+| **macOS / Windows（各 2 档）** | **未装** ⇒ 差分组 **skip**（**非失败**） | ✅ |
+
+⇒ **「skip ≠ fail」** 在 **Linux arm64 / macOS ×2 / Windows ×2** 五个档位上**由 CI 实证**
+⇒ 与本机单档实测**互补**（本机仅 Linux x86_64 一档）。
+
+⚠️ **未取到的部分**（**如实登记** · **不伪造**）：该 run 的 **`pytest-report-*.xml`**
+（junitxml artifact · 共 **7** 份）与**作业日志**的**逐段计数**（`tests/runtime` 段的
+`passed` / `skipped` 明细）**需登录 GitHub 才能下载** ⇒ 本机**未取到** ⇒ 本节只登记
+**上表的机器可读结论**（作业 / 步骤级 `conclusion`）**与由它推出的结论** ⇒ 逐段明细
+**待人工补录**（B5F2 的同款处置）。
+
+---
+
 ## 4. 结论
 
 | 项 | 实测 |
@@ -496,6 +536,7 @@ grep -c "承接条款" harness/features/B6F1_StateGraph构建器.md \
 | 跨 feature 接线 | **H-1…H-5 + D-1 四处全部命中**；**跨 feature 遗留 == 0**（九个承接方逐条接线 · 见 §3.13） |
 | 越界实现 | **0**（AST 级扫描 · `invoke` / `stream` / `compile` / `StateGraph` / `Command` / `Send` / `interrupt` / `async` / checkpoint 相关标识符） |
 | **一键验收入口** | **104 条硬断言全绿 · PASS · 退出码 0**（tasks T066 · 裁定 37 · FR-035 / SC-026） |
+| **CI 实跑** | **7/7 作业 success**（run `42981503299` · `head_sha = c327445`）· 7 条门禁在**全部 7 档**实跑并全 success（见 §3.14） |
 
 ⇒ **执行闸口 A1–A8 全部通过**（Setup · Foundational · US1–US6 · Polish · **发起者追认**）。
 ⇒ **本 feature 可合入**（tasks **T053** 已闭合 · 见 §5.1）。
@@ -507,14 +548,14 @@ grep -c "承接条款" harness/features/B6F1_StateGraph构建器.md \
 | # | 未实跑项 | 原因 | 承接方 | 处置 |
 |---|---|---|---|---|
 | **1** | ~~**发起者追认**（登记项 **R-1 / R-2 / R-4 / R-5** + **Q13**）~~ | —— | —— | ✅ **已闭合**（2026-11-11 · 发起者明示 · 见 §5.1）⇒ 跨 feature 遗留已逐条收口（§3.13） |
-| **2** | **macOS / Windows 档**的全量套件 | 本机为 **Linux x86_64** ⇒ **无法实跑** | **CI** | 交由 CI 实测确认 |
+| **2** | ~~**macOS / Windows 档**的全量套件~~ | —— | —— | ✅ **已闭合**（CI run `42981503299` · **7/7 作业 success** · 见 §3.14） |
 | **3** | **「fake 模型跑通验收基线的一轮」**（宪法质量门禁 4） | 本 feature **无图可跑**（`compile()` / `invoke()` 属 B7F2 / B7F3）⇒ **物理不可达成** | **B7F2 / B7F3** | 登记项 **R-1** ① · §5.1 |
 | **4** | **「真实模型一轮」**（宪法质量门禁 5） | 同上 | **B7F3 / B25F1** | 登记项 **R-1** ① · §5.1 |
 | **5** | **`harness/demo/target.py` 原样可跑**（宪法质量门禁 3） | 同上 | **B6F1 / B7F2 / B7F3 / B8F1 / B22F1 / B23F1** | 登记项 **R-1** ① · §5.1（承接条款**已逐条追补写入**各承接方的提示词初稿 · §3.13） |
 | **6** | **C8 的独立回归测试** | 路由语义 + 调度循环属 **B8F1** | **B8F1** | 挂载点 **C8 仍为 `not-landed`**（一字未动） |
 | **7** | **条件边求值** | 属 **B8F1**（本 feature **只预留字段**） | **B8F1** | 下游承接 **D-1** 已接线（§3.11） |
 | **8** | **上游差分比对** | 本 feature **零上游依赖**（连 `differential` 组都不需要）⇒ **无可比对对象** | —— | 由 `contracts/upstream-parity.md` 的 **13 条**逐条对照 + **6 条**实测基线承载（**证据表**，非运行时比对） |
-| **9** | **CI 的多档实跑** | 本机仅 Linux x86_64 一档 | **CI** | 7 个作业（`gates (<runner>, <Python>)`）实跑 |
+| **9** | ~~**CI 的多档实跑**~~ | —— | —— | ✅ **已闭合**（run `42981503299` · **7/7 作业 success** · Linux x86_64 ×2 / arm64 / macOS ×2 / Windows ×2 · 见 §3.14） |
 
 ### 5.1 · **发起者追认**（FR-031 · 裁定 20 · 登记项 **R-1 / R-2 / R-4 / R-5**）
 
