@@ -223,6 +223,11 @@ __marimo__/
 # 不是本项目的内容，不入库；需要时执行：python harness/scripts/fetch_docs.py
 harness/docs/
 
+# ── artifacts/：CI 产物（`pytest-report-*.xml` 的 zip）· 由 GitHub Actions 的
+# `Upload pytest report` 步骤产出（`if-no-files-found: ignore`）⇒ **不是本项目的
+# 内容**，不入库；需要时从 run 的 artifact 页下载（文件下载**须认证**）。
+artifacts/
+
 
 # ── 通用：编辑器 / 操作系统残留 ──
 .DS_Store

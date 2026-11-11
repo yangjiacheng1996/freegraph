@@ -511,11 +511,78 @@ required check 名**逐字一致**）⇒ **SC-014 成立**。
 ⇒ **「skip ≠ fail」** 在 **Linux arm64 / macOS ×2 / Windows ×2** 五个档位上**由 CI 实证**
 ⇒ 与本机单档实测**互补**（本机仅 Linux x86_64 一档）。
 
-⚠️ **未取到的部分**（**如实登记** · **不伪造**）：该 run 的 **`pytest-report-*.xml`**
-（junitxml artifact · 共 **7** 份）与**作业日志**的**逐段计数**（`tests/runtime` 段的
-`passed` / `skipped` 明细）**需登录 GitHub 才能下载** ⇒ 本机**未取到** ⇒ 本节只登记
-**上表的机器可读结论**（作业 / 步骤级 `conclusion`）**与由它推出的结论** ⇒ 逐段明细
-**待人工补录**（B7F1 的同款处置）。
+#### ★ **逐段取证（7 份 junitxml artifact · 发起者下载 · 已解析）**
+
+**取证的来源与校验**：7 份 `pytest-report-*.xml` 由**发起者**从本 run 的 artifact 下载
+（artifact **文件下载**必须认证 ⇒ 匿名 API 返 **401** ⇒ 实现者**未**自动取到）
+⇒ **逐份与 CI 的 artifact 元数据（`size_in_bytes`）比对**：**7/7 逐份**大小**完全一致**
+⇒ 确认**未被篡改 / 未错档** ⇒ 再解析（`zipfile` + `xml.etree`）。
+
+**逐档总体计数**（junitxml 的 `testsuite` 属性）：
+
+| 档位 | tests | skipped | failures | errors | 耗时 |
+|---|---|---|---|---|---|
+| **ubuntu-24.04 (3.11)** | **1047** | **3** | **0** | **0** | 11.5s |
+| **ubuntu-24.04 (3.14)** | **1047** | **3** | **0** | **0** | 14.0s |
+| **ubuntu-24.04-arm (3.11)** | **1047** | **6** | **0** | **0** | 8.9s |
+| **macos-15 (3.11)** | **1045** | **6** | **0** | **0** | 9.2s |
+| **macos-15 (3.14)** | **1045** | **6** | **0** | **0** | 9.3s |
+| **windows-2025 (3.11)** | **1045** | **6** | **0** | **0** | 14.2s |
+| **windows-2025 (3.14)** | **1045** | **6** | **0** | **0** | 15.4s |
+
+⇒ **七档 failures == 0 且 errors == 0**（与作业级 `conclusion = success` **互证**）。
+
+**逐目录计数**（`tests` / `skipped`）：
+
+| 目录 | ubuntu 3.11 | ubuntu 3.14 | arm 3.11 | macos 3.11 | macos 3.14 | win 3.11 | win 3.14 |
+|---|---|---|---|---|---|---|---|
+| `tests.contracts` | 286 / 2 | 286 / 2 | 286 / 2 | 286 / 2 | 286 / 2 | 286 / 2 | 286 / 2 |
+| `tests.differential` | **12 / 0** | **12 / 0** | 12 / 3 | 12 / 3 | 12 / 3 | 12 / 3 | 12 / 3 |
+| `tests.facade` | 83 / 1 | 83 / 1 | 83 / 1 | 83 / 1 | 83 / 1 | 83 / 1 | 83 / 1 |
+| `tests.gates` | **40 / 0** | **40 / 0** | 40 / 0 | **38 / 0** | **38 / 0** | **38 / 0** | **38 / 0** |
+| `tests.runtime` | **626 / 0** | **626 / 0** | **626 / 0** | **626 / 0** | **626 / 0** | **626 / 0** | **626 / 0** |
+
+**B9F1 的 11 个模块**（**逐档逐模块**计数 —— 每一条都**真实执行**、**零 skip**）：
+
+| 模块 | ubuntu 3.11 | ubuntu 3.14 | arm 3.11 | macos 3.11 | macos 3.14 | win 3.11 | win 3.14 |
+|---|---|---|---|---|---|---|---|
+| `test_command_goto_update` | 5 | 5 | 5 | 5 | 5 | 5 | 5 |
+| `test_command_merge_parity` | 11 | 11 | 11 | 11 | 11 | 11 | 11 |
+| `test_command_parent` | 4 | 4 | 4 | 4 | 4 | 4 | 4 |
+| `test_command_goto_errors` | 9 | 9 | 9 | 9 | 9 | 9 | 9 |
+| `test_command_goto_semantics` | 10 | 10 | 10 | 10 | 10 | 10 | 10 |
+| `test_command_list` | 8 | 8 | 8 | 8 | 8 | 8 | 8 |
+| `test_command_noop` | 7 | 7 | 7 | 7 | 7 | 7 | 7 |
+| `test_command_atomicity` | 7 | 7 | 7 | 7 | 7 | 7 | 7 |
+| `test_command_determinism` | 8 | 8 | 8 | 8 | 8 | 8 | 8 |
+| `test_command_purity` | 16 | 16 | 16 | 16 | 16 | 16 | 16 |
+| `test_command_contract` | 43 | 43 | 43 | 43 | 43 | 43 | 43 |
+| **── B9F1 合计** | **128** | **128** | **128** | **128** | **128** | **128** | **128** |
+
+⇒ **B9F1 的 128 条在七档上**逐模块**计数**逐字相同**、**零 skip** ⇒
+**跨平台无平台相关差异** ⇒ **本 feature 的判据在全部 7 档上均被真实执行**。
+
+**skip 条目的归属（逐档）**：
+
+| 档位 | skip | 归属 |
+|---|---|---|
+| **ubuntu-24.04（3.11 / 3.14）** | **3** | `test_contract_regressions`（**C8** 未落地 · 归 **B8F1**）· `test_protocols.TestStaticTypeCheck`（**mypy 未装** · 开发期工具）· `test_api_snapshot.TestUpdateEntryPoint`（`--update-api-snapshot` 未开启） |
+| **其余 5 档** | **6** | 上述 **3** 条 + `test_differential`（**3** 条 · **未装** `differential` 组 ⇒ 差分组**未执行**） |
+
+**差分组的档位归属**（与 `ci.yml` 步骤 5.6 的「仅 ubuntu-24.04 装该组」**逐字对应**）：
+
+| 档位 | `tests.differential` | 结论 |
+|---|---|---|
+| **ubuntu-24.04（3.11 / 3.14）** | **12 条 / 0 skip** | ✅ **真实执行**（`langgraph 1.2.11` 已装）⇒ **SC-014 的上游侧证据可达** |
+| **arm64 / macOS ×2 / Windows ×2** | 12 条 / **3 skip** | ✅ **skip（非失败）** ⇒ 「**skip ≠ fail**」**由 CI 实证** |
+
+**平台间 2 条差异的归因**（`tests.gates` 40 vs 38）：非 Linux 档少 **2** 条
+（`test_g22_isolated_env_closure_is_empty` · `test_g22_isolated_env_negative_case`）
+⇒ 二者带 **`@pytest.mark.linux_only`** ⇒ 被 CI 的 `pytest_args`
+（`-m "not linux_only and not full_install"`）**按设计排除** ⇒ **非缺陷**。
+
+⇒ **逐段明细已补齐**：本 run 的 **7 份** junitxml 已**逐档逐模块**解析完毕 ⇒
+**SC-014 的 CI 侧证据闭合**（不只「作业绿」，而是「**七档逐段用例计数对得上**」）。
 
 ### 3.16 · **R-8 ⑤ 的回溯修订**（B7F1 的两处「越界标识符」断言）
 
@@ -551,6 +618,7 @@ harness/verification/B7F1/acceptance.py:135:FORBIDDEN_NAMES = (
 | **纯单元可测** | **11** 个测试模块 · **不经由** `StateGraph` / `compile()` / `invoke()`（SC-016） |
 | **一键验收入口** | **87** 条硬断言全绿 · PASS · 退出码 **0**（追认栏闭合后 · tasks T005 / T038） |
 | **CI 实跑** | **7/7 作业 success**（run `43047327076` · `head_sha = 1896e16`）· 7 条门禁在**全部 7 档**实跑并全 success（见 §3.15） |
+| **CI 逐段取证** | **7 份** junitxml **逐档逐模块**解析：七档 **failures == 0 且 errors == 0** · B9F1 的 **128 条**在七档**逐字相同且零 skip** · 差分组在 **Linux x86_64 两档真实执行**（12 条 / 0 skip）· 非 Linux 档 **3 条 skip**（**非失败**） |
 
 ⇒ **执行闸口 A1–A10 全部通过**（Setup · Foundational · US1–US6 · Polish · **发起者追认**）
 ⇒ **本 feature 可合入**（宪法 v1.6.0 · 追认由**发起者本人**于 2026-11-11 作出 · 实现者**未代签**）。
@@ -570,6 +638,7 @@ harness/verification/B7F1/acceptance.py:135:FORBIDDEN_NAMES = (
 | **7** | **上游差分比对**（运行时） | 本 feature **零上游依赖**（连 `differential` 组都不需要）⇒ **无可比对对象** | —— | 由 `contracts/upstream-parity.md` 的 **12 条**逐条对照 + **8 组**实测基线承载（**证据表**，非运行时比对） |
 | **8** | **换上游版本时的行号重核**（research §4） | 上游版本未变（**1.2.11**） | —— | tasks **T040** · 换版时 MUST 重做 |
 | **9** | ~~**CI 多档实跑**（3.11 / 3.14 × 5 平台）~~ | —— | —— | ✅ **已闭合**（run `43047327076` · **7/7 作业 success** · 见 §3.15） |
+| **10** | ~~**CI 逐段明细**（各档 `pytest-report-*.xml` 的逐段计数）~~ | artifact **文件下载**必须认证 ⇒ 匿名 API 返 **401** | —— | ✅ **已闭合**（**发起者**下载 7 份 → **逐份与 CI 元数据大小比对一致** → 逐档逐模块解析 ⇒ 见 §3.15 的「逐段取证」） |
 | **10** | **L1 允许 `None` 而 B7F1 运行时拒绝它** | **既有偏差**（登记项 **R-7 ⑤**）⇒ **MUST NOT** 在本 feature 顺带放宽 B7F1 的 V-4 判据 | —— | **只登记 · 不修** |
 
 ### 5.1 · **发起者追认**（FR-019 · 宪法 v1.6.0 · 登记项 **R-1 / R-2 / R-3 / R-4 / R-5 / R-7 / R-8 / R-9**）
@@ -667,7 +736,7 @@ harness/verification/B7F1/acceptance.py:135:FORBIDDEN_NAMES = (
 | SC-011 | 多目标与空序列 | T024 | `test_command_goto_semantics.py::test_a_multi_target_goto_triggers_every_target` | ✅ |
 | SC-012 | `resume` **只被接受** | T026 / T027 | `test_command_noop.py::test_the_resume_slot_is_accepted_and_produces_no_effect` | ✅ |
 | SC-013 | 原子性 | T028 | `test_command_atomicity.py::test_an_unknown_key_leaves_every_channel_unchanged` | ✅ |
-| SC-014 | 依赖隔离 · 零出站 | T002 / T030 | `test_command_purity.py::test_the_kernel_source_imports_no_upstream_package` + §3.15 的 **CI 侧证据** | ✅ |
+| SC-014 | 依赖隔离 · 零出站 | T002 / T030 | `test_command_purity.py::test_the_kernel_source_imports_no_upstream_package` + §3.15 的 **CI 侧证据**（作业级 + **逐段 junitxml 取证**） | ✅ |
 | SC-015 | 结构纪律（导出面 / 冻结面 / 层纪律） | T012 / T030 / T033 | `test_command_purity.py::test_the_runtime_export_surface_holds_twenty_symbols` | ✅ |
 | SC-016 | 覆盖率 **100%** + 纯单元可测 | T031 / T032 | `test_command_contract.py::test_the_contract_declares_exactly_the_expected_invariants` | ✅ |
 | SC-017 | 人工验证记录 | T004 / T036 / T037 / T038 | **本文件**（§1–§6） | ✅ |
