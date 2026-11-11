@@ -59,6 +59,12 @@
   该口径由 B5F2 的 `specs/b5f2-sparse-state-read/spec.md`（FR-031 / 裁定 33 ③）落成
   · 契约见 `specs/b5f2-sparse-state-read/contracts/read-contract.md` §1.1。
 
+### 2.1 背景与上下文（补充 · 2026-11-11）
+
+- **承接条款（B9F1 → B8F1 · M2 · `node_writes` 的归属口径）**：B9F1 已冻结「`Command.update` 的写入
+  **归源节点**名下」（`node_writes` 仍**按节点分组**）⇒ **本 feature 的 fresh 读**（「本节点**本次**写入」）
+  **读得到** `Command` 的写入 ⇒ **零改动**、**形态不变**（分组维度不变 ⇒ B9F1 的归一**不破坏**本 feature 的前提）。
+  该口径由 B9F1 的 `specs/b9f1-command-primitive/spec.md`（**裁定 16** · FR-004）落成。
 ### 3. 用户场景
 
 **P1 — 路由基于本节点的最新产出**

@@ -14,6 +14,15 @@
 > | 建议 short-name | `b7f1-superstep-loop` |
 > | MVP 必需（★） | 否（但它是**关键路径上最重的一个 feature**） |
 
+### 2.1 背景与上下文（补充 · 2026-11-11）
+
+- **承接条款（B9F1 → B7F1 · M1 · V-4 的返回值口径**）**：B9F1 **经发起者特批**放宽了 L1 的
+  `NodeFunc.__call__` 返回联合（增「**命令列表**」）⇒ **B7F1 的 V-4 / FR-009**
+  「节点返回值**不是 `dict`** ⇒ `TypeError`」的口径**已被上游改写**为
+  「返回值**不在** {`dict`, `Command`, `list[Command | dict]`} 之内 ⇒ `TypeError`」
+  ⇒ **判据以改写后的口径为准**；⚠️ **`None` 的显式失败口径未放宽**（运行时**仍拒绝** `None`）。
+  该口径由 B9F1 的 `specs/b9f1-command-primitive/spec.md`（**裁定 21**）落成 · 登记项见 B9F1 的 `plan.md`（**R-7**）。
+
 ---
 
 ## 提示词正文

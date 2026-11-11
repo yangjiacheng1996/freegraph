@@ -37,6 +37,19 @@
   `LANGSMITH_API_KEY` 存在时**自动开 tracing**，Q3 实测）。
 - ✅ **缺口 3 已关闭（D11 批准 2026-11-05）**：`stream()` 与 `TraceSink` 仍是**两条
   事件通道**，但**共享同一 `run_id` / `thread_id`**（关联约定已冻结，见 §7）。
+- **承接条款（B9F1 → B19F1 · M3 · `Command` 跳转的触发源暴露口径）**：B9F1 已交付 `Command`
+  原语的**运行期语义**（`goto` / `update` / `Command.PARENT`）并**冻结**了跨 feature 的接口口径
+  ⇒ **本 feature MUST** 照它写：
+  - **触发源同源口径**：B9F1 已把 `Command.goto` 落在 B7F1 的**边触发源**空间
+    （标识 `("e", 源节点名)`）⇒ `goto` 与**静态边**的触发源**同源** ⇒ 若 span 要展示
+    「这个节点是被什么触发的」，**MUST** 由本 feature 在**触发判定层统一暴露**
+    （静态边与 `goto` **一起**给）⇒ **MUST NOT** 只暴露 `goto` 一类（否则可观测面只剩一半）；
+  - **不预留口径**：B9F1 **刻意未**在结果对象/调度状态里新增任何「跳转观测字段」
+    （B7F1 的 `SuperStepResult` **四字段冻结面**不动 · 跳转的可观察证据 = 下一轮 `executed` +
+    L1 的 `StateSnapshot.next`）⇒ 本 feature **MUST NOT** 期待 B9F1 预先提供跳转记录
+    ⇒ 触发源信息 **MUST** 由本 feature 自行在**调度层**取得。
+  该口径由 B9F1 的 `specs/b9f1-command-primitive/spec.md`（FR-002 / FR-022 / 裁定 1 / 裁定 18 /
+  裁定 19）落成。
 
 ### 3. 用户场景
 

@@ -278,6 +278,18 @@ description: "B2F1 · 4 类可插拔协议（NodeFunc/Checkpointer/TraceSink/Sto
 
 ---
 
+---
+
+## ⚠️ 回溯修订注记（2026-11-11 · **B9F1** · 发起者特批 · 破 L1 冻结面）
+
+> **本节由 B9F1 追加**（**只加注记 · 不改本 feature 的历史执行记录**）——
+> B9F1 为支持**命令列表**形态（上游 `ToolNode` **自身即用** · `langgraph/prebuilt/tool_node.py:890-920`），
+> **经发起者特批**放宽了 L1 的 `NodeFunc.__call__` 返回联合：
+> `StateDict | Command | None` ⇒ **`StateDict | Command | list[Command | StateDict] | None`**。
+> ⇒ **本文件 T011 等条目的「逐字记录」仍是 B2F1 当时的真实执行记录**（**不改**），
+> 但其中涉及的**签名表述已被上游改写** ⇒ **判据以 `spec.md` 的 FR-001 与
+> `contracts/public-api.md` 为准**（B9F1 的 **裁定 21** / plan 登记项 **R-7**）。
+> ⇒ **L1 的符号集合与数量不变**（**18** 个 ⇒ 门禁 **G7** 恒绿）。
 ## Dependencies & Execution Order
 
 ### feature Dependencies

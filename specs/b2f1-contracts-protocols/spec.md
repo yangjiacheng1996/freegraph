@@ -312,10 +312,20 @@ C1–C27 全部条目且无遗漏——即算独立交付。
 ### Functional Requirements
 
 - **FR-001**: 系统 MUST 以**协议**（标准库的类型协议机制）定义**节点函数协议 `NodeFunc`** ——
-  节点函数契约：`Callable[[StateDict], StateDict | Command | None]`（入参为稀疏状态字典，
-  返回部分状态字典 / 命令原语 / 空值）。协议 MUST 支持**运行时结构化子类型判定**，
+  节点函数契约：`Callable[[StateDict], StateDict | Command | list[Command | StateDict] | None]`
+  （入参为稀疏状态字典，返回部分状态字典 / 命令原语 / **命令列表** / 空值）。协议 MUST 支持**运行时结构化子类型判定**，
   用户无需显式继承即可满足。
   > **命名裁定（Q1）**：节点函数协议名为 **`NodeFunc`**；`Node` 一词专指**图结构节点元素**。
+  > **⚠️ 回溯修订（2026-11-11 · B9F1 · 发起者特批 · 破 L1 冻结面）**：原口径为
+  > `StateDict | Command | None`（**三形态**）⇒ **增补「命令列表」**（`list[Command | StateDict]`）
+  > ⇒ **四形态**。**理由**：① 上游 LangGraph 的 `ToolNode` **自身即返回命令列表**
+  > （多个工具各返回一个 `Command` ⇒ 汇总成列表返回 · `prebuilt/tool_node.py:890-920` 实测）
+  > ⇒ freegraph **须与上游同款**；② 「命令列表」**不引入写者竞争**（一个节点的产出 · 按**列表顺序**
+  > 串行生效）且**覆盖型通道的同轮重复写显式失败**（`InvalidChannelUpdateError`；上游同款：
+  > `last_value.py:56-64` 的 `INVALID_CONCURRENT_GRAPH_UPDATE`）⇒ 语义**安全且可复现**；
+  > ③ 协议 MUST 与运行时**一致**（否则「用 `NodeFunc` 标注的节点」在**类型层**无法表达列表返回）。
+  > **不变**：C5 / C6 的**条目本身**（Q8 §3.4 为唯一权威）**一字未动**；变更的只是
+  > `NodeFunc.__call__` 的**承载签名** ⇒ **G7 / G8 恒绿**（符号**集合**与**数量**不变）。
 
 - **FR-002**: 系统 MUST 以协议定义**检查点协议 `Checkpointer`** —— 方法集合恰为
   `get_tuple` / `list` / `put` / `put_writes` / `delete_thread` / `get_next_version`

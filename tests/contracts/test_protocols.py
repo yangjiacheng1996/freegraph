@@ -112,10 +112,26 @@ class TestNodeFunc:
         assert _protocol_methods(NodeFunc) == {"__call__"}
 
     def test_call_signature_is_frozen(self) -> None:
-        """``__call__`` 的注解 MUST 逐字为 ``(state: StateDict) -> StateDict | Command | None``。"""
+        """``__call__`` 的注解 MUST 逐字为
+        ``(state: StateDict) -> StateDict | Command | list[Command | StateDict] | None``。
+
+        ⚠️ **回溯修订（2026-11-11 · B9F1 · 发起者特批 · 破 L1 冻结面）**：原注解为
+        ``(state: StateDict) -> StateDict | Command | None``（**三形态**）⇒ **增补
+        「命令列表」**（``list[Command | StateDict]``）⇒ **四形态**。
+        **理由**：① 上游 LangGraph 的 ``ToolNode`` **自身即返回命令列表**
+        （``prebuilt/tool_node.py:890-920`` 实测）⇒ freegraph **须与上游同款**；
+        ② 「命令列表」**不引入写者竞争**（一个节点的产出 · 按**列表顺序**串行生效）且
+        **覆盖型通道的同轮重复写显式失败**（上游同款：``last_value.py:56-64`` 的
+        ``INVALID_CONCURRENT_GRAPH_UPDATE``）⇒ 语义**安全且可复现**；
+        ③ **协议 MUST 与运行时一致**（否则用 ``NodeFunc`` 标注的节点**类型层**无法表达
+        列表返回）⇒ 见 B9F1 的 **裁定 21** / plan 登记项 **R-7**。
+        ⇒ **L1 的符号集合与数量不变**（**18** 个 ⇒ **门禁 G7 恒绿**）。
+        """
         hints = get_type_hints(NodeFunc.__call__)
         assert hints["state"] == StateDict
-        assert hints["return"] == (StateDict | Command | None)
+        assert hints["return"] == (
+            StateDict | Command | list[Command | StateDict] | None
+        )
 
     def test_isinstance_is_available(self) -> None:
         """``runtime_checkable`` 生效 ⇒ 协议可做 ``isinstance`` 判定。"""

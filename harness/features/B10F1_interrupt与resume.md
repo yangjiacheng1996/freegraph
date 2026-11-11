@@ -53,6 +53,13 @@
 - freechain 的 HITL 能力依赖本原语（宪法原则 VII：freegraph 提供原语，
   freechain 提供 agent 装配）。
 
+### 2.1 背景与上下文（补充 · 2026-11-11）
+
+- **承接条款（B9F1 → B10F1 · M1 · `Command` 的两条路径的边界）**：B9F1 只交付**节点返回值**这条路径
+  （`Command` 作为**图的输入**（`invoke(Command(resume=...))`）**不属** B9F1 ⇒ 归 **B7F3 / B10F1**）；
+  且 L1 的 `NodeFunc` 虽允许 `None`（= 不写状态 · 忠实镜像上游），**B7F1 的运行时仍拒绝** `None`
+  （**既有偏差** · 已登记为遗留）⇒ 本 feature 的 `resume` 语义**不受**该偏差影响。
+  该口径由 B9F1 的 `specs/b9f1-command-primitive/spec.md`（**裁定 7** · **裁定 21** · 引文差异 **⑩**）落成。
 ### 3. 用户场景
 
 **P1 — 节点挂起并交还中断信息**

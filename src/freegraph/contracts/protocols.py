@@ -42,13 +42,22 @@ class NodeFunc(Protocol):
     ============== ============================================ ==========
     成员           签名                                          语义
     ============== ============================================ ==========
-    ``__call__``   ``(state: StateDict) -> StateDict | Command | None`` 节点函数
+    ``__call__``   ``(state: StateDict) -> StateDict | Command | list[Command | StateDict] | None`` 节点函数
     ============== ============================================ ==========
 
     **入参**：**稀疏**状态字典（只含「当前有值」的 key）。
 
     **返回**：**部分状态字典**（待归约的新状态）/ **命令原语**
-    （跳转 / 写入 / 恢复）/ **空值**（不写状态）。
+    （跳转 / 写入 / 恢复）/ **命令列表**（多条命令按**列表顺序**依次生效）/
+    **空值**（不写状态）。
+
+    .. note::
+       **「命令列表」形态**（``list[Command | StateDict]``）由 **B9F1** 增补
+       （**2026-11-11 · 发起者特批 · 破本协议的 L1 冻结面**）—— 上游 LangGraph 的
+       ``ToolNode`` **自身即返回该形态**（多个工具各返回一个 ``Command`` ⇒ 汇总成列表返回），
+       故本协议 MUST 与运行时**一致**（否则「用 ``NodeFunc`` 标注的节点」在**类型层**
+       无法表达列表返回）。
+       ``StateDict`` 即 ``dict[str, Any]`` ⇒ 与 B9F1 的 ``list[Command | dict]`` **逐字等价**。
 
     .. note::
        ``isinstance(f, NodeFunc)`` 对**任意可调用对象**恒为真（因其自带
@@ -59,7 +68,9 @@ class NodeFunc(Protocol):
     B4F1 / B5F1，本协议只冻结返回形态）。
     """
 
-    def __call__(self, state: StateDict) -> StateDict | Command | None: ...
+    def __call__(
+        self, state: StateDict
+    ) -> StateDict | Command | list[Command | StateDict] | None: ...
 
 
 @runtime_checkable

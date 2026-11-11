@@ -608,7 +608,17 @@ def case_frozen_surface(contracts: Any) -> None:
         cells = [c.strip() for c in line.strip().split("|")[1:-1]]
         names.append(cells[0].strip("`"))
         check(len(cells) >= 4, f"兼容矩阵行 {cells[0]} 四列齐全（不新增第 5 列）")
-    eq(set(names), set(existing) | set(new), "SC021 兼容矩阵逐符号覆盖公开符号面（18 个）")
+    # ⚠️ **补齐过期（2026-11-11 · B9F1 登记项 R-8 ①）**：本断言原写「覆盖公开符号面（**18** 个）」，
+    # 而兼容矩阵在 **B2F2 落地时**合法地**增补了门面层的 5 个符号**
+    # （`StateGraph` / `START` / `END` / `Send` / `interrupt` ⇒ 矩阵共 **23** 行）
+    # ⇒ 该断言**自 B2F2 之后即已过期**（**与 B9F1 的返工无关** —— 矩阵的**符号集合**返工前后**完全相同**）。
+    # ⇒ 此处**补齐**期望值（契约层 18 个 ∪ 门面新增的 5 个 = 23）⇒ 断言**恢复为真**，**非放宽**。
+    facade_extra = {"StateGraph", "START", "END", "Send", "interrupt"}
+    eq(
+        set(names),
+        set(existing) | set(new) | facade_extra,
+        "SC021 兼容矩阵逐符号覆盖公开符号面（契约层 18 个 + 门面新增 5 个 = 23 个）",
+    )
     missing_source: list[str] = []
     for line in rows:
         cells = [c.strip() for c in line.strip().split("|")[1:-1]]

@@ -452,6 +452,17 @@ class TestCompatMatrixCoversTheFacade:
                 f"兼容矩阵行 {name} 缺上游来源 {MATRIX_NEW_SOURCES[name]!r}"
             )
 
+    #: **契约层矩阵行**中**经特批可更新**的行（**B9F1 · 裁定 21 · 登记项 R-7**）。
+    #:
+    #: ⚠️ **破 G8「既有行逐字未改」判据的唯一白名单** —— 2026-11-11 · 发起者特批：
+    #: B9F1 交付了 `Command` 的**运行期语义**（`goto` / `update` / `Command.PARENT`）与
+    #: **命令列表**形态 ⇒ 这两行的「差异说明」**必须**随之更新，否则矩阵**过期**
+    #: （与原则 X 的「MUST 更新清单」相悖）。
+    #: ⇒ **只放行这两行**；其余 **16** 行仍**逐字未改**（判据**只放宽一处**）。
+    #: ⚠️ **等价程度（第三列）MUST NOT 变**（`Command` = 部分等价 · `NodeFunc` = 不支持）
+    #: —— 本白名单**只放行「差异说明」列的措辞更新**。
+    MATRIX_ROWS_UPDATABLE_BY_B9F1 = frozenset({"Command", "NodeFunc"})
+
     def test_existing_contract_rows_are_unchanged(self, repo_root: Path) -> None:
         """**既有 18 行逐字未改** —— 与 git 中���**上一版**逐字节比对。
 
@@ -489,9 +500,20 @@ class TestCompatMatrixCoversTheFacade:
         changed = sorted(
             name
             for name in previous
-            if previous[name] != current.get(name)
+            if name not in self.MATRIX_ROWS_UPDATABLE_BY_B9F1
+            and previous[name] != current.get(name)
         )
         assert not changed, f"既有契约层矩阵行被改动：{changed}"
+
+        # ⚠️ **白名单行**（B9F1 · 裁定 21）：**只**放行「差异说明」列的措辞更新
+        # ⇒ **等价程度（第三列）MUST NOT 变**。
+        for name in self.MATRIX_ROWS_UPDATABLE_BY_B9F1:
+            prev_cells = [c.strip() for c in previous[name].split(" | ")]
+            curr_cells = [c.strip() for c in current.get(name, "").split(" | ")]
+            assert curr_cells[2] == prev_cells[2], (
+                f"白名单行 {name} 的「等价程度」被改动："
+                f"{prev_cells[2]!r} → {curr_cells[2]!r}"
+            )
 
     def test_selfcheck_detects_a_missing_row(
         self, repo_root: Path, manifest_symbols: set[str]

@@ -30,7 +30,7 @@ from freegraph.contracts import (
     GraphInterrupt,        # └ 节点主动中断
 
     # ── B2F1 新增的 10 个（本 feature 的交付面）──
-    NodeFunc,              # 节点函数协议（Callable[[StateDict], StateDict | Command | None]）
+    NodeFunc,              # 节点函数协议（Callable[[StateDict], StateDict | Command | list[Command | StateDict] | None]）
     Checkpointer,          # 检查点协议（6 方法）
     TraceSink,             # 可观测接收端协议（3 方法）
     Store,                 # 长期存储协议（6 方法 · v1 无实现）
@@ -60,7 +60,7 @@ from freegraph.contracts import (
 
 | 协议 | 方法集（**恰为**） | 签名摘要 | 契约 |
 |---|---|---|---|
-| `NodeFunc` | `__call__` | `(state: StateDict) -> StateDict \| Command \| None` | C5 / C6 |
+| `NodeFunc` | `__call__` | `(state: StateDict) -> StateDict \| Command \| list[Command \| StateDict] \| None` | C5 / C6 |
 | `Checkpointer` | `get_tuple` / `list` / `put` / `put_writes` / `delete_thread` / `get_next_version` | **方法名与参数名已冻结**（逐字见 `data-model.md` §2.2）；**返回类型占位**（`Any`）——**载荷形状挂起 B14F1** | C19 |
 | `TraceSink` | `on_span_start` / `on_span_end` / `current_span` | `(span: Span) -> None` ×2；`() -> Span \| None` | C23 / C24 |
 | `Store` | `get` / `search` / `put` / `delete` / `list_namespaces` / `batch` | **方法名与参数名已冻结**（逐字见 `data-model.md` §2.4）；命名空间为层级路径、**载体形态挂起 v2** | C20 |
@@ -73,7 +73,7 @@ from freegraph.contracts import (
 
 | 协议 | 上游来源（`路径:行号`） |
 |---|---|
-| `NodeFunc` | **无上游同名符号**（上游以普通 `dict` 调用节点函数，无同名协议类）· 契约 **C5 / C6**；最接近的上游物：`langgraph/graph/state.py`（Q8 §3.2.2 · E4） |
+| `NodeFunc` | **无上游同名符号**（上游以普通 `dict` 调用节点函数，无同名协议类）· 契约 **C5 / C6**；最接近的上游物：`langgraph/graph/state.py`（Q8 §3.2.2 · E4）· 上游的 `ToolNode` **自身即返回命令列表**（`prebuilt/tool_node.py:890-920`）⇒ 本协议的「命令列表」形态与之同款 |
 | `Checkpointer` | `langgraph/checkpoint/base/__init__.py:239`（`get_tuple`）/ `:253`（`list`）/ `:277`（`put`）/ `:300`（`put_writes`）/ `:320`（`delete_thread`）/ `:692`（`get_next_version`） |
 | `TraceSink` | **无上游同名符号**（上游无 span 推送协议）· 契约 **C23 / C24**；最接近的上游物是 LangChain 的 `callbacks` / `tracers`（**非同名**物）——**MUST NOT** 以不相干的上游位置充数 |
 | `Store` | `langgraph/store/base/__init__.py:733`（`batch`）/ `:756`（`get`）/ `:779`（`search`）/ `:856`（`put`）/ `:937`（`delete`）/ `:946`（`list_namespaces`） |
@@ -171,8 +171,8 @@ from freegraph.contracts import (
 | C2 | 归约器机制 | 挂起 | — | B4F1 | — |
 | C3 | 默认归约语义 | 挂起 | — | B5F1 | — |
 | C4 | 稀疏状态 | 挂起 | — | B5F2 | 回归测试归 B5F2；本层只保证入参类型是普通 `dict` |
-| C5 | **节点函数签名** | 已冻结 | — | `NodeFunc.__call__` | `(state: StateDict) -> StateDict \| Command \| None` |
-| C6 | 节点返回值合并 | 已冻结 | — | `NodeFunc` 返回三形态 | **形态**已冻结；逐 key 归约语义挂起 B4F1 / B5F1 |
+| C5 | **节点函数签名** | 已冻结 | — | `NodeFunc.__call__` | `(state: StateDict) -> StateDict \| Command \| list[Command \| StateDict] \| None` |
+| C6 | 节点返回值合并 | 已冻结 | — | `NodeFunc` 返回四形态 | **形态**已冻结（含 **命令列表** · B9F1 增补）；逐 key 归约语义**已落地**（B4F1 / B5F1） |
 | C7 | 路由函数契约 | 挂起 | — | B8F1 | — |
 | C8 | 条件边读状态 | 挂起 | — | B8F1 | 回归测试归 B8F1 |
 | C9 | 起止标记 | 挂起 | — | B2F2（导出）/ B6F1（使用） | 门面归 B2F2 |
