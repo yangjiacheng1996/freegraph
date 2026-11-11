@@ -478,7 +478,46 @@ B24F1_打包分发与兼容矩阵 :: B9F1 提及 3 处
 （B12F1 的「命令列表的并发维度」与 B19F1 的「触发源同源 · **一起**暴露」逐条复核通过）
 ⇒ **MUST NOT** 越界实现 B12F1 的并发合并 / B19F1 的触发源暴露 / B10F1 的恢复效果。
 
-### 3.15 · **R-8 ⑤ 的回溯修订**（B7F1 的两处「越界标识符」断言）
+### 3.15 · ★ **CI 实跑取证**（run `43047327076` · 2026-11-11 · SC-014 的 CI 侧证据）
+
+**run**：`https://github.com/yangjiacheng1996/freegraph/actions/runs/43047327076`
+· `head_sha = 1896e16` · `event = push` · `status = completed` ·
+**`conclusion = success`**
+
+**逐作业的机器可读结论**（取自 GitHub REST API 的 `jobs` 端点）：
+
+| 作业 | 总体 |
+|---|---|
+| **gates (ubuntu-24.04, 3.11)** | ✅ success |
+| **gates (ubuntu-24.04, 3.14)** | ✅ success |
+| **gates (ubuntu-24.04-arm, 3.11)** | ✅ success |
+| **gates (macos-15, 3.11)** | ✅ success |
+| **gates (macos-15, 3.14)** | ✅ success |
+| **gates (windows-2025, 3.11)** | ✅ success |
+| **gates (windows-2025, 3.14)** | ✅ success |
+
+⇒ **7/7 作业全绿** · 零跳号门禁（G21 / G23 / G24 / G25 / G26 / G29 / G30 在**全部
+7 档**实跑并全 success）· 分支保护**零变更**（作业名与 `ci-matrix` §4.1 的 **7** 个
+required check 名**逐字一致**）⇒ **SC-014 成立**。
+
+**本 feature 在各档的档位归属**（与 B5F2 的同款口径）：
+
+| 档位 | 上游（`differential` 组） | 结论 |
+|---|---|---|
+| **Linux x86_64（3.11 / 3.14）** | **已装** ⇒ 差分组**真实执行** | ✅ |
+| **Linux arm64（3.11）** | **未装**（`Install differential group` 步骤 **skipped**）⇒ 差分组 **skip**（**非失败**） | ✅ |
+| **macOS / Windows（各 2 档）** | **未装** ⇒ 差分组 **skip**（**非失败**） | ✅ |
+
+⇒ **「skip ≠ fail」** 在 **Linux arm64 / macOS ×2 / Windows ×2** 五个档位上**由 CI 实证**
+⇒ 与本机单档实测**互补**（本机仅 Linux x86_64 一档）。
+
+⚠️ **未取到的部分**（**如实登记** · **不伪造**）：该 run 的 **`pytest-report-*.xml`**
+（junitxml artifact · 共 **7** 份）与**作业日志**的**逐段计数**（`tests/runtime` 段的
+`passed` / `skipped` 明细）**需登录 GitHub 才能下载** ⇒ 本机**未取到** ⇒ 本节只登记
+**上表的机器可读结论**（作业 / 步骤级 `conclusion`）**与由它推出的结论** ⇒ 逐段明细
+**待人工补录**（B7F1 的同款处置）。
+
+### 3.16 · **R-8 ⑤ 的回溯修订**（B7F1 的两处「越界标识符」断言）
 
 ```bash
 grep -n 'FORBIDDEN_NAMES' tests/runtime/test_superstep_purity.py harness/verification/B7F1/acceptance.py
@@ -510,7 +549,8 @@ harness/verification/B7F1/acceptance.py:135:FORBIDDEN_NAMES = (
 | **四字段冻结面** | `SuperStepResult` 的字段数 == **4**（**无**新增跳转观测字段 · 裁定 18） |
 | **命令列表** | 支持（上游同款）· 按**列表顺序**依次生效（SC-021） |
 | **纯单元可测** | **11** 个测试模块 · **不经由** `StateGraph` / `compile()` / `invoke()`（SC-016） |
-| **一键验收入口** | **75** 条硬断言全绿 · PASS · 退出码 **0**（tasks T005 / T038） |
+| **一键验收入口** | **87** 条硬断言全绿 · PASS · 退出码 **0**（追认栏闭合后 · tasks T005 / T038） |
+| **CI 实跑** | **7/7 作业 success**（run `43047327076` · `head_sha = 1896e16`）· 7 条门禁在**全部 7 档**实跑并全 success（见 §3.15） |
 
 ⇒ **执行闸口 A1–A10 全部通过**（Setup · Foundational · US1–US6 · Polish · **发起者追认**）
 ⇒ **本 feature 可合入**（宪法 v1.6.0 · 追认由**发起者本人**于 2026-11-11 作出 · 实现者**未代签**）。
@@ -522,14 +562,14 @@ harness/verification/B7F1/acceptance.py:135:FORBIDDEN_NAMES = (
 | # | 未实跑项 | 原因 | 承接方 | 处置 |
 |---|---|---|---|---|
 | **1** | ~~**发起者追认**（登记项 **R-1 / R-2 / R-3 / R-4 / R-5 / R-7 / R-8 / R-9** 共 **8** 项）~~ | —— | —— | ✅ **已闭合**（2026-11-11 · 发起者本人追认）⇒ 见 **§5.1** |
-| **2** | **B7F1 的验收脚本复跑与签字**（R-8 ③ / **⑤**） | 本 feature 落地 ⇒ B7F1 的两处「越界标识符」断言**过期** ⇒ 已按「**补齐过期**」修订 ⇒ **B7F1 的验收脚本内容已变** ⇒ MUST 由**发起者**复跑并签字 | **发起者** | 登记项 **R-8 ⑤** · §3.15 |
+| **2** | **B7F1 的验收脚本复跑与签字**（R-8 ③ / **⑤**） | 本 feature 落地 ⇒ B7F1 的两处「越界标识符」断言**过期** ⇒ 已按「**补齐过期**」修订 ⇒ **B7F1 的验收脚本内容已变** ⇒ MUST 由**发起者**复跑并签字 | **发起者** | 登记项 **R-8 ⑤** · §3.16 |
 | **3** | **「`harness/demo/target.py` 原样可跑」**（宪法质量门禁 3） | 本 feature **无图可跑**（`compile()` / `invoke()` 属 B7F2 / B7F3）⇒ **物理不可达成** | **B6F1 / B7F2 / B7F3 / B8F1 / B22F1 / B23F1** | 登记项 **R-1 ①** |
 | **4** | **「fake 模型跑通验收基线的一轮」**（宪法质量门禁 4） | 同上 | **B7F2 / B7F3** | 登记项 **R-1 ②** |
 | **5** | **「真实模型一轮」**（宪法质量门禁 5） | 同上 | **B7F3 / B25F1** | 登记项 **R-1 ②** |
 | **6** | **C16 的**端到端**断言** | `Command` 的**类型**在 B1F1、**运行期语义**在本 feature、**对外入口**在 B7F3 ⇒ 端到端断言**物理不可达成** | **B7F3** | 登记项 **R-1 ③** |
 | **7** | **上游差分比对**（运行时） | 本 feature **零上游依赖**（连 `differential` 组都不需要）⇒ **无可比对对象** | —— | 由 `contracts/upstream-parity.md` 的 **12 条**逐条对照 + **8 组**实测基线承载（**证据表**，非运行时比对） |
 | **8** | **换上游版本时的行号重核**（research §4） | 上游版本未变（**1.2.11**） | —— | tasks **T040** · 换版时 MUST 重做 |
-| **9** | **CI 多档实跑**（3.11 / 3.14 × 5 平台） | 本机仅 Linux x86_64 一档 ⇒ **未取到**CI 的机器可读结论 | —— | **如实登记 · 未伪造**（B7F1 的同款处置 · 见 B7F1 记录 §3.14） |
+| **9** | ~~**CI 多档实跑**（3.11 / 3.14 × 5 平台）~~ | —— | —— | ✅ **已闭合**（run `43047327076` · **7/7 作业 success** · 见 §3.15） |
 | **10** | **L1 允许 `None` 而 B7F1 运行时拒绝它** | **既有偏差**（登记项 **R-7 ⑤**）⇒ **MUST NOT** 在本 feature 顺带放宽 B7F1 的 V-4 判据 | —— | **只登记 · 不修** |
 
 ### 5.1 · **发起者追认**（FR-019 · 宪法 v1.6.0 · 登记项 **R-1 / R-2 / R-3 / R-4 / R-5 / R-7 / R-8 / R-9**）
@@ -627,7 +667,7 @@ harness/verification/B7F1/acceptance.py:135:FORBIDDEN_NAMES = (
 | SC-011 | 多目标与空序列 | T024 | `test_command_goto_semantics.py::test_a_multi_target_goto_triggers_every_target` | ✅ |
 | SC-012 | `resume` **只被接受** | T026 / T027 | `test_command_noop.py::test_the_resume_slot_is_accepted_and_produces_no_effect` | ✅ |
 | SC-013 | 原子性 | T028 | `test_command_atomicity.py::test_an_unknown_key_leaves_every_channel_unchanged` | ✅ |
-| SC-014 | 依赖隔离 · 零出站 | T002 / T030 | `test_command_purity.py::test_the_kernel_source_imports_no_upstream_package` | ✅ |
+| SC-014 | 依赖隔离 · 零出站 | T002 / T030 | `test_command_purity.py::test_the_kernel_source_imports_no_upstream_package` + §3.15 的 **CI 侧证据** | ✅ |
 | SC-015 | 结构纪律（导出面 / 冻结面 / 层纪律） | T012 / T030 / T033 | `test_command_purity.py::test_the_runtime_export_surface_holds_twenty_symbols` | ✅ |
 | SC-016 | 覆盖率 **100%** + 纯单元可测 | T031 / T032 | `test_command_contract.py::test_the_contract_declares_exactly_the_expected_invariants` | ✅ |
 | SC-017 | 人工验证记录 | T004 / T036 / T037 / T038 | **本文件**（§1–§6） | ✅ |
