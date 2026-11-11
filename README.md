@@ -91,14 +91,14 @@ uv run --no-project --python .venv python harness/scripts/gates/gate_G21_depende
 | freegraph 符号 | 对应上游符号 | 等价程度 | 差异说明 |
 |---|---|---|---|
 | `StateDict` | （LangGraph 1.2.19 无同名公开符号） | 行为等价 | 与 `dict[str, Any]` 完全等价；上游把同一形状内联为 `dict[str, Any]`，未单列类型名 |
-| `Command` | `langgraph.types.Command` | 部分等价 | 三个语义位 `goto` / `update` / `resume` 同名同义；freegraph **无 `graph` 字段**（`Command.PARENT` 只能作为 **`goto` 目标**，且 v1 **显式失败** —— 子图属 v2），且 `goto` 目标**只能是节点名**（上游可混入 `Send`）；**运行期语义由 B9F1 交付**（`goto` 落到**边触发源**空间 · `update` 与普通返回值**共用同一条合并路径**）；节点亦可返回**命令列表**（上游同款） |
+| `Command` | `langgraph.types.Command` | 部分等价 | 三个语义位 `goto` / `update` / `resume` 同名同义；freegraph **无 `graph` 字段**（`Command.PARENT` 只能作为 **`goto` 目标**，且 v1 **显式失败** —— 子图属 v2），且 `goto` 目标**只能是节点名**（上游可混入 `Send`）；**运行期语义已落地**（B9F1 · `goto` 落到**边触发源**空间 · `update` 与普通返回值**共用同一条合并路径**）；节点亦可返回**命令列表**（上游同款） |
 | `StateSnapshot` | `langgraph.types.StateSnapshot` | 部分等价 | 上游 **8** 个字段，freegraph **7** 个（**无 `parent_config`**）；`created_at` 上游为 `str \| None`，freegraph **必填**且恒为 UTC ISO-8601；`config` 的类型是 freegraph 自有的 `RunConfig`，不是 `RunnableConfig` |
 | `RunConfig` | `langchain_core.runnables.RunnableConfig` | **不支持**（刻意替代） | 字段集完全不同：freegraph 为 `thread_id` / `context` / `metadata` / `tags`，**不含** `configurable` / `callbacks` / `recursion_limit` / `run_name`；`context` 是**独立通道**（契约 C21），**不塞进 `configurable`** |
 | `FreegraphError` | （无对应） | 不支持 | freegraph 自创的统一基类——上游三个错误分属 `Exception` / `RecursionError` / `GraphBubbleUp` 三棵互不相干的继承树，无法只捕获一个基类兜住全部内核错误 |
 | `InvalidUpdateError` | `langgraph.errors.InvalidUpdateError` | 部分等价 | 同名、同触发条件；freegraph 额外暴露 `.invalid_keys`（上游只有消息字符串） |
 | `GraphRecursionError` | `langgraph.errors.GraphRecursionError` | 部分等价 | 同名、同触发条件；freegraph 额外暴露 `.recursion_limit` / `.current_step`（上游只有消息字符串） |
 | `GraphInterrupt` | `langgraph.errors.GraphInterrupt` | 部分等价 | 同名、同触发条件；freegraph 暴露 `.payload`（按契约 C17 带 `.value` 与 `.id`）；两者均可被 `except Exception` 捕获 |
-| `NodeFunc` | 无上游对应（自由设计） | 不支持 | 契约条目 **C5 / C6**（节点函数签名 / 节点返回值合并）——上游以普通 `dict` 调用节点函数，**无同名协议类**；返回**形态**已冻结（部分状态字典 / 命令原语 / **命令列表** / 空值），逐 key 归约语义**已落地**（B4F1 / B5F1）——**`Command` 的运行期语义由 B9F1 交付**（**命令列表**形态与上游 `ToolNode` 自身即用的形态同款） |
+| `NodeFunc` | 无上游对应（自由设计） | 不支持 | 契约条目 **C5 / C6**（节点函数签名 / 节点返回值合并）——上游以普通 `dict` 调用节点函数，**无同名协议类**；返回**形态**已冻结（部分状态字典 / 命令原语 / **命令列表** / 空值），逐 key 归约语义**已落地**（B4F1 / B5F1）——**`Command` 的运行期语义已落地**（B9F1 · **命令列表**形态与上游 `ToolNode` 自身即用的形态同款） |
 | `Checkpointer` | `langgraph.checkpoint.base.BaseCheckpointSaver` | 部分等价 | 六方法的**方法名与参数名**逐字对齐；freegraph **纯抽象、无默认实现**，上游是带实现的基类；**返回类型与载荷形状挂起 B14F1**；上游来源 `langgraph/checkpoint/base/__init__.py:239`（`get_tuple`）/ `:253`（`list`）/ `:277`（`put`）/ `:300`（`put_writes`）/ `:320`（`delete_thread`）/ `:692`（`get_next_version`） |
 | `TraceSink` | 无上游对应（自由设计） | 不支持 | 契约条目 **C23 / C24**（可观测挂钩 / 当前 span 上下文）——上游**无 span 推送协议**，其 `callbacks` / `tracers` 是**非同名**物 |
 | `Store` | `langgraph.store.base.BaseStore` | 部分等价 | 六方法与**参数名**逐字镜像上游（`search` 的 `namespace_prefix` 是位置参数、`list_namespaces` 的 `prefix` 是关键字参数——上游的这个命名分歧**照抄不统一**）；命名空间**载体形态**与 `batch` 操作表示挂起 v2；上游来源 `langgraph/store/base/__init__.py:733`（`batch`）/ `:756`（`get`）/ `:779`（`search`）/ `:856`（`put`）/ `:937`（`delete`）/ `:946`（`list_namespaces`） |

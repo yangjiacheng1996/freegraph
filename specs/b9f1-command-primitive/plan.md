@@ -307,6 +307,7 @@ MUST **NOT** 新增门禁编号 · MUST **NOT** 放宽任何判据。
 | ② | **机械层已复跑并留证**：**B2F1 124/124 PASS** · **B2F2 76/76 PASS** · **B7F1 104/104 PASS** ⇒ 结论已记入 tasks **T042 ⑤** | ✅ 已完成（机械层） |
 | ③ | **人工验收记录的复跑与签字**：L1 的公开签名已变 ⇒ B2F1 / B2F2 的人工验收记录中**记载旧签名**的部分**已失效** ⇒ **MUST 由发起者复跑** `harness/verification/<feature>/acceptance.py` 并**签字**（原则 V · **MUST NOT** 由实现者代签） | ✅ **已闭合（2026-11-11）** —— 发起者亲自复跑 **B2F1 124/124 · B2F2 76/76 · B7F1 104/104**（全 **PASS**）⇒ 三份记录的「**补充验收**」段已**如实转录**输出并标注「**发起者验收**」（**实施者未代签**） |
 | ④ | **对 B2F1 / B7F1 的定向三件套核验**（等价于 `/speckit.analyze` 的**只读**读法）：已核 —— 「spec 已改 ⇒ plan / tasks 是否漂移」= **是**（执行记录里的旧签名表述）⇒ 已用**回溯修订注记**闭合（**只加注记 · 不改历史记录**）⇒ 残留漂移 == **0** | ✅ 已完成 |
+| ⑤ | **B7F1 的两处「内核零越界标识符」断言因本 feature 落地而**过期**（**补齐过期**）—— B7F1 的禁用名清单**含** `Command`（彼时 `Command` 归 B9F1 ⇒ B7F1 的内核**不实现**它）⇒ 本 feature 落地后，`Command` 的**运行期语义**（`goto` / `update`）**由 L2 内核实现**⇒ `Command` **不再是**越界标识符 ⇒ **仅移除这一项**（`tests/runtime/test_superstep_purity.py` 的 `FORBIDDEN_NAMES` + `harness/verification/B7F1/acceptance.py` 的同名常量）⇒ **其余六项 / 七项逐字保留**（`invoke` / `stream` / `compile` / `StateGraph` / `Send` / `interrupt` / `async`）⇒ 判据**只移除一处**、**不放宽其余**（宪法 v1.6.0「MUST NOT 以此放宽任何门禁判据」）⇒ **B7F1 的验收脚本内容已变 ⇒ MUST 由发起者复跑并签字**（同 ③ 的义务） | ⏳ **待发起者复跑签字**（**阻断合入** · T039） |
 
 **红线**：MUST **NOT** 由实现者代签人工验收 / 追认 · MUST **NOT** 借本 feature 顺带改 B2F1 的验收脚本
 （属**另一次**修订）· MUST **NOT** 改宪法正文 · MUST **NOT** 新增门禁编号。
