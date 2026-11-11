@@ -31,7 +31,16 @@ from freegraph.runtime import (
 UPSTREAM_PREFIXES = ("langgraph", "langchain", "langsmith")
 
 #: **禁用标识符**（FR-028 · 不越界）。
-FORBIDDEN_NAMES = ("invoke", "stream", "compile", "StateGraph", "Command", "Send", "interrupt")
+#:
+#: ⚠️ **回溯修订（2026-11-11 · B9F1 · 发起者特批 · 登记项 R-8 ⑤）**：
+#: 原清单**含** ``"Command"`` —— 彼时 ``Command`` 归 **B9F1** ⇒ B7F1 的内核
+#: **不实现**它 ⇒ 把它列为禁用名。本 feature 落地后，``Command`` 的**运行期
+#: 语义**（``goto`` / ``update``）**由 L2 内核实现** ⇒ ``Command`` **不再是**
+#: B7F1 判据里的「越界标识符」⇒ **仅移除这一项**。
+#: ⇒ **其余六项逐字保留**（``invoke`` / ``stream`` / ``compile`` /
+#: ``StateGraph`` / ``Send`` / ``interrupt``）⇒ 判据**只移除一处**、
+#: **不放宽其余**（宪法 v1.6.0「MUST NOT 以此放宽任何门禁判据」）。
+FORBIDDEN_NAMES = ("invoke", "stream", "compile", "StateGraph", "Send", "interrupt")
 
 #: 调度内核的**用例**文件（AST 扫描的扫描域）。
 SCHEDULER_TEST_FILES = (

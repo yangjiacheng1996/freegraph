@@ -47,11 +47,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Container, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
 from freegraph.contracts.errors import GraphRecursionError, InvalidUpdateError
+from freegraph.contracts.types import Command
 
 from .channel import Channel, EphemeralValue
 from .errors import InvalidChannelUpdateError
@@ -72,6 +73,25 @@ _CHANNEL_SOURCE = "c"
 #: **触发源标识的第二个空间** = **边触发源**（契约 §3.1 · 裁定 3）。
 _EDGE_SOURCE = "e"
 
+#: **终止标记**（契约 §3 · 裁定 6）—— 字符串字面量。
+#:
+#: ⚠️ **L2 MUST NOT import 门面**（L3 · ARCH-1）⇒ 终止标记 MUST 以**字面量**
+#: 判定 ⇒ 门面 ``END`` 的值 MUST 与本字面量**逐字相等**（**可自动核对** ·
+#: SC-008 第三子句）。
+_TERMINAL_MARKER = "__end__"
+
+#: **入口标记**（门面 ``START`` 的值）—— **不是**合法跳转目标（契约 §3 · V-13）。
+#:
+#: ⚠️ 同上：以**字面量**判定（L2 MUST NOT import 门面）。
+_START_MARKER = "__start__"
+
+#: **保留节点名**（契约 §7 · V-14）—— ``Command.PARENT`` 的值。
+#:
+#: 图规格里出现该名字的节点 MUST **构造期**显式失败（内置 ``ValueError``）⇒
+#: 杜绝「用户自建一个叫 ``__parent__`` 的节点 ⇒ ``Command.PARENT`` 跳到它」的
+#: **语义歧义**（宪法原则 VIII 的术语纪律）。
+_RESERVED_NODE_NAME = Command.PARENT
+
 
 @dataclass(frozen=True)
 class NodeSpec:
@@ -79,20 +99,36 @@ class NodeSpec:
 
     **构造签名**（**逐字冻结** · 契约 §1）::
 
-        NodeSpec(subscribes: tuple[str, ...], run: Callable[[dict[str, Any]], dict[str, Any]])
+        NodeSpec(
+            subscribes: tuple[str, ...],
+            run: Callable[
+                [dict[str, Any]],
+                dict[str, Any] | Command | list[Command | dict[str, Any]],
+            ],
+        )
 
     * ``subscribes`` —— 该节点**订阅**的通道 key：**既管触发判定、也管入参内容**
       （裁定 2 ⇒ MUST NOT 存在「订阅了某通道却读不到它的值」的情形）；
     * ``run`` —— 节点函数（**C5**：``f(state: dict) -> dict``）⇒ MUST 可调用；
-      其返回值 MUST 是 ``dict``（**MUST NOT** ``None``）。
+      其返回值 MUST 是 ``dict`` / ``Command`` / ``list[Command | dict]`` 之一
+      （**B9F1** · FR-001 · 裁定 15 / 21）。
 
     **校验**（契约 §2.2）MUST **显式失败**，MUST NOT 静默忽略。
 
     **不可变**（data-model §1）⇒ 构造后**不可**改写。
+
+    ⚠️ **返回类型注解的放宽**（**B9F1** · 裁定 11 / 15 · 协变放宽）：
+    B7F1 冻结的注解是 ``Callable[[dict[str, Any]], dict[str, Any]]`` ⇒ 本 feature
+    把**接受面**放宽为「``dict`` / ``Command`` / **命令列表**」三形态 ⇒
+    **构造签名与名字逐字不变**（参数名 / 顺序 / 种类 / 个数均未动）⇒
+    B7F2 / B7F3 / B8F1 / B12F1 **零改动**。
     """
 
     subscribes: tuple[str, ...]
-    run: Callable[[dict[str, Any]], dict[str, Any]]
+    run: Callable[
+        [dict[str, Any]],
+        dict[str, Any] | Command | list[Command | dict[str, Any]],
+    ]
 
     def __post_init__(self) -> None:
         """构造期校验（裁定 32）—— ``run`` MUST 可调用（契约 §2.2）。"""
@@ -160,16 +196,27 @@ class SchedulerState:
     * ``channel_versions`` —— **通道 key → 写入版本**（**每通道独立** ·
       research **D-03**）· 通道**成功写入**时 +1（清空**不是**写入 ⇒ 不推进）；
     * ``node_versions`` —— **节点名 → 执行版本**（边触发源的版本）· 节点
-      **执行成功**时 +1。
+      **执行成功**时 +1；
+    * ``dynamic_edges`` —— **动态边表**（**B9F1** · 裁定 12 · 澄清轮第 2 次
+      **Q5** 发起者拍板）—— **源节点名 → 其最近一次执行的跳转目标序列**
+      （**保序** · 去重）⇒ 源节点**再次执行**时**整体替换**（含**空集**）
+      ⇒ 旧的 ``goto`` 目标被清空（FR-009 · 裁定 2）。
 
     ⚠️ **可变**（data-model §1）—— 调用方持有 ⇒ 同一份图规格可**安全跑多次**
     （FR-004 · 裁定 16）⇒ 两个入口的「已消费版本」**不串扰**。
+
+    ⚠️ **带缺省字段的扩展**（**B9F1** · 登记项 **R-3 ①** · 裁定 12）：
+    ``dynamic_edges`` 用**工厂语义**实现（``default_factory=dict``）⇒
+    MUST NOT 用字面可变默认值（dataclass 会抛 ``ValueError: mutable default``
+    · **实测**）⇒ ``SchedulerState()`` 的**构造签名与名字逐字不变**
+    ⇒ B7F2 / B7F3 / B8F1 / B12F1 **零改动**（FR-016 · SC-015）。
     """
 
     versions_seen: dict[str, dict[tuple[str, str], int]] = field(default_factory=dict)
     step: int = 0
     channel_versions: dict[str, int] = field(default_factory=dict)
     node_versions: dict[str, int] = field(default_factory=dict)
+    dynamic_edges: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -227,6 +274,11 @@ def _validate_graph_spec(spec: GraphSpec) -> None:
     for name, node in spec.nodes.items():
         if not isinstance(name, str):
             raise TypeError(f"GraphSpec node name must be str, got {type(name).__name__}")
+        if name == _RESERVED_NODE_NAME:
+            raise ValueError(
+                f"GraphSpec node name {name!r} is reserved for Command.PARENT "
+                f"(reserved-name check)"
+            )
         if not isinstance(node, NodeSpec):
             raise TypeError(
                 f"GraphSpec.nodes[{name!r}] must be a NodeSpec instance, "
@@ -251,20 +303,46 @@ def _validate_graph_spec(spec: GraphSpec) -> None:
         )
 
 
-def _trigger_sources(spec: GraphSpec, node_name: str, node: NodeSpec) -> list[tuple[str, str]]:
-    """枚举一个节点的**全部**触发源（契约 §3.1）。
+def _trigger_sources(
+    spec: GraphSpec,
+    state: SchedulerState,
+    node_name: str,
+    node: NodeSpec,
+) -> list[tuple[str, str]]:
+    """枚举一个节点的**全部**触发源（契约 §3.1 · FR-002）。
 
     * **通道触发源** —— ``("c", 通道 key)``：节点订阅的每个通道；
     * **边触发源** —— ``("e", 源节点名)``：每条指向该节点的边的**源**节点。
 
     ⚠️ **两个标识空间 MUST 分离** ⇒ 避免「通道 key 与节点名同名」时互相覆盖
     （裁定 3）。
+
+    ⚠️ **静态边与动态边同处「边」空间**（裁定 1 · FR-002）⇒ 两者**叠加**
+    （FR-008）⇒ 同一对 (源, 目标) 只枚举**一次**（SC-007：「一轮内至多触发
+    一次」）⇒ 本函数对触发源**去重**（**保序**）。
+
+    ⚠️ **动态边的存在性**由**动态边表**决定（源节点 → 其**最近一次执行**给出
+    的跳转目标）⇒ 源节点再次执行且**不**给 ``goto`` ⇒ 旧目标**从本枚举中
+    消失** ⇒ 该目标**不再**被触发（FR-009 · 裁定 2）。
+
+    ⚠️ **版本口径**：边触发源的版本 = **源节点的执行版本**（每执行成功一次
+    +1）⇒ 静态边与动态边**同款**（契约 §5）⇒ 配合 ``seen`` 记录 ⇒
+    「动态边**只影响下一轮**」（FR-002）。
     """
-    sources = [(_CHANNEL_SOURCE, key) for key in node.subscribes]
+    sources: list[tuple[str, str]] = []
+    for key in node.subscribes:
+        sources.append((_CHANNEL_SOURCE, key))
     for source, targets in spec.edges.items():
         if node_name in targets:
             sources.append((_EDGE_SOURCE, source))
-    return sources
+    for source, targets in state.dynamic_edges.items():
+        if node_name in targets:
+            sources.append((_EDGE_SOURCE, source))
+    deduplicated: list[tuple[str, str]] = []
+    for source in sources:
+        if source not in deduplicated:
+            deduplicated.append(source)
+    return deduplicated
 
 
 def _view_channel(spec: GraphSpec, state: SchedulerState, key: str) -> int:
@@ -327,7 +405,7 @@ def _determine_triggers(spec: GraphSpec, state: SchedulerState) -> list[str]:
     """
     triggered: list[str] = []
     for node_name, node in spec.nodes.items():
-        sources = _trigger_sources(spec, node_name, node)
+        sources = _trigger_sources(spec, state, node_name, node)
         if _is_triggered(spec, state, node_name, node, sources):
             triggered.append(node_name)
     return triggered
@@ -371,45 +449,256 @@ def _node_input(spec: GraphSpec, node: NodeSpec) -> dict[str, Any]:
     return read_channels(subset)
 
 
+def _normalize_node_result(
+    result: Any,
+    node_names: Container[str],
+) -> dict[str, Any]:
+    """**归一**节点返回值 —— 三形态 → **一种内部形状**（契约 §2）。
+
+    **归一后的统一形状**（内部中间产物 · **不进公开面**）::
+
+        {"writes": dict[str, tuple[Any, ...]], "gotos": tuple[str, ...]}
+
+    * ``writes`` —— **待写入**（每 key 一个**值序列** · 键序 = 归一顺序）；
+    * ``gotos`` —— **跳转目标**（**保序去重**）。
+
+    **三种合法形态**（契约 §2 · FR-001）：
+
+    ============================ ==================================== ==========
+    形态                         语法                                   归一结果
+    ============================ ==================================== ==========
+    **部分状态**                 ``dict``                               该 dict 的 items
+    **单条命令**                 ``Command``                            ``update`` / ``goto``
+    **命令列表**                 ``list[Command | dict]``              按**列表顺序**归入
+    ============================ ==================================== ==========
+
+    ⚠️ **归一是唯一的新增概念** ⇒ 三形态归一后**只有一种内部表示** ⇒
+    「未知 key 报错」「归约器语义」「批量合并」「原子性」**全部复用 B7F1 的
+    同一条路径**（裁定 4 · FR-004）。
+
+    ⚠️ **失败信号**（契约 §7 · V-9…V-11）：
+
+    * **V-9**（返回值形态非法 · 含 ``None``）⇒ 内置 ``TypeError``；
+    * **V-10**（命令列表的**元素**类型非法）⇒ 内置 ``TypeError``；
+    * **V-11**（``Command.update`` **不是** ``dict``）⇒ 内置 ``TypeError``。
+
+    .. note::
+       **骨架期**（Phase 2 ⇒ 各故事落地前）：``Command`` 与**命令列表**两种形态
+       **一律**抛 ``NotImplementedError`` ⇒ 各故事的用例 MUST **先写 · 先失败**
+       （先红后绿）⇒ 实现由各用户故事**分摊**（T014 / T018）。
+    """
+    if isinstance(result, dict):
+        return {
+            "writes": {key: (value,) for key, value in result.items()},
+            "gotos": (),
+        }
+    if isinstance(result, Command):
+        return _normalize_command(result, node_names)
+    if isinstance(result, list):
+        return _normalize_command_list(result, node_names)
+    raise TypeError(
+        f"Node result must be a dict, a Command or a list of them, "
+        f"got {type(result).__name__} (V-9)"
+    )
+
+
+def _normalize_command(
+    command: Command,
+    node_names: Container[str],
+) -> dict[str, Any]:
+    """**归一**单条命令（契约 §2 · FR-003 · FR-004 · FR-010）。
+
+    * ``update`` —— ``None`` ⇒ **无写入**（该位**未提供**）；``dict`` ⇒ 逐 key
+      归入待写入（**空** ``dict`` ⇒ **无写入** · 该位**不产生动作**）；
+      **其它类型** ⇒ 内置 ``TypeError``（**V-11** · FR-010）；
+    * ``goto`` ⇒ 交由 :func:`_parse_goto_targets` 解析（契约 §3）；
+    * ``resume`` —— 本 feature **只接受**、**不产生任何效果**（FR-011 ·
+      恢复语义归 **B10F1**）。
+
+    ⚠️ **跳转与更新互不排斥**（FR-003）⇒ 两者**同时**归一进同一份结果 ⇒
+    「只生效其一」的现象**物理不可能**发生。
+    """
+    update = command.update
+    if update is None:
+        writes: dict[str, tuple[Any, ...]] = {}
+    elif isinstance(update, dict):
+        writes = {key: (value,) for key, value in update.items()}
+    else:
+        raise TypeError(
+            f"Command.update must be a dict or None, got {type(update).__name__} (V-11)"
+        )
+    return {"writes": writes, "gotos": _parse_goto_targets(command.goto, node_names)}
+
+
+def _normalize_command_list(
+    commands: list[Any],
+    node_names: Container[str],
+) -> dict[str, Any]:
+    """**归一**命令列表（契约 §2 · FR-001 · FR-004 · 裁定 15）。
+
+    * 元素 MUST 是 ``Command`` 或 ``dict`` ⇒ 其它类型 ⇒ 内置 ``TypeError``
+      （**V-10**）；
+    * 各元素的写入按**列表顺序**归入**同一份**待写入 ⇒ 归约型通道按该顺序
+      归约（与上游 ``_get_updates`` 的 ``updates.extend(...)`` **逐字一致**）
+      ⇒ **MUST NOT** 让「后一条命令覆盖前一条」（**值序列** ⇒ 同 key 的多个值
+      **依次入列**）；
+    * 各条命令的 ``goto`` 各自成边 ⇒ **并集**（**保序去重**）；
+    * **空列表** ⇒ **明确无操作**（零写入 + 零跳转）。
+    """
+    writes: dict[str, tuple[Any, ...]] = {}
+    gotos: list[str] = []
+    for element in commands:
+        if isinstance(element, Command):
+            part = _normalize_command(element, node_names)
+        elif isinstance(element, dict):
+            part = {
+                "writes": {key: (value,) for key, value in element.items()},
+                "gotos": (),
+            }
+        else:
+            raise TypeError(
+                f"Command list elements must be a Command or a dict, "
+                f"got {type(element).__name__} (V-10)"
+            )
+        for key, values in part["writes"].items():
+            writes[key] = writes.get(key, ()) + tuple(values)
+        for target in part["gotos"]:
+            if target not in gotos:
+                gotos.append(target)
+    return {"writes": writes, "gotos": tuple(gotos)}
+
+
+def _parse_goto_targets(
+    goto: Any,
+    node_names: Container[str],
+) -> tuple[str, ...]:
+    """**解析** ``Command.goto`` ⇒ 跳转目标（契约 §3 · FR-007）。
+
+    ================================ ==================================== ==========
+    输入                             解析结果                              说明
+    ================================ ==================================== ==========
+    ``None``                         无跳转                                该位**未提供**
+    ``str``（**先判**）              **一个**目标                           见下
+    ``Sequence[str]``（非空）        **多个**目标（**保序去重**）            每条各自成边
+    ``Sequence[str]``（空）          无跳转                                该位不产生动作
+    终止标记 ``"__end__"``           无跳转                                该位不产生动作
+    ``Command.PARENT``               **显式失败**                          ``NotImplementedError``
+    其它 ``str``                     **显式失败**                          ``ValueError``
+    其它类型 / 序列含非 ``str``      **显式失败**                          ``TypeError``
+    ================================ ==================================== ==========
+
+    ⚠️ **``str`` MUST 先判**（``str`` 本身也是 ``Sequence[str]`` ⇒ 顺序判断会
+    把它拆成字符序列 —— L1 docstring 逐字点名）。
+
+    ⚠️ **终止标记以字面量判定**（L2 **MUST NOT** import 门面 · ARCH-1）⇒
+    门面 ``END`` 的值 MUST 与该字面量**逐字相等**（**可自动核对** · 裁定 6）。
+
+    ⚠️ **失败信号 MUST 分开**（裁定 7 · 澄清轮第 2 次 **Q2**）：
+
+    * **V-12**（形态非法）⇒ 内置 ``TypeError``；
+    * **V-13**（目标不在节点表 / 空串 / ``START``）⇒ 内置 ``ValueError``
+      （**点名目标**）；
+    * **V-14**（``goto == Command.PARENT``）⇒ 内置 ``NotImplementedError``
+      （**点名 ``__parent__``** + 「子图属 v2 能力」）⇒ 「**写错了**」与
+      「**合法但未实现**」**可区分**。
+
+    ⚠️ **形态校验先于语义校验**：序列里**任一**元素**不是** ``str`` ⇒ 先抛
+    ``TypeError``（V-12）⇒ 再逐个做**目标**校验 ⇒ 「序列含非 ``str``」**恒**是
+    **类型错误**（与 spec Edge Cases 的逐字口径一致）。
+    """
+    if goto is None:
+        return ()
+    if isinstance(goto, str):
+        return _parse_goto_target(goto, node_names)
+    if isinstance(goto, Sequence):
+        items = list(goto)
+        for item in items:
+            if not isinstance(item, str):
+                raise TypeError(
+                    f"Command.goto sequence items must be str, "
+                    f"got {type(item).__name__} (V-12)"
+                )
+        targets: list[str] = []
+        for item in items:
+            for target in _parse_goto_target(item, node_names):
+                if target not in targets:
+                    targets.append(target)
+        return tuple(targets)
+    raise TypeError(
+        f"Command.goto must be a str or a sequence of str, "
+        f"got {type(goto).__name__} (V-12)"
+    )
+
+
+def _parse_goto_target(
+    target: str,
+    node_names: Container[str],
+) -> tuple[str, ...]:
+    """**解析**单个跳转目标（契约 §3 · FR-007 · V-13 / V-14）。
+
+    * ``Command.PARENT`` ⇒ 内置 ``NotImplementedError``（**V-14**）；
+    * 终止标记 ⇒ **无跳转**（该位不产生动作）；
+    * 空串 / ``START`` / 不在节点表 ⇒ 内置 ``ValueError``（**V-13** ·
+      **点名目标**）。
+    """
+    if target == _RESERVED_NODE_NAME:
+        raise NotImplementedError(
+            "Command.goto target '__parent__' (Command.PARENT) is not supported "
+            "in this version: 子图属 v2 能力（跨层传播归 C26 · v2）(V-14)"
+        )
+    if target == _TERMINAL_MARKER:
+        return ()
+    if not target or target == _START_MARKER or target not in node_names:
+        raise ValueError(
+            f"Command.goto target {target!r} is not a node in the graph (V-13)"
+        )
+    return (target,)
+
+
 def _execute_node(
     spec: GraphSpec,
     state: SchedulerState,
     node_name: str,
     node: NodeSpec,
     node_input: dict[str, Any],
-) -> dict[str, Any]:
-    """**执行**一个节点（阶段 ③ · FR-009 · FR-013 · FR-015）。
+) -> dict[str, tuple[Any, ...]]:
+    """**执行**一个节点（阶段 ③ · FR-009 · FR-013 · FR-015 · FR-001）。
 
     * 按**节点表顺序**串行执行；
     * 节点抛出的异常 MUST **原样**向上传播（**不**包装 · **不**吞掉）；
-    * 返回值 MUST 是 ``dict``（返回 ``None`` 或非 ``dict`` ⇒ **显式失败** ·
-      校验规则 **V-4** ⇒ 内置 ``TypeError``）；
-    * 节点**执行成功**后 ⇒ 其**执行版本** +1（边触发源的版本）。
+    * 返回值 MUST 是 ``dict`` / ``Command`` / ``list[Command | dict]`` 之一
+      （**FR-001**）⇒ 其它类型（含 ``None``）⇒ **显式失败**（内置
+      ``TypeError`` · **V-9**）；
+    * 返回值经 :func:`_normalize_node_result` **归一** ⇒ 待写入交给**既有的**
+      :func:`_collect_writes` / :func:`_merge_writes`（MUST NOT 另写合并路径）；
+    * 节点**执行成功**后 ⇒ 其**执行版本** +1（边触发源的版本）；
+    * 节点**执行成功**后 ⇒ **动态边表**登记本次的跳转目标（**整体替换** ·
+      含**空集** ⇒ 旧的 ``goto`` 目标被清空 · FR-009）。
     """
     result = node.run(node_input)
-    if not isinstance(result, dict):
-        raise TypeError(
-            f"Node {node_name!r} must return a dict, got {type(result).__name__}"
-        )
+    normalized = _normalize_node_result(result, spec.nodes)
+    state.dynamic_edges[node_name] = normalized["gotos"]
     state.node_versions[node_name] = state.node_versions.get(node_name, 0) + 1
-    return result
+    return normalized["writes"]
 
 
 def _collect_writes(
     executed: list[str],
-    results: dict[str, dict[str, Any]],
+    results: dict[str, dict[str, tuple[Any, ...]]],
 ) -> dict[str, dict[str, tuple[Any, ...]]]:
     """**收集待写入**（阶段 ④ · FR-006）。
 
     * 产出**待写入**并**按节点分组**保留（节点名 → 通道 key → 值序列）
       ⇒ B8F1 的 fresh 读复用前提；
+    * **``Command.update`` 的写入归到**返回该命令的那个节点**名下（裁定 16 ·
+      SC-022）⇒ **归一**已在**执行阶段**完成 ⇒ 本阶段**只收集**、**不**写入；
     * 执行期间通道的**正式值 MUST NOT** 被改写 ⇒ 本阶段**只收集**、**不**写入。
     """
     pending: dict[str, dict[str, tuple[Any, ...]]] = {}
     for node_name in executed:
         writes = pending.setdefault(node_name, {})
-        for key, value in results[node_name].items():
-            writes[key] = writes.get(key, ()) + (value,)
+        for key, values in results[node_name].items():
+            writes[key] = writes.get(key, ()) + tuple(values)
     return pending
 
 
@@ -554,12 +843,12 @@ def _run_round(
     tasks: list[tuple[str, NodeSpec, dict[str, Any]]] = []
     for node_name in triggered:
         node = spec.nodes[node_name]
-        sources = _trigger_sources(spec, node_name, node)
+        sources = _trigger_sources(spec, state, node_name, node)
         node_input = _node_input(spec, node)
         _consume_versions(state, node_name, sources)
         tasks.append((node_name, node, node_input))
     executed: list[str] = []
-    results: dict[str, dict[str, Any]] = {}
+    results: dict[str, dict[str, tuple[Any, ...]]] = {}
     for node_name, node, node_input in tasks:
         results[node_name] = _execute_node(spec, state, node_name, node, node_input)
         executed.append(node_name)

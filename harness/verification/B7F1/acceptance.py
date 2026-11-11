@@ -132,12 +132,19 @@ UPSTREAM_PACKAGE_NAMES = (
 )
 
 #: **越界**标识符（FR-028 · MUST NOT 实现）。
+#:
+#: ⚠️ **回溯修订（2026-11-11 · B9F1 · 发起者特批 · 登记项 R-8 ⑤）**：
+#: 原清单**含** ``"Command"`` —— 彼时 ``Command`` 归 **B9F1** ⇒ B7F1 的内核
+#: **不实现**它 ⇒ 把它列为禁用名。B9F1 落地后，``Command`` 的**运行期语义**
+#: **由 L2 内核实现** ⇒ ``Command`` **不再是**越界标识符 ⇒ **仅移除这一项**。
+#: ⇒ **其余七项逐字保留**（``invoke`` / ``stream`` / ``compile`` /
+#: ``StateGraph`` / ``Send`` / ``interrupt`` / ``async``）⇒ 判据**只移除一处**、
+#: **不放宽其余**。
 FORBIDDEN_NAMES = (
     "invoke",
     "stream",
     "compile",
     "StateGraph",
-    "Command",
     "Send",
     "interrupt",
     "async",
