@@ -1507,8 +1507,9 @@
   `harness/features/B8F1_条件边路由与fresh读.md:42`（§2）· `:111`（§7 口径提醒）；导航文件
   `harness/features/README.md:44`。
   **宪法修订**：本 feature 的两条义务**触发了宪法 v1.8.0**（新增「跨 feature 承接的接线通则」·
-  首次适用 = B5F2）⇒ 记录于 `.specify/memory/constitution.md` 的修订记录 v1.8.0 与
-  `harness/proposals/立项书.md` §12 的 **D16**。
+  首次适用 = B5F2）⇒ 记录于 `.specify/memory/constitution.md` 的**正文**与
+  `.specify/memory/constitution-changelog.md` 的**修订记录 v1.8.0**（⚠️ **2026-11-13** 起
+  修订记录已归档至该文件）· 以及 `harness/proposals/立项书.md` §12 的 **D16**。
 - **差分夹具的 freegraph 侧**：由**测试侧**的规格驱动器承担（MUST NOT 进 `src/`）⇒ 它是 **B7F1**
   调度器的**替身**，MUST NOT 含触发判定 / 分支路由 / 版本号逻辑（裁定 6）。
 - **人工验证记录**：采用仓库既有的**五段式** + **来源覆盖表**（宪法原则 V / VIII）；
