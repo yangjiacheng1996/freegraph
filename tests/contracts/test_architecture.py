@@ -13,7 +13,7 @@ G3      依赖闭包**为空**（基础安装零第三方依赖）              
 G4      **零**环境变量读取 + **零**出站（范围含夹具目录）           FR-011
 G5      每个新源文件带署名头且 docstring 为首个语句                FR-015/SC-009
 G6      ``py.typed`` 存在且为空（PEP 561）                         FR-011
-G7      公开符号面**恰为 18 个**（清单驱动 · 分两段落地）           FR-012/SC-001/SC-017
+G7      公开符号面**恰为 20 个**（清单驱动 · 清单来自 public-api.md §0） FR-012/SC-001/SC-017
 G8      文档合规门禁（兼容矩阵逐符号覆盖 + ``THIRD_PARTY_NOTICES``） FR-013/SC-020/SC-021
 G9      **运行时环境基线**：typing 构件上限 = 3.11                  FR-011
 G10     协议**纯抽象**（方法体只有 ``...``）                        FR-007/SC-008
@@ -23,7 +23,10 @@ G13     **纯数据纪律**（数据类不得含对象引用字段）           
 ======  ==========================================================  ==========================
 
 G1–G6 / G9 继承自 **B1F1**（``specs/b1f1-contracts-core/contracts/architecture-gates.md``），
-G7 / G8 由本 feature **修改**（8 → 18 · 改为清单驱动），G10–G13 为**新增**。
+G7 / G8 由本 feature **修改**（8 → 20 · 改为清单驱动），G10–G13 为**新增**。
+⚠️ **2026-11-13 订正（X1 / R-10）**：本行的「18」是**交付时点记述**（B2F1 交付时确为 18）
+⇒ 当前权威 = ``public-api.md`` §0 的清单（**恰好 20 个** · 上游对齐批次 P3 扩面）
+⇒ **断言零改动**（清单驱动 ⇒ 期望值从清单解析 ⇒ **不硬编码个数**）。
 
 「已加载模块清单」类断言 MUST 在**子进程**中执行——测试进程自身已被
 pytest 污染，同进程 ``sys.modules`` 不可作依据（research D-11）。
@@ -52,7 +55,7 @@ SIGNATURE_HEADER = (
     "https://github.com/yangjiacheng1996/freegraph"
 )
 
-#: 契约层的公开符号面（恰 18 个）——**唯一权威**是
+#: 契约层的公开符号面（清单驱动 · **当前 20 个**）——**唯一权威**是
 #: ``specs/b2f1-contracts-protocols/contracts/public-api.md`` §0。
 #:
 #: **期望值一律从 §0 解析**（:func:`parse_public_api_symbols`），MUST NOT 硬编码
@@ -395,9 +398,9 @@ def parse_public_api_symbols(manifest: Path) -> tuple[list[str], list[str]]:
        （注释行不是符号；分组注释行用于切分「既有 / 新增」）；
     ④ 余下每行按 ``,`` 切分取**首段**再 ``strip()``，并**断言**其匹配
        ``^[A-Za-z_][A-Za-z0-9_]*$``（不匹配即报可读错误，MUST NOT 静默跳过）；
-    ⑤ 抽出的符号名集合 MUST 为 **18** 个（否则报可读错误，MUST NOT 静默返回空集）；
-    ⑥ 按 §0 的**分组注释**把结果切分为「B1F1 已冻结的 8 个」与
-       「B2F1 新增的 10 个」两段。
+    ⑤ 抽出的符号名集合 MUST 为 **20** 个（否则报可读错误，MUST NOT 静默返回空集）；
+    ⑥ 按 §0 的**分组注释**把结果切分为「B1F1 已冻结的 8 个」·
+       「B2F1 新增的 10 个」·「B12F1 上游对齐新增的 2 个」三段。
     """
     text = manifest.read_text(encoding="utf-8")
     blocks = re.findall(r"```[A-Za-z0-9_+-]*\n(.*?)```", text, re.S)
@@ -423,6 +426,7 @@ def parse_public_api_symbols(manifest: Path) -> tuple[list[str], list[str]]:
 
     existing: list[str] = []
     new: list[str] = []
+    aligned: list[str] = []
     bucket = existing
     for raw in lines[1:end]:
         stripped = raw.strip()
@@ -433,6 +437,8 @@ def parse_public_api_symbols(manifest: Path) -> tuple[list[str], list[str]]:
                 bucket = existing
             elif "B2F1 新增的 10 个" in stripped:
                 bucket = new
+            elif "B12F1 上游对齐新增的 2 个" in stripped:
+                bucket = aligned
             continue
         name = stripped.split(",")[0].split("#")[0].strip()
         assert re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name), (
@@ -440,18 +446,22 @@ def parse_public_api_symbols(manifest: Path) -> tuple[list[str], list[str]]:
         )
         bucket.append(name)
 
-    symbols = existing + new
-    assert len(symbols) == 18, (
-        f"{manifest} §0 解析出的符号数 MUST 为 18，实得 {len(symbols)}：{symbols}"
+    symbols = existing + new + aligned
+    assert len(symbols) == 20, (
+        f"{manifest} §0 解析出的符号数 MUST 为 20，实得 {len(symbols)}：{symbols}"
     )
     assert len(existing) == 8, (
         f"{manifest} §0 的「既有」段 MUST 恰为 8 个，实得 {len(existing)}"
     )
-    assert set(new) == FR012_NEW_SYMBOLS, (
-        f"{manifest} §0 的「新增」段 MUST 恰为 FR-012 所列的 10 个，"
-        f"实得 {sorted(set(new) ^ FR012_NEW_SYMBOLS)}（对称差）"
+    assert set(new) | set(aligned) == FR012_NEW_SYMBOLS | {"Interrupt", "PregelTask"}, (
+        f"{manifest} §0 的「新增 + 上游对齐」段 MUST 恰为 FR-012 所列的 10 个 + "
+        f"上游对齐新增的 2 个，实得 {sorted((set(new) | set(aligned)) ^ (FR012_NEW_SYMBOLS | {'Interrupt', 'PregelTask'}))}（对称差）"
     )
-    return existing, new
+    assert set(aligned) == {"Interrupt", "PregelTask"}, (
+        f"{manifest} §0 的「上游对齐」段 MUST 恰为 2 个（Interrupt / PregelTask），"
+        f"实得 {sorted(aligned)}"
+    )
+    return existing, new + aligned
 
 
 def _first_line(path: Path) -> str:
@@ -718,21 +728,23 @@ class TestPyTypedMarker:
 
 
 class TestPublicSymbolSurface:
-    """G7 · 公开符号面恰为 18 个（FR-012 · 清单驱动）。"""
+    """G7 · 公开符号面恰为 **20** 个（FR-012 · **清单驱动** · 期望值从 public-api.md §0 解析）。"""
 
-    def test_manifest_splits_into_eight_existing_and_ten_new(self, repo_root: Path) -> None:
+    def test_manifest_splits_into_eight_existing_ten_new_and_two_aligned(
+        self, repo_root: Path
+    ) -> None:
         """**新增集合段**（始终启用）——既有恰 8 个、新增恰为 FR-012 的 10 个。
 
         这是 SC-017「新增恰为 10 个」的机械落点（总集合相等断言**不覆盖**这一维）。
         """
         existing, new = parse_public_api_symbols(repo_root / PUBLIC_API_MANIFEST)
         assert len(existing) == 8
-        assert set(new) == FR012_NEW_SYMBOLS
+        assert set(new) == FR012_NEW_SYMBOLS | {"Interrupt", "PregelTask"}
 
     def test_all_equals_public_symbols(self, repo_root: Path) -> None:
-        """**集合相等段** —— ``__all__`` MUST **集合等于** §0 解析出的 18 个符号。
+        """**集合相等段** —— ``__all__`` MUST **集合等于** §0 解析出的 20 个符号。
 
-        （18 个符号全部导出后启用——抓「漏导出」。集合断言才能抓住
+        （20 个符号全部导出后启用——抓「漏导出」。集合断言才能抓住
         「偷偷多导出一个」。）
         """
         import freegraph.contracts as contracts
@@ -745,7 +757,7 @@ class TestPublicSymbolSurface:
         )
 
     def test_all_is_a_subset_of_the_manifest(self, repo_root: Path) -> None:
-        """**子集段**（始终启用）——``__all__`` ⊆ §0 解析出的 18 个。
+        """**子集段**（始终启用）——``__all__`` ⊆ §0 解析出的 20 个。
 
         抓住「偷偷多导出一个」；构造期 ``__all__`` 尚未齐全时恒成立。
         """
@@ -760,8 +772,8 @@ class TestPublicSymbolSurface:
     def test_every_exported_name_is_gettable(self) -> None:
         """``__all__`` 里的每个名字 MUST 能从 ``freegraph.contracts`` 直接取到。
 
-        （「清单里的 18 个**全部**已导出」那条断言属 G7 的**集合相等段**——
-        在 18 个符号全部导出后启用。）
+        （「清单里的符号**全部**已导出」那条断言属 G7 的**集合相等段**——
+        在全部符号导出后启用。）
         """
         import freegraph.contracts as contracts
 
@@ -1236,14 +1248,14 @@ class TestDocumentationCompliance:
     def test_compat_matrix_rows_are_within_the_manifest(
         self, repo_root: Path
     ) -> None:
-        """**子集段**（始终启用）——契约层的 18 个符号 MUST **至多一行**。
+        """**子集段**（始终启用）——契约层的符号 MUST **至多一行**。
 
         （抓「重复 / 超量」。矩阵**整体无重复行**是更一般的判据，一并断言。）
 
         **口径修订（2026-11-07 · B2F2）**：兼容矩阵自 **B2F2** 起**同时**承载
-        **契约层 18 个**与**门面层 7 个**符号 ⇒「矩阵首列符号集合 **==** 契约层
-        18 个」这一**整表**判据**不再成立**。本门禁的判定因此**按层收敛到
-        契约层**——B2F2 的门禁契约声明本门禁的范围**正是**「契约层 18 个符号」
+        **契约层 20 个**与**门面层 7 个**符号 ⇒「矩阵首列符号集合 **==** 契约层
+        20 个」这一**整表**判据**不再成立**。本门禁的判定因此**按层收敛到
+        契约层**——B2F2 的门禁契约声明本门禁的范围**正是**「契约层 20 个符号」
         （门面层 7 个符号的覆盖由门禁 **G19** 判，两者的**分工不重叠**）；
         整表的「无清单外符号」由 **G19** 一并判。
         **契约层的任何一条判据都未被削弱**——「不多」（本段）与「不少」
@@ -1299,12 +1311,12 @@ class TestDocumentationCompliance:
                 )
 
     def test_compat_matrix_covers_every_manifest_symbol(self, repo_root: Path) -> None:
-        """**集合相等段** —— 契约层的 18 个符号 MUST 在矩阵中**全部齐备**。
+        """**集合相等段** —— 契约层的符号 MUST 在矩阵中**全部齐备**。
 
         （README 已补入本层 10 行 ⇒ 该段自此启用；抓「漏写」。）
 
         **口径修订（2026-11-07 · B2F2）**：矩阵自 **B2F2** 起同时承载**门面层**
-        的 7 个符号 ⇒ 整表集合相等判据改为**按层**判定（契约层 18 个**齐备**
+        的 7 个符号 ⇒ 整表集合相等判据改为**按层**判定（契约层符号**齐备**
         + 整表符号集合由门禁 **G19** 判）。
         """
         readme = (repo_root / "README.md").read_text(encoding="utf-8")
@@ -1482,12 +1494,12 @@ class TestPureDataDiscipline:
 
 
 class TestPublicSymbolAnnotations:
-    """SC-010 / FR-012 · 公开符号面 **18 个符号**的注解 MUST 可被完整解析。"""
+    """SC-010 / FR-012 · 公开符号面（**清单驱动**）的注解 MUST 可被完整解析。"""
 
-    def test_all_eighteen_symbols_have_resolvable_annotations(
+    def test_all_twenty_symbols_have_resolvable_annotations(
         self, repo_root: Path
     ) -> None:
-        """18 个符号逐一解析——无未解析的字符串注解、无解析异常。
+        """清单里的符号逐一解析——无未解析的字符串注解、无解析异常。
 
         （协议取其**方法**注解；数据类取其**字段**注解；类型别名与异常类
         取其自身可解析的部分。）
@@ -1496,7 +1508,7 @@ class TestPublicSymbolAnnotations:
 
         existing, new = parse_public_api_symbols(repo_root / PUBLIC_API_MANIFEST)
         symbols = existing + new
-        assert len(symbols) == 18
+        assert len(symbols) == 20
 
         for name in symbols:
             symbol = getattr(contracts, name)

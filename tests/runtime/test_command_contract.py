@@ -2,6 +2,11 @@
 
 """**契约守卫**的用例 —— 属 **B9F1**（tasks T031）。
 
+⚠️ **触发模型**（上游对齐 · 2026-11-12）：触发源**恒为边**（上游
+``branch:to:<node>`` · ``langgraph/graph/state.py:1531-1532``）⇒ ``subscribes``
+只决定「读哪些通道」（上游 ``:1534``）⇒ 每张图 MUST 有**入口边**
+``{"__start__": (首节点,)}``（上游 ``add_edge(START, "a")`` 的同款写法）。
+
 **契约权威**：``specs/b9f1-command-primitive/contracts/command-contract.md``
 （``<!-- authority: yes -->``）⇒ 本文件 MUST **解析**该契约并**逐条**断言
 §9 的 **I-1…I-14**（MUST NOT 只测行为而不校验契约文本）。
@@ -121,7 +126,11 @@ def _contract_invariants() -> list[str]:
 
 
 def _channels() -> dict[str, Channel]:
-    """构造通道状态：归约型（``messages``）+ 覆盖型（``count`` / ``seed``）。"""
+    """构造通道状态：归约型（``messages``）+ 覆盖型（``count`` / ``seed``）。
+
+    ⚠️ ``seed`` 的**初值**只作**入参**（``subscribes`` 只决定「读哪些通道」·
+    上游 ``langgraph/graph/state.py:1534``）⇒ **不再**是触发源。
+    """
     return {
         "messages": BinaryOperatorAggregate("messages", list, operator.add),
         "count": LastValue("count", int),
@@ -129,14 +138,47 @@ def _channels() -> dict[str, Channel]:
     }
 
 
+#: **入口哨兵**（上游 ``START`` 的值 · ``langgraph/constants.py:30``）——
+#: 触发源**恒为边**（上游 ``branch:to:<node>`` · ``langgraph/graph/state.py:1531``）
+#: ⇒ 每张图 MUST 有**入口边** ``{"__start__": (首节点,)}``（上游
+#: ``add_edge(START, "a")`` 的同款写法 · ``langgraph/graph/state.py:321``）。
+_START = "__start__"
+
+
+def _never(state: dict[str, Any]) -> dict[str, Any]:
+    """**入口哨兵**的节点函数 —— 恒**不被调用**（哨兵无入边 ⇒ 永不被触发）。"""
+    raise AssertionError("入口哨兵 __start__ 恒不被执行")
+
+
+#: **入口哨兵节点**（上游 ``START`` **伪节点**）—— 恒**不被执行**。
+_SENTINEL = NodeSpec(subscribes=(), run=_never)
+
+
+def _graph(
+    channels: dict[str, Channel],
+    nodes: dict[str, NodeSpec],
+    edges: dict[str, tuple[str, ...]],
+) -> GraphSpec:
+    """组装图规格 —— **注入**入口哨兵节点（``edges`` MUST 已含**入口边**）。
+
+    ⚠️ 边的**源** MUST 在节点表里（V-2）⇒ 入口边的**源**（``__start__``）由
+    **哨兵节点**承载（上游的 ``START`` 亦是图里的**伪节点**）。
+    """
+    return GraphSpec(
+        channels=channels,
+        nodes={_START: _SENTINEL, **nodes},
+        edges=edges,
+    )
+
+
 def _run_returning(result: Any) -> Any:
-    """跑一个**只返回** ``result`` 的单节点图。"""
+    """跑一个**只返回** ``result`` 的单节点图（靠**入口边**起跑）。"""
     channels = _channels()
     channels["seed"].update([1])
-    spec = GraphSpec(
+    spec = _graph(
         channels=channels,
         nodes={"writer": NodeSpec(subscribes=("seed",), run=lambda state: result)},
-        edges={},
+        edges={_START: ("writer",)},
     )
     return run_super_step(spec, SchedulerState())
 
@@ -172,13 +214,30 @@ def test_every_binding_points_to_a_real_test_function(invariant: str) -> None:
 
 
 def test_i1_only_three_return_forms_are_accepted() -> None:
-    """**I-1**：返回值**只有三种合法形态**（``dict`` / ``Command`` / 列表）。"""
+    """**I-1**：返回值**只有三种合法形态**（``dict`` / ``Command`` / 列表）。
+
+    ⚠️ **2026-11-12 上游对齐 P3**：**``None`` 也是合法形态**（**无写入**）
+    —— 上游 ``langgraph/graph/state.py:1459-1460`` 的 ``if input is None: return None``
+    ⇒ 非法形态的样例**换成** ``123``（``None`` 已被上游合法化）。
+    """
     for valid in ({"messages": ["x"]}, Command(update={"messages": ["x"]}),
                   [Command(update={"messages": ["x"]})]):
         assert _run_returning(valid).executed == ("writer",)
 
     with pytest.raises(TypeError):
-        _run_returning(None)
+        _run_returning(123)
+
+
+def test_a_node_returning_none_is_a_no_op_like_upstream() -> None:
+    """**上游同款**：节点返回 ``None`` ⇒ **无写入**（不是错误）。
+
+    ⚠️ **2026-11-12 上游对齐 P3** · 上游 ``langgraph/graph/state.py:1459-1460``。
+    """
+    result = _run_returning(None)
+
+    assert result.executed == ("writer",)
+    assert result.state["messages"] == []
+    assert result.node_writes == {"writer": {}}
 
 
 def test_i2_the_three_forms_share_one_merge_path() -> None:
@@ -209,8 +268,15 @@ def test_i4_the_list_writes_are_merged_in_list_order() -> None:
     assert result.state["messages"] == ["first", "second"]
 
 
-def test_i5_every_list_goto_becomes_its_own_edge() -> None:
-    """**I-5**：列表里每条 ``goto`` **各自成边** ⇒ 全部目标**都**被执行。"""
+@pytest.mark.parametrize("max_concurrency", [1, None], ids=["serial", "concurrent"])
+def test_i5_every_list_goto_becomes_its_own_edge(max_concurrency: int | None) -> None:
+    """**I-5**：列表里每条 ``goto`` **各自成边** ⇒ 全部目标**都**被执行。
+    ⚠️ **B12F1（T069）**：本用例断言「用户侧副作用的**同轮完成顺序**」⇒
+    并发下该顺序**不再确定** ⇒ **拆分而不删** —— ① **串行模式**
+    （``max_concurrency=1``）**保留原逐字顺序断言**（**一条不删**）·
+    ② **并发模式**（缺省）断言**顺序无关但有力**的性质
+    （**元素多重集相等** + **次数相等**）⇒ **MUST NOT** 写成「跑过了就行」的弱断言。
+    """
     channels = _channels()
     channels["seed"].update([1])
     executed: list[str] = []
@@ -227,23 +293,35 @@ def test_i5_every_list_goto_becomes_its_own_edge() -> None:
         executed.append("two")
         return {}
 
-    spec = GraphSpec(
+    spec = _graph(
         channels=channels,
         nodes={
             "writer": NodeSpec(subscribes=("seed",), run=writer),
             "one": NodeSpec(subscribes=(), run=one),
             "two": NodeSpec(subscribes=(), run=two),
         },
-        edges={},
+        edges={_START: ("writer",)},
     )
 
-    run_super_steps(spec)
+    run_super_steps(spec, max_concurrency=max_concurrency)
 
-    assert executed == ["writer", "one", "two"]
+    if max_concurrency == 1:
+        # ⚠️ **串行模式**：**原逐字**顺序断言（**一条不删**）
+        assert executed == ["writer", "one", "two"]
+    else:
+        # ⚠️ **并发模式**：**顺序无关**但**有力**（元素多重集相等 + 次数相等）
+        assert sorted(executed) == ['one', 'two', 'writer']
+        assert len(executed) == 3
 
 
 def test_i6_the_dynamic_edges_are_replaced_wholesale() -> None:
-    """**I-6**：再次执行无 ``goto`` ⇒ 旧目标**不再**被触发（**整体替换**）。"""
+    """**I-6**：再次执行无 ``goto`` ⇒ 旧目标**不再**被触发（**整体替换**）。
+
+    ⚠️ **上游同款**（上游对齐 · 2026-11-12）：触发源**恒为边** ⇒ 源节点的
+    **再次执行**必须由**显式边**驱动（本例：静态边 ``z → x``）⇒ 旧目标被清空
+    的证据 = ``z`` 在 ``x`` 的**第二次**执行之后**不再**被触发 ⇒ 执行序列里
+    ``z`` **只出现一次**（若动态边**未**被整体替换 ⇒ ``z`` 会**再**被执行一次）。
+    """
     channels = _channels()
     channels["seed"].update([1])
     executed: list[str] = []
@@ -260,18 +338,18 @@ def test_i6_the_dynamic_edges_are_replaced_wholesale() -> None:
         executed.append("z")
         return {}
 
-    spec = GraphSpec(
+    spec = _graph(
         channels=channels,
         nodes={
             "x": NodeSpec(subscribes=("seed", "count"), run=writer),
             "z": NodeSpec(subscribes=("count",), run=z),
         },
-        edges={},
+        edges={_START: ("x",), "z": ("x",)},
     )
 
     run_super_steps(spec)
 
-    assert executed == ["x#1", "x#2", "z"]
+    assert executed == ["x#1", "z", "x#2"]
 
 
 def test_i7_the_target_is_triggered_only_in_the_next_round() -> None:
@@ -279,13 +357,13 @@ def test_i7_the_target_is_triggered_only_in_the_next_round() -> None:
     channels = _channels()
     channels["seed"].update([1])
     state = SchedulerState()
-    spec = GraphSpec(
+    spec = _graph(
         channels=channels,
         nodes={
             "x": NodeSpec(subscribes=("seed",), run=lambda state: Command(goto="z")),
             "z": NodeSpec(subscribes=(), run=lambda state: {}),
         },
-        edges={},
+        edges={_START: ("x",)},
     )
 
     first = run_super_step(spec, state)
@@ -296,7 +374,11 @@ def test_i7_the_target_is_triggered_only_in_the_next_round() -> None:
 
 
 def test_i8_the_target_runs_without_any_valued_channel() -> None:
-    """**I-8**：``goto`` 目标**无「有值」门槛**（订阅通道无值仍被执行）。"""
+    """**I-8**：``goto`` 目标**无「有值」门槛**（订阅通道无值仍被执行）。
+
+    ⚠️ **上游同款**：边触发源**没有**「值」概念 ⇒ 判定式**只有**版本比较
+    ⇒ 目标**不**因「订阅通道无值」而被挡下。
+    """
     channels = _channels()
     channels["seed"].update([1])
     captured: list[dict[str, Any]] = []
@@ -308,13 +390,13 @@ def test_i8_the_target_runs_without_any_valued_channel() -> None:
         captured.append(state)
         return {}
 
-    spec = GraphSpec(
+    spec = _graph(
         channels=channels,
         nodes={
             "x": NodeSpec(subscribes=("seed",), run=writer),
             "z": NodeSpec(subscribes=("count",), run=z),
         },
-        edges={},
+        edges={_START: ("x",)},
     )
 
     run_super_steps(spec)
@@ -338,13 +420,13 @@ def test_i9_the_target_input_equals_the_sparse_read() -> None:
         captured.append(state)
         return {}
 
-    spec = GraphSpec(
+    spec = _graph(
         channels=channels,
         nodes={
             "x": NodeSpec(subscribes=("seed",), run=writer),
             "z": NodeSpec(subscribes=("count", "messages"), run=z),
         },
-        edges={},
+        edges={_START: ("x",)},
     )
 
     run_super_steps(spec)
@@ -368,13 +450,13 @@ def test_i10_the_target_reads_the_source_update() -> None:
         captured.append(state)
         return {}
 
-    spec = GraphSpec(
+    spec = _graph(
         channels=channels,
         nodes={
             "x": NodeSpec(subscribes=("seed",), run=writer),
             "z": NodeSpec(subscribes=("count",), run=z),
         },
-        edges={},
+        edges={_START: ("x",)},
     )
 
     run_super_steps(spec)
@@ -382,8 +464,15 @@ def test_i10_the_target_reads_the_source_update() -> None:
     assert captured[0]["count"] == 5
 
 
-def test_i11_the_dynamic_and_static_edges_are_superposed() -> None:
-    """**I-11**：动态边与静态边**叠加**（两个目标**都**被触发）。"""
+@pytest.mark.parametrize("max_concurrency", [1, None], ids=["serial", "concurrent"])
+def test_i11_the_dynamic_and_static_edges_are_superposed(max_concurrency: int | None) -> None:
+    """**I-11**：动态边与静态边**叠加**（两个目标**都**被触发）。
+    ⚠️ **B12F1（T069）**：本用例断言「用户侧副作用的**同轮完成顺序**」⇒
+    并发下该顺序**不再确定** ⇒ **拆分而不删** —— ① **串行模式**
+    （``max_concurrency=1``）**保留原逐字顺序断言**（**一条不删**）·
+    ② **并发模式**（缺省）断言**顺序无关但有力**的性质
+    （**元素多重集相等** + **次数相等**）⇒ **MUST NOT** 写成「跑过了就行」的弱断言。
+    """
     channels = _channels()
     channels["seed"].update([1])
     executed: list[str] = []
@@ -400,19 +489,25 @@ def test_i11_the_dynamic_and_static_edges_are_superposed() -> None:
         executed.append("z")
         return {}
 
-    spec = GraphSpec(
+    spec = _graph(
         channels=channels,
         nodes={
             "x": NodeSpec(subscribes=("seed",), run=writer),
             "y": NodeSpec(subscribes=(), run=y),
             "z": NodeSpec(subscribes=(), run=z),
         },
-        edges={"x": ("y",)},
+        edges={_START: ("x",), "x": ("y",)},
     )
 
-    run_super_steps(spec)
+    run_super_steps(spec, max_concurrency=max_concurrency)
 
-    assert executed == ["x", "y", "z"]
+    if max_concurrency == 1:
+        # ⚠️ **串行模式**：**原逐字**顺序断言（**一条不删**）
+        assert executed == ["x", "y", "z"]
+    else:
+        # ⚠️ **并发模式**：**顺序无关**但**有力**（元素多重集相等 + 次数相等）
+        assert sorted(executed) == ['x', 'y', 'z']
+        assert len(executed) == 3
 
 
 def test_i12_end_neither_jumps_nor_terminates() -> None:
@@ -429,13 +524,13 @@ def test_i12_end_neither_jumps_nor_terminates() -> None:
         executed.append("y")
         return {}
 
-    spec = GraphSpec(
+    spec = _graph(
         channels=channels,
         nodes={
             "x": NodeSpec(subscribes=("seed",), run=writer),
             "y": NodeSpec(subscribes=(), run=y),
         },
-        edges={"x": ("y",)},
+        edges={_START: ("x",), "x": ("y",)},
     )
 
     result = run_super_steps(spec)
@@ -445,12 +540,22 @@ def test_i12_end_neither_jumps_nor_terminates() -> None:
 
 
 def test_i13_the_empty_slots_and_lists_are_no_ops() -> None:
-    """**I-13**：空槽位 / 空列表 = **无操作**（零写入 + 零跳转 + 计入执行记录）。"""
-    for empty in (Command(update={}), Command(goto=()), Command(goto=(), update={}), []):
+    """**I-13**：空槽位 = **无操作**（零写入 + 零跳转 + 计入执行记录）。
+
+    ⚠️ **2026-11-12 上游对齐 P3**：**空列表不再是「无操作」** ⇒ **显式失败** ——
+    上游的判据是 ``isinstance(input,(list,tuple)) and input and any(...)``
+    ⇒ **空列表落 ``else``** ⇒ 抛 ``InvalidUpdateError("Expected dict, got []")``
+    （上游 ``langgraph/graph/state.py:1488-1492``）。
+    ⇒ freegraph 抛内置 ``TypeError``（**类型不同 · 语义等价**）。
+    """
+    for empty in (Command(update={}), Command(goto=()), Command(goto=(), update={})):
         result = _run_returning(empty)
         assert result.executed == ("writer",)
         assert result.state["messages"] == []
         assert result.node_writes == {"writer": {}}
+
+    with pytest.raises(TypeError):
+        _run_returning([])
 
 
 def test_i14_the_result_object_has_exactly_four_fields() -> None:
@@ -460,3 +565,34 @@ def test_i14_the_result_object_has_exactly_four_fields() -> None:
     from freegraph.runtime import SuperStepResult
 
     assert len(fields(SuperStepResult)) == 4
+
+
+# ── 上游同款（2026-11-12 上游对齐 P3）──────────────────────────────────────
+
+
+def test_the_update_accepts_a_list_of_two_tuples_like_upstream() -> None:
+    """``Command.update`` MUST 接受 **list/tuple of 2-tuples**（**上游同款**）。
+
+    ⚠️ **2026-11-12 上游对齐 P3**：上游 ``langgraph/types.py:836-840``
+    ⇒ 元素**必须是 tuple** · 键**必须是 str** ⇒ 逐条照抄（含「列表元素不算」的细节）。
+    """
+    from_list = _run_returning(Command(update=[("messages", ["x"])]))
+    assert from_list.state["messages"] == ["x"]
+
+    from_tuple = _run_returning(Command(update=(("messages", ["y"]),)))
+    assert from_tuple.state["messages"] == ["y"]
+
+    # **元素必须是 tuple** ⇒ 列表元素**不算**（上游同款）
+    with pytest.raises(TypeError):
+        _run_returning(Command(update=[["messages", ["z"]]]))  # type: ignore[arg-type]
+
+
+def test_a_command_to_the_parent_graph_fails_like_upstream() -> None:
+    """``Command(graph=Command.PARENT)`` MUST **显式失败**（**上游同款**）。
+
+    ⚠️ **2026-11-12 上游对齐 P3**：上游 ``langgraph/graph/state.py:1761-1762``
+    抛 ``ParentCommand``（上游 ``errors.py:129-133``）⇒ freegraph 抛内置
+    ``NotImplementedError``（**类型不同 · 语义等价（都失败）**）。
+    """
+    with pytest.raises(NotImplementedError):
+        _run_returning(Command(graph=Command.PARENT))

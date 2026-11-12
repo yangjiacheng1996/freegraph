@@ -15,6 +15,11 @@
 * 参数化的守卫用例断言「**契约里的每条不变量都有绑定**」且「**每条绑定都
   指向一个真实存在的测试函数**」⇒ 契约新增一条不变量而没人断言 ⇒ **变红**。
 
+⚠️ **2026-11-12 · 上游对齐（P1-0-2）**：契约 §3 已整节重写为「**纯边触发** +
+``__start__`` 入口」⇒ 本文件的夹具一律带**入口边**
+（``edges={"__start__": ("首节点",)}``）⇒ ``subscribes`` **只**决定「读哪些通道」
+⇒ **I-3 / I-4** 的措辞已与契约同步（**边触发源**口径 / **无入边**）。
+
 **签名头**（宪法原则 X）：本文件带署名头且模块 docstring 是首个语句。
 """
 
@@ -52,7 +57,7 @@ SUPERSTEP_CONTRACT_PATH = (
 )
 
 #: 契约 §7 冻结的**不变量编号集合**（**逐条** · I-1…I-15）。
-EXPECTED_INVARIANTS = tuple(f"I-{index}" for index in range(1, 16))
+EXPECTED_INVARIANTS = tuple(f"I-{index}" for index in range(1, 17))
 
 #: **编号 → 断言**的绑定表（每条不变量**恰好**一个**真实断言**的测试函数）。
 INVARIANT_TESTS: dict[str, str] = {
@@ -67,10 +72,11 @@ INVARIANT_TESTS: dict[str, str] = {
     "I-9": "test_i9_a_failed_round_leaves_every_channel_unchanged",
     "I-10": "test_i10_only_unwritten_routing_channels_are_cleared",
     "I-11": "test_i11_repeating_the_same_spec_yields_equal_results",
-    "I-12": "test_i12_the_execution_order_follows_the_node_table_order",
+    "I-12": "test_i12_the_report_order_follows_the_node_name_order",
     "I-13": "test_i13_two_independent_scheduler_states_give_equal_results",
     "I-14": "test_i14_a_non_empty_conditional_edges_field_fails_explicitly",
     "I-15": "test_i15_a_node_exception_propagates_as_the_very_same_object",
+    "I-16": "test_i16_the_same_spec_runs_concurrently_without_interference",
 }
 
 
@@ -168,13 +174,31 @@ def _channels() -> dict[str, Channel]:
 class _CountingEphemeral(EphemeralValue):
     """**计数路由型**通道（``isinstance(channel, EphemeralValue)`` 仍成立）。"""
 
-    def __init__(self, key: str, value_type: Any) -> None:
-        super().__init__(key, value_type)
+    def __init__(self, key: str, value_type: Any, guard: bool = True) -> None:
+        super().__init__(key, value_type, guard)
         self.clear_calls = 0
 
     def clear(self) -> bool:
         self.clear_calls += 1
         return super().clear()
+
+    def update(self, values):  # type: ignore[no-untyped-def]
+        """计入「**空序列**写入」—— 上游同款的**步末清空**口径。"""
+        if not values:
+            self.clear_calls += 1
+        return super().update(values)
+
+
+#: **入口哨兵节点**（上游 ``START`` 同款 · ``langgraph/constants.py:30``）。
+#:
+#: ⚠️ 它**无入边** ⇒ **永不执行**（永不进 ``executed``）⇒ 它只作「入口边」的**源**。
+#:
+#: ⚠️ **为什么它 MUST 在节点表里** —— ``GraphSpec`` 的校验规则 **V-2** 要求
+#: 「边的**源** MUST 在节点表里」⇒ 入口边 ``edges={"__start__": ("首节点",)}``
+#: 的源 ``__start__`` 也 MUST 在节点表里（上游的 ``START`` 是**编译期**补进去的
+#: 伪节点 · ``langgraph/graph/state.py:321`` ⇒ freegraph 在**手写图规格**层面
+#: 用「节点表里的一个哨兵节点」表达**同款**语义）。
+_ENTRY = NodeSpec(subscribes=(), run=lambda state: {})
 
 
 # ── I-1 · 节点入参是普通 dict 且只含「订阅集 ∩ 有值集」───────────────────
@@ -192,8 +216,11 @@ def test_i1_node_input_is_a_plain_dict_with_only_the_available_subscriptions() -
 
     spec = GraphSpec(
         channels=channels,
-        nodes={"reader": NodeSpec(subscribes=("count", "messages"), run=node)},
-        edges={},
+        nodes={
+            "__start__": _ENTRY,
+            "reader": NodeSpec(subscribes=("count", "messages"), run=node),
+        },
+        edges={"__start__": ("reader",)},
     )
 
     run_super_step(spec, SchedulerState())
@@ -220,8 +247,11 @@ def test_i2_node_input_equals_the_sparse_read_of_the_sub_mapping() -> None:
 
     spec = GraphSpec(
         channels=channels,
-        nodes={"reader": NodeSpec(subscribes=("messages", "count"), run=node)},
-        edges={},
+        nodes={
+            "__start__": _ENTRY,
+            "reader": NodeSpec(subscribes=("messages", "count"), run=node),
+        },
+        edges={"__start__": ("reader",)},
     )
 
     run_super_step(spec, SchedulerState())
@@ -242,7 +272,11 @@ def test_i2_node_input_equals_the_sparse_read_of_the_sub_mapping() -> None:
 
 
 def test_i3_the_same_version_never_triggers_the_same_node_twice() -> None:
-    """**I-3**：同一版本 MUST NOT 重复触发同一节点。"""
+    """**I-3**：同一版本 MUST NOT 重复触发同一节点（**边触发源**口径 · 契约 §3）。
+
+    ⚠️ **上游同款**：入口哨兵的版本**恒为 1** ⇒ 入口节点**只在第 1 轮**被触发
+    一次 ⇒ 第 2 轮**不**重复触发。
+    """
     channels = _channels()
     channels["count"].update([1])
     calls: list[str] = []
@@ -253,8 +287,11 @@ def test_i3_the_same_version_never_triggers_the_same_node_twice() -> None:
 
     spec = GraphSpec(
         channels=channels,
-        nodes={"node": NodeSpec(subscribes=("count",), run=node)},
-        edges={},
+        nodes={
+            "__start__": _ENTRY,
+            "node": NodeSpec(subscribes=("count",), run=node),
+        },
+        edges={"__start__": ("node",)},
     )
     state = SchedulerState()
 
@@ -268,7 +305,13 @@ def test_i3_the_same_version_never_triggers_the_same_node_twice() -> None:
 
 
 def test_i4_an_untriggered_node_never_runs() -> None:
-    """**I-4**：未被触发的节点执行次数 == **0**。"""
+    """**I-4**：**无入边**（且非入口节点）的节点执行次数 == **0**。
+
+    ⚠️ **上游同款**：触发源**恒为边** ⇒ 该节点**订阅了有值通道**却**无入边**
+    ⇒ ``sources(N)`` 为空 ⇒ **永不**执行。
+    """
+    channels = _channels()
+    channels["count"].update([1])
     calls: list[str] = []
 
     def node(state: dict[str, Any]) -> dict[str, Any]:
@@ -276,8 +319,11 @@ def test_i4_an_untriggered_node_never_runs() -> None:
         return {}
 
     spec = GraphSpec(
-        channels=_channels(),
-        nodes={"node": NodeSpec(subscribes=("count",), run=node)},
+        channels=channels,
+        nodes={
+            "__start__": _ENTRY,
+            "node": NodeSpec(subscribes=("count",), run=node),
+        },
         edges={},
     )
 
@@ -297,6 +343,7 @@ def test_i5_two_nodes_writing_the_reducing_channel_are_concatenated() -> None:
     spec = GraphSpec(
         channels=channels,
         nodes={
+            "__start__": _ENTRY,
             "a": NodeSpec(
                 subscribes=("count",), run=lambda state: {"messages": ["a"]}
             ),
@@ -304,7 +351,7 @@ def test_i5_two_nodes_writing_the_reducing_channel_are_concatenated() -> None:
                 subscribes=("count",), run=lambda state: {"messages": ["b"]}
             ),
         },
-        edges={},
+        edges={"__start__": ("a", "b")},
     )
 
     result = run_super_step(spec, SchedulerState())
@@ -324,10 +371,11 @@ def test_i6_two_nodes_writing_the_overwriting_channel_fail_explicitly() -> None:
     spec = GraphSpec(
         channels=channels,
         nodes={
+            "__start__": _ENTRY,
             "a": NodeSpec(subscribes=("count",), run=lambda state: {"count": 1}),
             "b": NodeSpec(subscribes=("count",), run=lambda state: {"count": 2}),
         },
-        edges={},
+        edges={"__start__": ("a", "b")},
     )
 
     with pytest.raises(InvalidChannelUpdateError) as excinfo:
@@ -348,12 +396,13 @@ def test_i7_an_unknown_key_fails_explicitly_with_all_unknown_keys() -> None:
     spec = GraphSpec(
         channels=channels,
         nodes={
+            "__start__": _ENTRY,
             "a": NodeSpec(
                 subscribes=("count",),
                 run=lambda state: {"count": 1, "ghost_a": 2, "ghost_b": 3},
-            )
+            ),
         },
-        edges={},
+        edges={"__start__": ("a",)},
     )
 
     with pytest.raises(InvalidUpdateError) as excinfo:
@@ -381,10 +430,11 @@ def test_i8_the_official_value_is_not_rewritten_during_execution() -> None:
     spec = GraphSpec(
         channels=channels,
         nodes={
+            "__start__": _ENTRY,
             "reader": NodeSpec(subscribes=("count",), run=reader),
             "writer": NodeSpec(subscribes=("count",), run=writer),
         },
-        edges={},
+        edges={"__start__": ("reader", "writer")},
     )
 
     run_super_step(spec, SchedulerState())
@@ -409,10 +459,11 @@ def test_i9_a_failed_round_leaves_every_channel_unchanged() -> None:
     spec = GraphSpec(
         channels=channels,
         nodes={
+            "__start__": _ENTRY,
             "a": NodeSpec(subscribes=("count",), run=lambda state: {"count": 1}),
             "b": NodeSpec(subscribes=("count",), run=lambda state: {"count": 2}),
         },
-        edges={},
+        edges={"__start__": ("a", "b")},
     )
 
     with pytest.raises(InvalidChannelUpdateError):
@@ -429,25 +480,43 @@ def test_i9_a_failed_round_leaves_every_channel_unchanged() -> None:
 
 
 def test_i10_only_unwritten_routing_channels_are_cleared() -> None:
-    """**I-10**：步末 MUST NOT 清「本轮写过的」路由型通道；MUST 清「未写的」。"""
+    """**I-10**：步末 MUST NOT 清「本轮写过的」路由型通道；MUST 清「未写的」。
+
+    ⚠️ **2026-11-12 · 上游对齐 P2-a**：步末清空的**机制**改为上游同款的
+    ``update(EMPTY_SEQ)``（上游 ``langgraph/pregel/_algo.py:326-333``）⇒ 计数口径
+    改为「**空序列**写入」的次数；且**只有**「仍有值」的通道会被通知
+    （上游同款：``if channels[chan].is_available() and chan not in updated_channels``）
+    ⇒ **无值**的路由通道**不**产生调用（**可观察状态**一致：空 ⇒ 空）。
+    """
     channels = _channels()
     route = _CountingEphemeral("route", str)
     channels["route"] = route
     spec = GraphSpec(
         channels=channels,
         nodes={
+            "__start__": _ENTRY,
             "writer": NodeSpec(
                 subscribes=("count",), run=lambda state: {"count": 1}
-            )
+            ),
         },
-        edges={},
+        edges={"__start__": ("writer",)},
     )
     channels["count"].update([1])
 
-    run_super_step(spec, SchedulerState())
+    state = SchedulerState()
+    run_super_step(spec, state)
 
-    assert route.clear_calls == 1
-    assert route.is_available() is False
+    # ⚠️ 观测**本次运行**的通道实例（上游同款 · P2-b）
+    run_route = state.channels["route"]
+    # 路由通道**无值** ⇒ 上游口径下**不**被通知（调用次数 == 0）
+    assert run_route.clear_calls == 0
+
+    # **模板**带上值 ⇒ **新建的运行期实例**继承它 ⇒ 本轮**未**写入 ⇒ 被通知一次（**清空**）
+    route.update(["x"])
+    state2 = SchedulerState()
+    run_super_step(spec, state2)
+    assert state2.channels["route"].clear_calls == 1
+    assert state2.channels["route"].is_available() is False
 
 
 # ── I-11 · 重复执行 ⇒ 状态与执行序列逐项相等 ───────────────────────────
@@ -461,8 +530,11 @@ def test_i11_repeating_the_same_spec_yields_equal_results() -> None:
         channels["count"].update([1])
         spec = GraphSpec(
             channels=channels,
-            nodes={"node": NodeSpec(subscribes=("count",), run=lambda state: {})},
-            edges={},
+            nodes={
+                "__start__": _ENTRY,
+                "node": NodeSpec(subscribes=("count",), run=lambda state: {}),
+            },
+            edges={"__start__": ("node",)},
         )
         result = run_super_step(spec, SchedulerState())
         results.append((result.state, result.executed))
@@ -473,8 +545,14 @@ def test_i11_repeating_the_same_spec_yields_equal_results() -> None:
 # ── I-12 · 节点表顺序 == 执行顺序 ───────────────────────────────────────
 
 
-def test_i12_the_execution_order_follows_the_node_table_order() -> None:
-    """**I-12**：执行顺序 MUST == **节点表顺序**（MUST NOT 节点名字典序）。"""
+def test_i12_the_report_order_follows_the_node_name_order() -> None:
+    """**I-12**：**报告顺序** MUST == **节点名序**（**上游同款** · `_algo.py:482`）。
+
+    ⚠️ **2026-11-13 · B12F1 回溯修订 T-8**：原措辞「执行顺序 MUST == **节点表顺序**」⇒
+    ① **P2-c** 已把口径改为**节点名序**；② **并发**下「**执行**的时间先后」**不确定**
+    ⇒ ⇒ 本条只承诺「**报告**顺序（`executed` 的口径）」⇒ ⇒ **执行时序 MUST NOT**
+    作为任何可观察顺序的判据（**拆分而不删** · 顺序承诺本身不撤销）。
+    """
     def make(name: str) -> Any:
         def run(state: dict[str, Any]) -> dict[str, Any]:
             return {}
@@ -487,14 +565,19 @@ def test_i12_the_execution_order_follows_the_node_table_order() -> None:
         spec = GraphSpec(
             channels=channels,
             nodes={
-                name: NodeSpec(subscribes=("count",), run=make(name))
-                for name in order
+                "__start__": _ENTRY,
+                **{
+                    name: NodeSpec(subscribes=("count",), run=make(name))
+                    for name in order
+                },
             },
-            edges={},
+            edges={"__start__": order},
         )
         return run_super_step(spec, SchedulerState()).executed
 
-    assert build(("zeta", "alpha")) == ("zeta", "alpha")
+    # ⚠️ **上游同款**（2026-11-12 P2-c）：执行顺序 = **节点名序**
+    # （上游 ``langgraph/pregel/_algo.py:482``）⇒ **重排节点表不改变**执行序列
+    assert build(("zeta", "alpha")) == ("alpha", "zeta")
     assert build(("alpha", "zeta")) == ("alpha", "zeta")
 
 
@@ -508,8 +591,11 @@ def test_i13_two_independent_scheduler_states_give_equal_results() -> None:
         channels["count"].update([1])
         spec = GraphSpec(
             channels=channels,
-            nodes={"node": NodeSpec(subscribes=("count",), run=lambda state: {})},
-            edges={},
+            nodes={
+                "__start__": _ENTRY,
+                "node": NodeSpec(subscribes=("count",), run=lambda state: {}),
+            },
+            edges={"__start__": ("node",)},
         )
         return run_super_step(spec, SchedulerState())
 
@@ -545,11 +631,68 @@ def test_i15_a_node_exception_propagates_as_the_very_same_object() -> None:
 
     spec = GraphSpec(
         channels=channels,
-        nodes={"node": NodeSpec(subscribes=("count",), run=node)},
-        edges={},
+        nodes={
+            "__start__": _ENTRY,
+            "node": NodeSpec(subscribes=("count",), run=node),
+        },
+        edges={"__start__": ("node",)},
     )
 
     with pytest.raises(RuntimeError) as excinfo:
         run_super_step(spec, SchedulerState())
 
     assert excinfo.value is boom
+
+
+# ── I-16 · 运行期的通道值住在调度状态里（上游同款 · 多会话隔离）──────────────
+
+
+def test_i16_the_same_spec_runs_concurrently_without_interference() -> None:
+    """**I-16**：**运行期的通道值** MUST 住在**调度状态**的 ``channels`` 里 ⇒
+    **同一份图规格可并发跑多次而互不干扰**（**上游同款** · P2-b）。
+
+    ⚠️ **P2-b 之前**通道值住在**图规格**里 ⇒ 第二次运行会**累积**上次的值
+    （审计的 **X-6**）⇒ 本用例是该缺陷的**回归防线**。
+    """
+    import threading
+
+    def build() -> Any:
+        seed = LastValue("seed", int)
+        seed.update([1])
+        acc = BinaryOperatorAggregate("acc", list, operator.add)
+        spec = GraphSpec(
+            channels={"seed": seed, "acc": acc},
+            nodes={
+                "__start__": _ENTRY,
+                "writer": NodeSpec(
+                    subscribes=("seed",), run=lambda s: {"acc": ["written"]}
+                ),
+            },
+            edges={"__start__": ("writer",)},
+        )
+        return spec
+
+    # ① 连续两次（两个独立调度状态）⇒ 互不累积
+    spec = build()
+    first = run_super_step(spec, SchedulerState())
+    second = run_super_step(spec, SchedulerState())
+    assert first.state["acc"] == ["written"]
+    assert second.state["acc"] == ["written"]
+
+    # ② 并发两次 ⇒ 互不干扰
+    spec = build()
+    outcomes: dict[str, Any] = {}
+
+    def run(tag: str) -> None:
+        outcomes[tag] = run_super_step(spec, SchedulerState()).state
+
+    threads = [threading.Thread(target=run, args=(tag,)) for tag in ("A", "B")]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert outcomes["A"]["acc"] == ["written"]
+    assert outcomes["B"]["acc"] == ["written"]
+
+    # ③ **模板**不被运行期改写 ⇒ 图规格可反复复用
+    assert spec.channels["acc"].get() == []

@@ -3,6 +3,10 @@
 """**跳转语义**（叠加 / 生命周期 / 触发门槛 / 入参）的用例 —— 属 **B9F1**
 （tasks T024 / T025）。
 
+⚠️ **触发模型**（上游对齐 · 2026-11-12）：触发源**恒为边**（上游
+``branch:to:<node>``）⇒ ``subscribes`` 只决定「读哪些通道」⇒ 每张图 MUST 有
+**入口边** ``{"__start__": (首节点,)}``（上游 ``add_edge(START, "a")`` 的同款写法）。
+
 覆盖的判定：
 
 * **SC-007** —— 静态边目标与 ``goto`` 目标**都**在下一轮被触发（**叠加**）；
@@ -22,6 +26,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 import operator
 from typing import Any
 
@@ -40,7 +46,11 @@ from freegraph.runtime import (
 
 
 def _channels() -> dict[str, Channel]:
-    """构造通道状态：**归约型**（``messages``）+ 覆盖型（``count`` / ``seed``）。"""
+    """构造通道状态：**归约型**（``messages``）+ **覆盖型**（``count`` / ``seed``）。
+
+    ⚠️ ``seed`` 的**初值**只作**入参**（``subscribes`` 只决定「读哪些通道」·
+    上游 ``langgraph/graph/state.py:1534``）⇒ **不再**是触发源。
+    """
     return {
         "messages": BinaryOperatorAggregate("messages", list, operator.add),
         "count": LastValue("count", int),
@@ -48,11 +58,51 @@ def _channels() -> dict[str, Channel]:
     }
 
 
-def test_the_goto_target_and_the_static_edge_target_are_both_triggered() -> None:
+#: **入口哨兵**（上游 ``START`` 的值 · ``langgraph/constants.py:30``）——
+#: 触发源**恒为边**（上游 ``branch:to:<node>`` · ``langgraph/graph/state.py:1531``）
+#: ⇒ 每张图 MUST 有**入口边** ``{"__start__": (首节点,)}``（上游
+#: ``add_edge(START, "a")`` 的同款写法 · ``langgraph/graph/state.py:321``）。
+_START = "__start__"
+
+
+def _never(state: dict[str, Any]) -> dict[str, Any]:
+    """**入口哨兵**的节点函数 —— 恒**不被调用**（哨兵无入边 ⇒ 永不被触发）。"""
+    raise AssertionError("入口哨兵 __start__ 恒不被执行")
+
+
+#: **入口哨兵节点**（上游 ``START`` **伪节点**）—— 恒**不被执行**。
+_SENTINEL = NodeSpec(subscribes=(), run=_never)
+
+
+def _graph(
+    channels: dict[str, Channel],
+    nodes: dict[str, NodeSpec],
+    edges: dict[str, tuple[str, ...]],
+) -> GraphSpec:
+    """组装图规格 —— **注入**入口哨兵节点（``edges`` MUST 已含**入口边**）。
+
+    ⚠️ 边的**源** MUST 在节点表里（V-2）⇒ 入口边的**源**（``__start__``）由
+    **哨兵节点**承载（上游的 ``START`` 亦是图里的**伪节点**）。
+    """
+    return GraphSpec(
+        channels=channels,
+        nodes={_START: _SENTINEL, **nodes},
+        edges=edges,
+    )
+
+
+@pytest.mark.parametrize("max_concurrency", [1, None], ids=["serial", "concurrent"])
+def test_the_goto_target_and_the_static_edge_target_are_both_triggered(max_concurrency: int | None) -> None:
     """**SC-007**：静态边目标与 ``goto`` 目标**都**在下一轮被触发（**叠加**）。
 
     ⇒ 「``goto`` 取消静态边」或「静态边取消 ``goto``」的现象 == **0** 次
     （裁定 3 · 发起者的概念锚点：「两者同类 ⇒ 叠加自洽」）。
+    
+    ⚠️ **B12F1（T069）**：本用例断言「用户侧副作用的**同轮完成顺序**」⇒
+    并发下该顺序**不再确定** ⇒ **拆分而不删** —— ① **串行模式**
+    （``max_concurrency=1``）**保留原逐字顺序断言**（**一条不删**）·
+    ② **并发模式**（缺省）断言**顺序无关但有力**的性质
+    （**元素多重集相等** + **次数相等**）⇒ **MUST NOT** 写成「跑过了就行」的弱断言。
     """
     channels = _channels()
     channels["seed"].update([1])
@@ -70,19 +120,25 @@ def test_the_goto_target_and_the_static_edge_target_are_both_triggered() -> None
         executed.append("z")
         return {}
 
-    spec = GraphSpec(
+    spec = _graph(
         channels=channels,
         nodes={
             "x": NodeSpec(subscribes=("seed",), run=writer),
             "y": NodeSpec(subscribes=(), run=y),
             "z": NodeSpec(subscribes=(), run=z),
         },
-        edges={"x": ("y",)},
+        edges={_START: ("x",), "x": ("y",)},
     )
 
-    run_super_steps(spec)
+    run_super_steps(spec, max_concurrency=max_concurrency)
 
-    assert executed == ["x", "y", "z"]
+    if max_concurrency == 1:
+        # ⚠️ **串行模式**：**原逐字**顺序断言（**一条不删**）
+        assert executed == ["x", "y", "z"]
+    else:
+        # ⚠️ **并发模式**：**顺序无关**但**有力**（元素多重集相等 + 次数相等）
+        assert sorted(executed) == ['x', 'y', 'z']
+        assert len(executed) == 3
 
 
 def test_the_same_source_target_pair_is_triggered_at_most_once_per_round() -> None:
@@ -102,13 +158,13 @@ def test_the_same_source_target_pair_is_triggered_at_most_once_per_round() -> No
         executed.append("y")
         return {}
 
-    spec = GraphSpec(
+    spec = _graph(
         channels=channels,
         nodes={
             "x": NodeSpec(subscribes=("seed",), run=writer),
             "y": NodeSpec(subscribes=(), run=y),
         },
-        edges={"x": ("y",)},
+        edges={_START: ("x",), "x": ("y",)},
     )
 
     run_super_steps(spec)
@@ -121,8 +177,10 @@ def test_the_goto_target_is_not_triggered_again_after_the_source_reruns_without_
 
     ⇒ 「残留触发（幽灵触发）」的现象 == **0** 次（裁定 2 · FR-009）。
 
-    ⚠️ 源节点靠**自己写入的通道**再次被触发（第 1 轮写 ``count`` ⇒ 第 2 轮
-    ``count`` 版本推进 ⇒ 源节点再跑一次 ⇒ 本次**不**给 ``goto``）。
+    ⚠️ **上游同款**（上游对齐 · 2026-11-12）：触发源**恒为边** ⇒ 源节点的
+    **再次执行** MUST 由**显式边**驱动（本例：静态边 ``z → x``）⇒ 旧目标被
+    清空的证据 = ``z`` 在 ``x`` 的**第二次**执行之后**不再**被触发 ⇒ 执行序列
+    里 ``z`` **只出现一次**（若动态边**未**被整体替换 ⇒ ``z`` 会**再**被执行）。
     """
     channels = _channels()
     channels["seed"].update([1])
@@ -140,18 +198,18 @@ def test_the_goto_target_is_not_triggered_again_after_the_source_reruns_without_
         executed.append("z")
         return {}
 
-    spec = GraphSpec(
+    spec = _graph(
         channels=channels,
         nodes={
             "x": NodeSpec(subscribes=("seed", "count"), run=writer),
             "z": NodeSpec(subscribes=("count",), run=z),
         },
-        edges={},
+        edges={_START: ("x",), "z": ("x",)},
     )
 
     run_super_steps(spec)
 
-    assert executed == ["x#1", "x#2", "z"]
+    assert executed == ["x#1", "z", "x#2"]
 
 
 def test_the_goto_target_runs_even_when_its_subscribed_channels_have_no_value() -> None:
@@ -170,13 +228,13 @@ def test_the_goto_target_runs_even_when_its_subscribed_channels_have_no_value() 
         captured.append(state)
         return {}
 
-    spec = GraphSpec(
+    spec = _graph(
         channels=channels,
         nodes={
             "x": NodeSpec(subscribes=("seed",), run=writer),
             "z": NodeSpec(subscribes=("count",), run=z),
         },
-        edges={},
+        edges={_START: ("x",)},
     )
 
     run_super_steps(spec)
@@ -202,13 +260,13 @@ def test_the_goto_target_input_equals_the_sparse_read_of_the_sub_mapping() -> No
         captured.append(state)
         return {}
 
-    spec = GraphSpec(
+    spec = _graph(
         channels=channels,
         nodes={
             "x": NodeSpec(subscribes=("seed",), run=writer),
             "z": NodeSpec(subscribes=("count", "messages"), run=z),
         },
-        edges={},
+        edges={_START: ("x",)},
     )
 
     run_super_steps(spec)
@@ -237,13 +295,13 @@ def test_the_goto_target_reads_the_source_update() -> None:
         captured.append(state)
         return {}
 
-    spec = GraphSpec(
+    spec = _graph(
         channels=channels,
         nodes={
             "x": NodeSpec(subscribes=("seed",), run=writer),
             "z": NodeSpec(subscribes=("count",), run=z),
         },
-        edges={},
+        edges={_START: ("x",)},
     )
 
     run_super_steps(spec)
@@ -251,10 +309,17 @@ def test_the_goto_target_reads_the_source_update() -> None:
     assert captured[0]["count"] == 5
 
 
-def test_a_multi_target_goto_triggers_every_target() -> None:
+@pytest.mark.parametrize("max_concurrency", [1, None], ids=["serial", "concurrent"])
+def test_a_multi_target_goto_triggers_every_target(max_concurrency: int | None) -> None:
     """**SC-011**：``goto=("one", "two")`` ⇒ **全部**目标在下一轮被执行。
 
     ⇒ 与「单条命令 + 多目标 ``goto``」**同款**（裁定 9 · 上游实测同款）。
+    
+    ⚠️ **B12F1（T069）**：本用例断言「用户侧副作用的**同轮完成顺序**」⇒
+    并发下该顺序**不再确定** ⇒ **拆分而不删** —— ① **串行模式**
+    （``max_concurrency=1``）**保留原逐字顺序断言**（**一条不删**）·
+    ② **并发模式**（缺省）断言**顺序无关但有力**的性质
+    （**元素多重集相等** + **次数相等**）⇒ **MUST NOT** 写成「跑过了就行」的弱断言。
     """
     channels = _channels()
     channels["seed"].update([1])
@@ -272,19 +337,25 @@ def test_a_multi_target_goto_triggers_every_target() -> None:
         executed.append("two")
         return {}
 
-    spec = GraphSpec(
+    spec = _graph(
         channels=channels,
         nodes={
             "x": NodeSpec(subscribes=("seed",), run=writer),
             "one": NodeSpec(subscribes=(), run=one),
             "two": NodeSpec(subscribes=(), run=two),
         },
-        edges={},
+        edges={_START: ("x",)},
     )
 
-    run_super_steps(spec)
+    run_super_steps(spec, max_concurrency=max_concurrency)
 
-    assert executed == ["x", "one", "two"]
+    if max_concurrency == 1:
+        # ⚠️ **串行模式**：**原逐字**顺序断言（**一条不删**）
+        assert executed == ["x", "one", "two"]
+    else:
+        # ⚠️ **并发模式**：**顺序无关**但**有力**（元素多重集相等 + 次数相等）
+        assert sorted(executed) == ['one', 'two', 'x']
+        assert len(executed) == 3
 
 
 def test_an_empty_goto_sequence_produces_no_jump() -> None:
@@ -301,13 +372,13 @@ def test_an_empty_goto_sequence_produces_no_jump() -> None:
         executed.append("z")
         return {}
 
-    spec = GraphSpec(
+    spec = _graph(
         channels=channels,
         nodes={
             "x": NodeSpec(subscribes=("seed",), run=writer),
             "z": NodeSpec(subscribes=(), run=z),
         },
-        edges={},
+        edges={_START: ("x",)},
     )
 
     run_super_steps(spec)
@@ -332,13 +403,13 @@ def test_goto_end_does_not_terminate_the_graph_and_the_update_still_applies() ->
         executed.append("y")
         return {}
 
-    spec = GraphSpec(
+    spec = _graph(
         channels=channels,
         nodes={
             "x": NodeSpec(subscribes=("seed",), run=writer),
             "y": NodeSpec(subscribes=(), run=y),
         },
-        edges={"x": ("y",)},
+        edges={_START: ("x",), "x": ("y",)},
     )
 
     result = run_super_steps(spec)
@@ -353,13 +424,13 @@ def test_the_goto_target_is_not_executed_in_the_same_round() -> None:
     channels["seed"].update([1])
     state = SchedulerState()
 
-    spec = GraphSpec(
+    spec = _graph(
         channels=channels,
         nodes={
             "x": NodeSpec(subscribes=("seed",), run=lambda state: Command(goto="z")),
             "z": NodeSpec(subscribes=(), run=lambda state: {}),
         },
-        edges={},
+        edges={_START: ("x",)},
     )
 
     first = run_super_step(spec, state)
