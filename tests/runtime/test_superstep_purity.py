@@ -10,6 +10,11 @@
   `langsmith` 的导入次数 == **0**；
 * **SC-018** —— 零环境变量读取 · 零出站 · 导入无副作用。
 
+⚠️ **2026-11-12 · 上游对齐（P1-0-2）**：触发源**恒为边**（上游 ``branch:to:<node>``
+· ``langgraph/graph/state.py:1531-1532``）⇒ 本文件的夹具一律带**入口边**
+（``edges={"__start__": ("首节点",)}`）⇒ ``subscribes`` **只**决定「读哪些通道」，
+**不再**是触发源。
+
 **签名头**（宪法原则 X）：本文件带署名头且模块 docstring 是首个语句。
 """
 
@@ -205,13 +210,20 @@ def test_the_kernel_source_never_uses_the_out_of_scope_symbols(
 
 
 def test_the_scheduler_runs_without_any_builder_dependency() -> None:
-    """**SC-005**：调度内核**不经由**构建器即可跑完一轮（手写图规格直接驱动）。"""
+    """**SC-005**：调度内核**不经由**构建器即可跑完一轮（手写图规格直接驱动）。
+
+    ⚠️ **上游同款**：触发源**恒为边** ⇒ 规格**必须**带**入口边**
+    （``edges={"__start__": ("worker",)}``）⇒ 图才起得了跑。
+    """
     channels = {"count": LastValue("count", int)}
     channels["count"].update([1])
     spec = GraphSpec(
         channels=channels,
-        nodes={"worker": NodeSpec(subscribes=("count",), run=lambda state: {})},
-        edges={},
+        nodes={
+            "__start__": NodeSpec(subscribes=(), run=lambda state: {}),
+            "worker": NodeSpec(subscribes=("count",), run=lambda state: {}),
+        },
+        edges={"__start__": ("worker",)},
     )
 
     result = run_super_step(spec, SchedulerState())

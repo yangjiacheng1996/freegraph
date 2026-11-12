@@ -54,7 +54,8 @@ def test_value_type_is_resolved_to_a_type_not_a_string() -> None:
     """裁定 5：未来注解下 ``value_type`` MUST 是**类型对象**（不是字符串）。"""
     spec = parse_state_schema(MessagesState)
 
-    assert spec.channels["messages"].value_type is list
+    # ⚠️ **上游同款**（2026-11-12 P3）：``value_type`` 保留 ``Annotated`` 原样
+    assert spec.channels["messages"].value_type.__origin__ is list
     assert spec.channels["llm_calls"].value_type is int
 
 

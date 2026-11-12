@@ -26,9 +26,10 @@
 
 | 形态 | 语法 | 归一结果 | 失败信号（形态非法时） |
 |---|---|---|---|
-| **部分状态** | `dict` | 待写入 = 该 dict 的 items | 非 `dict`（含 `None`）⇒ `TypeError`（B7F1 **V-4** 同族） |
-| **单条命令** | `Command` | 待写入 = `command.update`（若非 `None`）；跳转目标 = `command.goto` | `update` 非 `dict` ⇒ `TypeError` |
-| **命令列表** | `list[Command \| dict]` | 待写入 = **按列表顺序**把各元素归入同一份；跳转目标 = 各条命令的 `goto` 的**并集**（各自成边） | 元素非 `Command` / `dict` ⇒ `TypeError`；**空列表 ⇒ 无操作**（非失败） |
+| **部分状态** | `dict` | 待写入 = 该 dict 的 items | 非 `dict` ⇒ `TypeError`（B7F1 **V-4** 同族） |
+| **单条命令** | `Command` | 待写入 = `command.update`（若非 `None`）；跳转目标 = `command.goto` | `update` 既非 `dict` 又非 **2-tuples** ⇒ `TypeError`（⚠️ **2026-11-12 上游对齐 P3**：**2-tuples 是上游同款** · 上游 `types.py:836-840`） |
+| **命令列表** | `list[Command \| dict]` | 待写入 = **按列表顺序**把各元素归入同一份；跳转目标 = 各条命令的 `goto` 的**并集**（各自成边） | 元素非 `Command` / `dict` ⇒ `TypeError`；⚠️ **空列表 ⇒ 失败**（**上游同款** · 2026-11-12 P3） |
+| **无写入** | `None` | **零写入** | **合法**（⚠️ **上游同款** · 2026-11-12 P3 · 上游 `state.py:1459-1460`） |
 
 **归一后的统一形状**（内部中间产物 · **不进公开面**）：
 
@@ -125,9 +126,9 @@ NormalizedResult = {
 
 | # | 场景 | 失败信号 | 落点 |
 |---|---|---|---|
-| **V-9** | 节点返回值**既不是 `dict`、也不是 `Command`、也不是 `list`**（含 `None`） | 内置 **`TypeError`**（与 B7F1 **V-4** 同族） | FR-001 |
+| **V-9** | 节点返回值**既不是 `dict`、也不是 `Command`、也不是 `list`、也不是 `None`**（**含空列表**） | 内置 **`TypeError`**（与 B7F1 **V-4** 同族） | FR-001 |
 | **V-10** | 命令列表的**元素类型非法**（非 `Command` / 非 `dict`） | 内置 **`TypeError`** | FR-001 |
-| **V-11** | `Command.update` **不是 `dict`** | 内置 **`TypeError`** | FR-010 |
+| **V-11** | `Command.update` **既不是 `dict`** **又不是** list/tuple of 2-tuples | 内置 **`TypeError`** | FR-010 |
 | **V-12** | `Command.goto` 的**形态非法**（非 `str` / 序列含非 `str`） | 内置 **`TypeError`** | FR-007 |
 | **V-13** | `Command.goto` 的**目标不在节点表**（或为空串 / `START`） | 内置 **`ValueError`**（点名目标） | FR-007 · 裁定 8 |
 | **V-14** | `Command.goto == Command.PARENT` | 内置 **`NotImplementedError`**（点名「子图属 v2 能力」） | FR-005 · 裁定 7 |

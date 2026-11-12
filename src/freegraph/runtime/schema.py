@@ -36,7 +36,7 @@ from typing import (
 
 from .errors import (
     REASON_ANNOTATION_UNRESOLVABLE,
-    REASON_NOT_A_TYPED_DICT,
+    REASON_NOT_A_STATE_SCHEMA,
     REASON_REDUCER_NOT_BINARY,
     InvalidSchemaError,
 )
@@ -164,7 +164,7 @@ def parse_state_schema(schema: Any) -> SchemaSpec:
     流程（FR-001 ~ FR-021）：
 
     1. **鸭子判定** schema 是不是 ``TypedDict`` ⇒ 否则抛
-       ``InvalidSchemaError(key=None, reason="not_a_typed_dict")``；
+       ``InvalidSchemaError(key=None, reason="not_a_state_schema")``；
     2. ``get_type_hints(schema, include_extras=True)`` 解析注解
        （**保留** PEP 593 元数据 —— 裁定 5）；失败 ⇒ 逐 key 探针
        **指名**出错 key（research D-04）；
@@ -181,8 +181,8 @@ def parse_state_schema(schema: Any) -> SchemaSpec:
     **纯函数**（FR-013）：不调用归约器 · 不读环境变量 · 不出站 ·
     不写文件。
     """
-    if not _is_state_typed_dict(schema):
-        raise InvalidSchemaError(key=None, reason=REASON_NOT_A_TYPED_DICT)
+    if not _is_state_schema(schema):
+        raise InvalidSchemaError(key=None, reason=REASON_NOT_A_STATE_SCHEMA)
 
     annotations = _resolve_annotations(schema)
     required_keys = frozenset(getattr(schema, "__required_keys__", frozenset()))
@@ -193,7 +193,12 @@ def parse_state_schema(schema: Any) -> SchemaSpec:
         if key == _SLOTS_KEY:
             continue
         stripped = _strip_requiredness(annotation)
-        value_type = _base_type(stripped)
+        # ⚠️ **上游同款**（2026-11-12 上游对齐 P3 · 上游 ``graph/state.py:1862-1872``）：
+        # 上游把**原始注解**（**保留 ``Annotated``**）交给通道（``LastValue(annotation)`` /
+        # ``BinaryOperatorAggregate(annotation)``）⇒ 通道的 ``typ`` **带** ``Annotated`` ⇒
+        # freegraph 的 ``value_type`` **同款**（**语义变更**：由「基类型 T」改为「原始注解」）
+        # ⇒ **空值推导**那一侧仍由 B5F1 的宽口径剥离负责（上游 ``binop.py:22-30``）⇒ 两端口径一致。
+        value_type = stripped
         candidate = _extract_reducer(stripped)
         if candidate is None:
             reducer: Callable[..., Any] | None = None
@@ -218,28 +223,37 @@ def parse_state_schema(schema: Any) -> SchemaSpec:
     return SchemaSpec(channels=channels, keys=tuple(keys))
 
 
-def _is_state_typed_dict(candidate: Any) -> bool:
-    """**鸭子口径**判定「是不是状态 schema」（FR-001 ① · 裁定 3）。
+def _is_state_schema(candidate: Any) -> bool:
+    """判定「是不是状态 schema」（FR-001 ① · 裁定 3）。
 
-    ``typing.is_typeddict(x)`` 为真，**或** ``x`` 同时满足
-    「是一个类」+「是 ``dict`` 的子类」+「有 ``__annotations__``」+
-    「有 ``__total__``」。
+    ⚠️ **上游同款**（**2026-11-12 上游对齐 P3** · 上游
+    ``langgraph/graph/state.py:1818``）：上游的判据**只有一条** ——
+    「**有** ``__annotations__``」⇒ **pydantic 模型 / dataclass / 普通类**
+    **一律接受**（上游把它们都当状态 schema）。
 
-    ⇒ 覆盖 ``typing_extensions.TypedDict``（**实测**：
-    ``typing.is_typeddict`` 对其返回 ``False`` ⇒ 只用它判定会把
-    验收基准 ``harness/demo/target.py:59-61`` 的 schema 判成
-    「非 ``TypedDict````）。
+    ⇒ freegraph 采**同一条**判据 ⇒ **放宽**（原先要求「是 ``dict`` 的子类」+
+    「有 ``__total__``」⇒ 只认 ``TypedDict``）⇒ 上游形状的 schema **直接可解析**。
 
-    内核 MUST NOT import ``typing_extensions``（FR-001 ② · FR-013）。
+    ⚠️ **``typing_extensions.TypedDict`` 仍然可用**：它有 ``__annotations__``
+    ⇒ 命中本判据（**实测**：``typing.is_typeddict`` 对其返回 ``False`` ⇒
+    **不能**只用它判定）⇒ 内核 MUST NOT import ``typing_extensions``
+    （FR-001 ② · FR-013）。
+
+    ⚠️ **零通道的 schema 仍被拒**（``REASON_NOT_A_STATE_SCHEMA``）—— 上游对这类 schema
+    建**单根** ``__root__`` 通道（上游 ``graph/state.py:1819-1823``）⇒ **该形态的运行期语义
+    归 B7F1 / B8F1**（根通道的聚合）⇒ 本层**只**放宽到「有**非空** ``__annotations__``」
+    这一类（**上游同款**且**零依赖**）。
+
+    ⚠️ **与上游的一处**刻意**收紧**（**只针对「实例」**）：上游只判 ``hasattr`` ⇒ 一个
+    **实例**也会命中（类属性可见）⇒ 但上游随后 ``get_type_hints(instance)`` **会抛**
+    ``TypeError`` ⇒ freegraph 要求「**是类**且有 ``__annotations__``」⇒ **实例**被显式拒绝
+    （失败信号更可诊断）⇒ **成功路径与上游逐字同款**。
+
+    ⚠️ **空 schema（零个 key）仍然合法**（B4F1 的既有冻结口径）⇒ 产出**零条**通道规格
+    （Python 3.10+ 里任何类都**自动**获得一个**空** ``__annotations__`` ⇒ 空 ``TypedDict``
+    命中本判据 ⇒ 零通道 ⇒ **合法**）。
     """
-    if is_typeddict(candidate):
-        return True
-    return (
-        isinstance(candidate, type)
-        and issubclass(candidate, dict)
-        and hasattr(candidate, "__annotations__")
-        and hasattr(candidate, "__total__")
-    )
+    return isinstance(candidate, type) and hasattr(candidate, "__annotations__")
 
 
 def _resolve_annotations(schema: Any) -> dict[str, Any]:
@@ -315,6 +329,11 @@ def _readable_type(value_type: Any) -> str:
 
     ⚠️ **不能**直接用 ``str()``：``str(int)`` == ``"<class 'int'>"``。
     """
+    # ⚠️ **2026-11-12 上游对齐 P3**：`value_type` 现在**保留** ``Annotated`` 原样
+    # （上游同款）⇒ 它的 ``str()`` **带**元数据的 repr（归约器若是 lambda ⇒ **带内存地址**）
+    # ⇒ 投影里 MUST **只渲染基类型** ⇒ 仍是**确定性**且**不泄漏地址**。
+    if getattr(value_type, "__metadata__", None) is not None:
+        value_type = value_type.__origin__
     if isinstance(value_type, type):
         return value_type.__name__
     return str(value_type).replace("typing.", "")

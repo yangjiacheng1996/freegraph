@@ -27,7 +27,7 @@ SC-001 … SC-033 + 覆盖率取证 + 10 条门禁的实跑结果，**不必**�
   **依赖组的正向枚举** · CI 的 ``--group`` 白名单）；
 * **V10** 全量测试 + 10 条门禁（**零新增门禁编号**）；
 * **V11** 覆盖率取证（``read.py`` 行 / 分支 **100%**）；
-* **V12** 冻结面审计（**18 / 7 / 14**）+ 跨 feature 接线（**五处**）。
+* **V12** 冻结面审计（**20 / 7 / 20**）+ 跨 feature 接线（**五处**）⇒ ⚠️ 计数随 B7F1 / B9F1 / B12F1 的上游对齐增长。
 
 依赖
 ----
@@ -107,9 +107,9 @@ INTERPRETER = sys.executable
 PROJECT_VENV_PYTHON = REPO_ROOT / ".venv" / "bin" / "python"
 
 #: 契约层 / 门面 / L2 内部 API 的公开符号面（**冻结面** · SC-011 / SC-029）。
-CONTRACT_PUBLIC_SYMBOL_COUNT = 18
+CONTRACT_PUBLIC_SYMBOL_COUNT = 20
 FACADE_PUBLIC_SYMBOL_COUNT = 7
-RUNTIME_PUBLIC_SYMBOL_COUNT = 14
+RUNTIME_PUBLIC_SYMBOL_COUNT = 20
 
 #: 门禁总数（**G1–G30** 的连续性是不变量 · SC-011）。
 GATE_TOTAL = 30
@@ -968,7 +968,7 @@ def case_dependency_redlines(runtime: Any) -> None:
 def case_frozen_surface(runtime: Any) -> None:
     """**V12** · 冻结面审计（SC-011 / SC-012 / SC-029 · FR-021 / FR-026）。
 
-    * 契约层 **18** 个 · 门面 **7** 个 · ``freegraph.runtime`` **14** 个
+    * 契约层 **20** 个 · 门面 **7** 个 · ``freegraph.runtime`` **20** 个
       （含两个读取入口）；
     * **兼容矩阵零新增行**（符号集合 == 契约层 18 + 门面 7）；
     * 层注册表把 ``src/freegraph/runtime/`` 登记为 **L2**（**零改动**）；
@@ -983,9 +983,9 @@ def case_frozen_surface(runtime: Any) -> None:
     runtime_symbols = _public_symbols(
         REPO_ROOT / "src" / "freegraph" / "runtime" / "__init__.py"
     )
-    eq(len(contract_symbols), CONTRACT_PUBLIC_SYMBOL_COUNT, "契约层符号数 == **18**")
+    eq(len(contract_symbols), CONTRACT_PUBLIC_SYMBOL_COUNT, "契约层符号数 == **20**（上游对齐 P3）")
     eq(len(facade_symbols), FACADE_PUBLIC_SYMBOL_COUNT, "门面符号数 == **7**")
-    eq(len(runtime_symbols), RUNTIME_PUBLIC_SYMBOL_COUNT, "`freegraph.runtime` == **14**")
+    eq(len(runtime_symbols), RUNTIME_PUBLIC_SYMBOL_COUNT, "`freegraph.runtime` == **20**（随 B7F1 / B9F1 增长 · 上游对齐后再次核对）")
     check(
         "read_channels" in runtime_symbols and "local_read" in runtime_symbols,
         "`freegraph.runtime.__all__` 含两个读取入口",

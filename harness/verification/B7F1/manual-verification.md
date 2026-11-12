@@ -143,8 +143,8 @@ feature **只追加**节点边界的断言，**不删除**读取层口径 ⇒ �
 
 | 判定 | 断言落点 | 实测 |
 |---|---|---|
-| 订阅**有值**通道的节点执行**恰好一次** | `test_a_subscribed_node_runs_exactly_once_and_the_state_merges` | ✅ |
-| 订阅**无值**通道的节点执行 **0** 次 | `test_a_node_subscribing_an_empty_channel_does_not_run` | ✅ |
+| **入口边**触发的节点执行**恰好一次** | `test_an_entry_node_runs_exactly_once_and_the_state_merges` | ✅ |
+| **无入边**的节点执行 **0** 次 | `test_a_node_without_an_incoming_edge_does_not_run` | ✅ |
 | 只更新节点**返回的** key | `test_a_node_updates_only_the_keys_it_returns` | ✅ |
 | 边 ⇒ 目标节点在**下一轮**被调度 | `test_an_edge_target_is_scheduled_in_the_next_round` | ✅ |
 | 五阶段产物**逐项可观测** | `test_the_five_phase_products_are_all_observable` | ✅ |
@@ -155,7 +155,7 @@ feature **只追加**节点边界的断言，**不删除**读取层口径 ⇒ �
 | 待写入隔离（正式值在执行期间**不变**） | `test_a_node_does_not_see_another_nodes_write_of_the_same_round` | ✅ |
 | 节点异常**原样**传播（对象 `is` 同一） | `test_a_node_exception_propagates_as_the_very_same_object` | ✅ |
 | 条件边字段**恒空**；非空即**显式失败** | `test_a_non_empty_conditional_edges_field_fails_explicitly` 等 2 条 | ✅ |
-| 初始化写入豁免的**两条边界** | `test_a_value_written_before_the_run_triggers_its_subscriber` 等 2 条 | ✅ |
+| 初始化写入豁免的**两条边界** | `test_a_value_written_before_the_run_is_visible_to_the_entry_node` 等 2 条 | ✅ |
 | `GraphSpec.channels` 是**可变**映射（可增补） | `test_the_channel_mapping_can_be_augmented_after_construction` | ✅ |
 
 ### 3.2 · §2 · 同轮多写按归约器合并（**V2** · **A2** · SC-002 / SC-023）
@@ -214,7 +214,7 @@ feature **只追加**节点边界的断言，**不删除**读取层口径 ⇒ �
 | 未被触发的节点执行 **0** 次 · 被触发的执行 **1** 次 | `test_an_untriggered_node_never_runs_while_a_triggered_one_runs_once` | ✅ |
 | 同一版本**不重复触发**同一节点 | `test_the_same_version_never_triggers_the_same_node_twice` | ✅ |
 | 一个触发源的推进**不掩盖**另一个触发源的推进 | `test_advancing_one_trigger_source_does_not_mask_another_one` | ✅ |
-| 写入**逐字相等**的值 ⇒ 下游**仍被触发** | `test_writing_a_literally_equal_value_still_triggers_the_subscriber` | ✅ |
+| 写入**逐字相等**的值 ⇒ **边**下游**仍被触发** | `test_writing_a_literally_equal_value_still_triggers_the_downstream_node` | ✅ |
 | 版本**仅**在 `update()` 返回**真**时推进 | `test_the_channel_version_advances_only_on_a_successful_write` | ✅ |
 | 路由型通道被清空 ⇒ 版本**未推进** | `test_clearing_a_routing_channel_does_not_advance_its_version` | ✅ |
 | `update()` 返回**假** ⇒ 版本**不**推进（第三方通道） | `test_a_channel_whose_update_returns_false_does_not_advance_its_version` | ✅ |
@@ -650,7 +650,7 @@ $ .venv/bin/python harness/verification/B7F1/acceptance.py
 |---|---|---|---|---|
 | SC-001 | 五阶段产物**逐项可观测** + 多轮跨轮累计 | T018 / T019 / T020 / T064 | `test_superstep_basic.py::test_the_five_phase_products_are_all_observable` · `test_superstep_convergence.py::test_the_multi_round_entry_accumulates_executed_and_node_writes` | ✅ |
 | SC-002 | 同轮双写 == 归约结果 | T013 / T023 | `test_superstep_merge.py::test_two_nodes_writing_the_reducing_channel_are_concatenated` | ✅ |
-| SC-003 | 版本号语义 | T009 / T030 / T032 / T033 / T034 / T055 / T056 / T064 | `test_superstep_trigger.py::test_writing_a_literally_equal_value_still_triggers_the_subscriber` 等 5 条 | ✅ |
+| SC-003 | 版本号语义 | T009 / T030 / T032 / T033 / T034 / T055 / T056 / T064 | `test_superstep_trigger.py::test_writing_a_literally_equal_value_still_triggers_the_downstream_node` 等 5 条 | ✅ |
 | SC-004 | 未触发不执行 | T009 / T018 / T029 / T031 | `test_superstep_trigger.py::test_an_untriggered_node_never_runs_while_a_triggered_one_runs_once` | ✅ |
 | SC-005 | 脱离构建器 | T022 / T044 | `test_superstep_purity.py::test_the_scheduler_tests_never_use_the_builder_symbols` | ✅ |
 | SC-006 | 收敛 + 上限缺省 **25** | T035 / T036 / T037 / T038 / T064 | `test_superstep_convergence.py::test_the_default_step_limit_is_twenty_five` 等 6 条 | ✅ |
@@ -680,7 +680,7 @@ $ .venv/bin/python harness/verification/B7F1/acceptance.py
 | FR | 摘要 | 断言落点 | 结论 |
 |---|---|---|---|
 | FR-001 | 五阶段形态 | `test_superstep_basic.py::test_the_five_phase_products_are_all_observable` | ✅ |
-| FR-002 | 版本号语义 | `test_superstep_trigger.py::test_writing_a_literally_equal_value_still_triggers_the_subscriber` | ✅ |
+| FR-002 | 版本号语义 | `test_superstep_trigger.py::test_writing_a_literally_equal_value_still_triggers_the_downstream_node` | ✅ |
 | FR-003 | 两类触发源 | `test_superstep_convergence.py::test_an_edge_target_is_scheduled_in_the_next_round` | ✅ |
 | FR-004 | `versions_seen` | `test_superstep_convergence.py::test_the_two_entries_do_not_share_their_consumed_versions` | ✅ |
 | FR-005 | 批量归约路径 | `test_superstep_merge.py::test_two_nodes_writing_the_reducing_channel_are_concatenated` | ✅ |

@@ -42,11 +42,11 @@ spec.channels["llm_calls"].semantics         # 'overwrite'               ← C3 
 
 | 项 | 约定 | 依据 |
 |---|---|---|
-| **接受** | **标准 `TypedDict`**（stdlib `typing` 或 `typing_extensions`） | FR-001 · 裁定 3 |
-| **判定口径** | `typing.is_typeddict(x)` 为真，**或** `x` 同时满足「是类」+「是 `dict` 子类」+「有 `__annotations__`」+「有 `__total__」` | FR-001 ① |
+| **接受** | **任何「是类 + 有 `__annotations__`」的对象** —— 标准 `TypedDict`（stdlib `typing` 或 `typing_extensions`）· **pydantic 模型** · **dataclass** · 普通类（**上游同款** · 上游 `langgraph/graph/state.py:1818` 的判据**只有**「有 `__annotations__`」） | FR-001 · 裁定 3 · **上游对齐 P3** |
+| **判定口径** | **是类**（`isinstance(x, type)`）**且** `hasattr(x, "__annotations__")` ⇒ **上游原样**（上游只判 `hasattr`）· ⚠️ **一处刻意收紧**：**实例**被拒（上游随后 `get_type_hints(instance)` **会抛** `TypeError` ⇒ freegraph 给**可诊断的失败信号**而非崩溃）⇒ **成功路径与上游逐字同款** | FR-001 ① · **上游对齐 P3** |
 | **正面路径 MUST 有断言** | **`typing_extensions.TypedDict`**（验收基准同构形态）MUST 被**接受** ⇒ 被误判为「非 `TypedDict`」的次数 == **0**（`typing.is_typeddict` 对其返回 `False` ⇒ 只用它判定会使验收基准不可用） | **SC-018** · 裁定 3 · FR-001 ① |
 | **MUST NOT** | 要求继承任何 freegraph 基类 · 要求安装任何第三方包（**内核** MUST NOT import `typing_extensions`；被测 schema 由**测试代码**构造 ⇒ 不违反「零新增依赖声明」） | FR-001 · FR-016 ② · FR-019 |
-| **拒绝** | 普通 `dict` · `dict[str, int]` · 模型实例 · **Pydantic 形态的替身**（零依赖替身类：有 `__annotations__` 但非 `dict` 子类 · 与 Pydantic `BaseModel` 的结构特征一致）⇒ `InvalidSchemaError(reason="not_a_typed_dict")` | FR-007 ① · 裁定 7 |
+| **拒绝** | 普通 `dict` · `dict[str, int]` · **模型实例**（**上游同款**：上游随后会崩）⇒ `InvalidSchemaError(reason="not_a_state_schema")`<br>⚠️ **2026-11-12 上游对齐 P3**：**Pydantic 形态的类**（零依赖替身：有 `__annotations__` 但非 `dict` 子类）**不再被拒** ⇒ **被接受**（**上游同款**）<br>⚠️ **空 schema（零个 key）仍然合法** ⇒ 产出**零条**通道（B4F1 的既有冻结口径） | FR-007 ① · 裁定 7 · **上游对齐 P3** |
 
 **示例**（验收基准形态 · `harness/demo/target.py:59-61`）：
 
@@ -104,7 +104,7 @@ class MessagesState(TypedDict):
 
 | 原因码 | 触发条件 | `key` |
 |---|---|---|
-| `not_a_typed_dict` | schema 不是 `TypedDict` | **空** |
+| `not_a_state_schema` | schema **不是类**或**无** `__annotations__`（**原名** `not_a_typed_dict` · 2026-11-12 上游对齐 P3 随判定放宽而**改名**：判定口径已不再是「是不是 `TypedDict`」） | **空** |
 | `reducer_not_binary` | 末位是 callable 但位置参数数 ≠ 2（含类 / 实例 / 签名不可取） | 有 |
 | `annotation_unresolvable` | 注解解析失败（如不可解析的前向引用） | 有 |
 

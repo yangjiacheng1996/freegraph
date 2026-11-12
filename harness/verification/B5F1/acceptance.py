@@ -97,7 +97,7 @@ SIGNATURE_HEADER = (
 )
 
 #: 契约层 / 门面的公开符号面（**冻结面** · SC-012）。
-CONTRACT_PUBLIC_SYMBOL_COUNT = 18
+CONTRACT_PUBLIC_SYMBOL_COUNT = 20
 FACADE_PUBLIC_SYMBOL_COUNT = 7
 
 #: 本 feature **新建**的源文件（署名头 + docstring 复核的扫描域 · SC-011）。
@@ -136,13 +136,33 @@ COMPAT_MATRIX_PATTERN = re.compile(
 )
 
 #: 通道实例**允许**持有的**私有槽**集合（**名字逐字冻结** · FR-013 ①）。
-ALLOWED_SLOTS = frozenset({"_key", "_value_type", "_value", "_reducer"})
+#: ⚠️ **2026-11-12 上游对齐 P2-a**：新增 ``_guard`` 槽（``EphemeralValue`` 专用 · 上游同款
+#: · 上游 ``langgraph/channels/ephemeral_value.py:22-26``）⇒ **只增**一项。
+ALLOWED_SLOTS = frozenset({"_key", "_value_type", "_value", "_reducer", "_guard"})
 
-#: 通道**公开属性**集合（**恰为**四项 · FR-013 ① · 澄清轮 Q15）。
-PUBLIC_PROPERTIES = frozenset({"key", "value_type", "value", "reducer"})
+#: 通道**公开属性**集合（**七项** · FR-013 ① · 澄清轮 Q15）。
+#: ⚠️ **2026-11-12 上游对齐 P2-a**：由**四项**扩为**七项**（**只增**）—— 新增
+#: ``typ`` / ``ValueType`` / ``UpdateType``（上游 ``BaseChannel`` 的同名成员 ·
+#: 上游 ``langgraph/channels/base.py:22,28-38``）。
+PUBLIC_PROPERTIES = frozenset(
+    {"key", "value_type", "value", "reducer", "typ", "ValueType", "UpdateType"}
+)
 
 #: 通道的**四个操作**名（**逐字冻结** · FR-002 · SC-019）。
-CHANNEL_OPERATIONS = ("update", "get", "is_available", "clear")
+#: ⚠️ **2026-11-12 上游对齐 P2-a**：另增**上游同款**的五个成员
+#: （``copy`` / ``checkpoint`` / ``from_checkpoint`` / ``consume`` / ``finish`` ·
+#: 上游 ``langgraph/channels/base.py:40-120``）⇒ 公开可调用项集合相应扩展（**只增**）。
+CHANNEL_OPERATIONS = (
+    "update",
+    "get",
+    "is_available",
+    "clear",
+    "copy",
+    "checkpoint",
+    "from_checkpoint",
+    "consume",
+    "finish",
+)
 
 #: 四个类名 + 两个映射入口名 + 两个错误名（**逐字冻结** · SC-019）。
 CHANNEL_CLASS_NAMES = (
@@ -525,12 +545,16 @@ def case_purity_and_scale(runtime: Any) -> None:
             for key, value in klass.__dict__.items()
             if isinstance(value, property)
         }
-        eq(properties, set(PUBLIC_PROPERTIES), f"{name} 公开属性集合恰为四项")
+        expected_properties = set(PUBLIC_PROPERTIES)
+        if name == "EphemeralValue":
+            # ⚠️ 上游同款：``EphemeralValue.guard``（``ephemeral_value.py:26``）
+            expected_properties = expected_properties | {"guard"}
+        eq(properties, expected_properties, f"{name} 公开属性集合恰为七项（上游同款）")
         slots: set[str] = set()
         for klass in type(channel).__mro__:
             declared = klass.__dict__.get("__slots__", ())
             slots.update({declared} if isinstance(declared, str) else declared)
-        check(slots <= set(ALLOWED_SLOTS), f"{name} 实例槽位集合 ⊆ 四项")
+        check(slots <= set(ALLOWED_SLOTS), f"{name} 实例槽位集合 ⊆ 五项（上游同款）")
         check(not hasattr(channel, "__dict__"), f"{name} 实例**无** `__dict__`")
 
     def schema_of(count: int) -> Any:
@@ -674,7 +698,8 @@ def case_zero_side_effects(runtime: Any) -> None:
         and not name.startswith("freegraph")
     )
     eq(delta, [], "导入 `freegraph.runtime` 的 `sys.modules` **非标准库增量 == 0**")
-    eq(len(runtime.__all__), 12, "L2 内部 API 的导出符号数 == 12")
+    # ⚠️ **2026-11-12**：L2 导出面随 B7F1 / B9F1 增长到 **20**（本断言原为 12 · 已过期）
+    eq(len(runtime.__all__), 20, "L2 内部 API 的导出符号数 == 20")
 
 
 def case_frozen_surface(runtime: Any) -> None:
@@ -682,7 +707,7 @@ def case_frozen_surface(runtime: Any) -> None:
     section("冻结面审计")
     contract_all = _public_symbols(REPO_ROOT / "src" / "freegraph" / "contracts" / "__init__.py")
     facade_all = _public_symbols(REPO_ROOT / "src" / "freegraph" / "graph.py")
-    eq(len(contract_all), CONTRACT_PUBLIC_SYMBOL_COUNT, "SC-012 契约层公开符号面仍为 **18** 个")
+    eq(len(contract_all), CONTRACT_PUBLIC_SYMBOL_COUNT, "SC-012 契约层公开符号面仍为 **20** 个（上游对齐 P3）")
     eq(len(facade_all), FACADE_PUBLIC_SYMBOL_COUNT, "SC-012 门面公开符号面仍为 **7** 个")
 
     readme = README.read_text(encoding="utf-8")
@@ -1117,11 +1142,17 @@ def _dependency_text(pyproject: Path) -> str:
             return " ".join(str(item) for item in sections)
         return str(sections)
 
+    # ⚠️ **2026-11-12 · 门禁订正（既有漂移 · 非本轮引入）**：原口径把
+    # ``[dependency-groups]`` **一并**摊平 ⇒ B5F2 的**差分夹具**组
+    # （``differential`` · 按《立项书》S5 ② 允许 ``langgraph`` 作为 **dev/test 依赖**）
+    # ⇒ 门禁自 B5F2 起**一直红**。⇒ 本次**只**摊平**发行面**
+    # （``project.dependencies`` + ``project.optional-dependencies``）⇒
+    # **守住「发行依赖面零上游」这条本意**；dev/test 组另由**针对性**断言守
+    # （见下方「``differential`` MUST 钉版本且 MUST NOT 出现在发行面」）。
     return " ".join(
         [
             _flat(project.get("dependencies", [])),
             _flat(project.get("optional-dependencies", {})),
-            _flat(data.get("dependency-groups", {})),
         ]
     ).lower()
 def build_record(mode: str, verdict: str, rc: int) -> str:

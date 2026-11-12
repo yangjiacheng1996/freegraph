@@ -85,8 +85,17 @@ class Checkpointer(Protocol):
     ``put``          ``(config: RunConfig, ...) -> Any``   写入一个**快照**
     ``put_writes``   ``(config: RunConfig, ...) -> Any``   写入**待写入数据**
     ``delete_thread`` ``(thread_id: str) -> Any``           删除某**会话**的全部数据
+    ``delete_for_runs`` ``(run_ids: Sequence[str]) -> Any`` 删除若干**运行**的数据
+    ``copy_thread``  ``(source_thread_id: str, target_thread_id: str) -> Any`` 复制一个**会话**的数据
     ``get_next_version`` ``(...) -> Any``                  生成**下一个版本号**
     ================ ==================================== ==============================
+
+    ⚠️ **2026-11-12 上游对齐 P3**（**上游同款** · 上游 ``langgraph/checkpoint/base/__init__.py``）：
+    新增 ``delete_for_runs``（`:331`）与 ``copy_thread``（`:350`）—— 这两个在**上游是
+    **必须实现**的**（无默认实现）⇒ **上游形状的 saver 若缺它们就**结构化**不满足本协议**
+    ⇒ 补上后 **上游的 ``BaseCheckpointSaver`` 子类可直接满足本协议** ⇒ **兼容性闭环**。
+    ⚠️ **不补**上游的**异步变体**（``aget`` / ``aput`` / …）—— freegraph v1 **无 async**
+    （spec FR-008）⇒ 契约层 MUST NOT 声明 async 成员。
 
     **返回结构与载荷形状挂起 B14F1**——签名中的 ``Any`` **不是**「随便什么」，
     而是「返回结构与载荷形状尚未冻结」的显式标记；收紧属**契约修订**流程
@@ -94,7 +103,7 @@ class Checkpointer(Protocol):
 
     **已冻结的三条最小约束**：
 
-    ① 方法集合**恰为**上述六个（不多不少）；
+    ① 方法集合**恰为**上述**八个**（不多不少 · **2026-11-12 上游对齐 P3** 由六个增为八个）；
     ② 读写面 MUST 能承载**检查点标识**（C23 要求 span 必带它）；
     ③ 载荷 MUST 为**纯数据**（可 JSON 序列化）。
 
@@ -110,6 +119,10 @@ class Checkpointer(Protocol):
     def put_writes(self, config: RunConfig, *args: Any, **kwargs: Any) -> Any: ...
 
     def delete_thread(self, thread_id: str) -> Any: ...
+
+    def delete_for_runs(self, run_ids: Sequence[str]) -> Any: ...
+
+    def copy_thread(self, source_thread_id: str, target_thread_id: str) -> Any: ...
 
     def get_next_version(self, *args: Any, **kwargs: Any) -> Any: ...
 
@@ -160,6 +173,11 @@ class Store(Protocol):
     ``put``              ``(namespace, key, value) -> Any``  写入一项
     ``delete``           ``(namespace, key) -> Any``        删除一项
     ``list_namespaces``  ``(*, prefix, ...) -> Any``        列出命名空间
+
+    ⚠️ **2026-11-12 上游对齐 P3**（**上游同款** · 上游 ``langgraph/store/base/__init__.py``）：
+    命名空间由 ``Any`` **收紧**为 ``tuple[str, ...]``（上游的 ``NamespacePath`` 是
+    **层级元组** · 上游 `:311`）⇒ 上游形状的 store **直接满足**本协议。
+    ⚠️ **不补**上游的**异步变体**（``abatch`` / ``aget`` / …）—— freegraph v1 **无 async**。
     ``batch``            ``(ops, ...) -> Any``              **批量**执行多个操作
     ==================== ================================ ==========================
 
@@ -167,7 +185,9 @@ class Store(Protocol):
     取值 MUST 为**纯映射**（可 JSON 序列化）。
 
     **命名空间的**具体载体形态**（层级元组 / 点分字符串）与 ``batch`` 的
-    **操作表示**挂起 v2——故 ``namespace`` 参数的类型以 ``Any`` 占位。
+    **操作表示**挂起 v2——故 ``batch`` 的载荷类型以 ``Any`` 占位；
+    ⚠️ **2026-11-12 上游对齐 P3**：``namespace`` / ``namespace_prefix`` / ``prefix``
+    **已收紧**为 ``tuple[str, ...]``（上游同款 · 上游 ``store/base/__init__.py:311``）。
 
     .. note::
        ``namespace_prefix`` 与 ``prefix`` **是两个不同的参数名**，逐字镜像
@@ -180,15 +200,19 @@ class Store(Protocol):
     **对应契约**：C20。
     """
 
-    def get(self, namespace: Any, key: str) -> Any: ...
+    def get(self, namespace: tuple[str, ...], key: str) -> Any: ...
 
-    def search(self, namespace_prefix: Any, *args: Any, **kwargs: Any) -> Any: ...
+    def search(
+        self, namespace_prefix: tuple[str, ...], *args: Any, **kwargs: Any
+    ) -> Any: ...
 
-    def put(self, namespace: Any, key: str, value: Any) -> Any: ...
+    def put(self, namespace: tuple[str, ...], key: str, value: Any) -> Any: ...
 
-    def delete(self, namespace: Any, key: str) -> Any: ...
+    def delete(self, namespace: tuple[str, ...], key: str) -> Any: ...
 
-    def list_namespaces(self, *, prefix: Any = None, **kwargs: Any) -> Any: ...
+    def list_namespaces(
+        self, *, prefix: tuple[str, ...] | None = None, **kwargs: Any
+    ) -> Any: ...
 
     def batch(self, ops: Any, *args: Any, **kwargs: Any) -> Any: ...
 

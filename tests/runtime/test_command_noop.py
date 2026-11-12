@@ -2,6 +2,9 @@
 
 """**空操作 / ``resume`` 只被接受**的用例 —— 属 **B9F1**（tasks T026 / T027）。
 
+⚠️ **触发模型**（上游对齐 · 2026-11-12）：触发源**恒为边** ⇒ 每张图 MUST 有
+**入口边** ``{"__start__": (首节点,)}``（上游 ``add_edge(START, "a")`` 的同款写法）。
+
 覆盖的判定：
 
 * **SC-006** —— ``Command(update={})`` / ``Command(goto=())`` /
@@ -25,6 +28,8 @@ from __future__ import annotations
 import operator
 from typing import Any
 
+import pytest
+
 from freegraph.contracts import Command
 from freegraph.runtime import (
     BinaryOperatorAggregate,
@@ -39,21 +44,58 @@ from freegraph.runtime import (
 
 
 def _channels() -> dict[str, Channel]:
-    """构造通道状态：**归约型**（``messages``）+ **覆盖型**（``seed``）。"""
+    """构造通道状态：**归约型**（``messages``）+ **覆盖型**（``seed``）。
+
+    ⚠️ ``seed`` 的**初值**只作**入参**（``subscribes`` 只决定「读哪些通道」·
+    上游 ``langgraph/graph/state.py:1534``）⇒ **不再**是触发源。
+    """
     return {
         "messages": BinaryOperatorAggregate("messages", list, operator.add),
         "seed": LastValue("seed", int),
     }
 
 
+#: **入口哨兵**（上游 ``START`` 的值 · ``langgraph/constants.py:30``）——
+#: 触发源**恒为边**（上游 ``branch:to:<node>`` · ``langgraph/graph/state.py:1531``）
+#: ⇒ 每张图 MUST 有**入口边** ``{"__start__": (首节点,)}``（上游
+#: ``add_edge(START, "a")`` 的同款写法 · ``langgraph/graph/state.py:321``）。
+_START = "__start__"
+
+
+def _never(state: dict[str, Any]) -> dict[str, Any]:
+    """**入口哨兵**的节点函数 —— 恒**不被调用**（哨兵无入边 ⇒ 永不被触发）。"""
+    raise AssertionError("入口哨兵 __start__ 恒不被执行")
+
+
+#: **入口哨兵节点**（上游 ``START`` **伪节点**）—— 恒**不被执行**。
+_SENTINEL = NodeSpec(subscribes=(), run=_never)
+
+
+def _graph(
+    channels: dict[str, Channel],
+    nodes: dict[str, NodeSpec],
+    edges: dict[str, tuple[str, ...]],
+) -> GraphSpec:
+    """组装图规格 —— **注入**入口哨兵节点（``edges`` MUST 已含**入口边**）。
+
+    ⚠️ 边的**源** MUST 在节点表里（V-2）⇒ 入口边的**源**（``__start__``）由
+    **哨兵节点**承载（上游的 ``START`` 亦是图里的**伪节点**）。
+    """
+    return GraphSpec(
+        channels=channels,
+        nodes={_START: _SENTINEL, **nodes},
+        edges=edges,
+    )
+
+
 def _run_returning(result: Any) -> Any:
-    """跑一个**只返回** ``result`` 的单节点图。"""
+    """跑一个**只返回** ``result`` 的单节点图（靠**入口边**起跑）。"""
     channels = _channels()
     channels["seed"].update([1])
-    spec = GraphSpec(
+    spec = _graph(
         channels=channels,
         nodes={"writer": NodeSpec(subscribes=("seed",), run=lambda state: result)},
-        edges={},
+        edges={_START: ("writer",)},
     )
     return run_super_step(spec, SchedulerState())
 
@@ -80,13 +122,13 @@ def test_an_empty_goto_slot_produces_no_jump() -> None:
         executed.append("z")
         return {}
 
-    spec = GraphSpec(
+    spec = _graph(
         channels=channels,
         nodes={
             "x": NodeSpec(subscribes=("seed",), run=writer),
             "z": NodeSpec(subscribes=(), run=z),
         },
-        edges={},
+        edges={_START: ("x",)},
     )
 
     run_super_steps(spec)
@@ -108,13 +150,13 @@ def test_both_slots_empty_produces_no_write_and_no_jump() -> None:
         executed.append("z")
         return {}
 
-    spec = GraphSpec(
+    spec = _graph(
         channels=channels,
         nodes={
             "x": NodeSpec(subscribes=("seed",), run=writer),
             "z": NodeSpec(subscribes=(), run=z),
         },
-        edges={},
+        edges={_START: ("x",)},
     )
 
     result = run_super_steps(spec)
@@ -125,12 +167,13 @@ def test_both_slots_empty_produces_no_write_and_no_jump() -> None:
 
 
 def test_an_empty_command_list_is_a_no_op_and_the_node_still_counts_as_executed() -> None:
-    """**SC-006 / SC-021 ④**：**空列表** ⇒ 零写入 + 零跳转 + 节点仍计入执行记录。"""
-    result = _run_returning([])
+    """**SC-006 / SC-021 ④**：**空列表** ⇒ **显式失败**（**上游同款** · 2026-11-12 上游对齐 P3）。
 
-    assert result.executed == ("writer",)
-    assert result.state["messages"] == []
-    assert result.node_writes == {"writer": {}}
+    ⚠️ 上游 ``langgraph/graph/state.py:1488-1492``：**空列表落 ``else``** ⇒
+    ``InvalidUpdateError("Expected dict, got []")`` ⇒ freegraph 抛内置 ``TypeError``。
+    """
+    with pytest.raises(TypeError):
+        _run_returning([])
 
 
 def test_the_execution_version_still_advances_for_a_no_op_command() -> None:
@@ -140,14 +183,14 @@ def test_the_execution_version_still_advances_for_a_no_op_command() -> None:
     """
     channels = _channels()
     channels["seed"].update([1])
-    spec = GraphSpec(
+    spec = _graph(
         channels=channels,
         nodes={
             "writer": NodeSpec(
                 subscribes=("seed",), run=lambda state: Command(goto=(), update={})
             )
         },
-        edges={},
+        edges={_START: ("writer",)},
     )
 
     state = SchedulerState()
@@ -173,13 +216,13 @@ def test_the_resume_slot_is_accepted_and_produces_no_effect() -> None:
         executed.append("z")
         return {}
 
-    spec = GraphSpec(
+    spec = _graph(
         channels=channels,
         nodes={
             "x": NodeSpec(subscribes=("seed",), run=writer),
             "z": NodeSpec(subscribes=(), run=z),
         },
-        edges={},
+        edges={_START: ("x",)},
     )
 
     result = run_super_steps(spec)
@@ -203,13 +246,13 @@ def test_the_resume_slot_does_not_change_the_flow() -> None:
         executed.append("y")
         return {}
 
-    spec = GraphSpec(
+    spec = _graph(
         channels=channels,
         nodes={
             "x": NodeSpec(subscribes=("seed",), run=writer),
             "y": NodeSpec(subscribes=(), run=y),
         },
-        edges={"x": ("y",)},
+        edges={_START: ("x",), "x": ("y",)},
     )
 
     run_super_steps(spec)

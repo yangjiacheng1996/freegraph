@@ -9,6 +9,11 @@
 * 四类触发场景（节点抛异常 · 未知 key · 归约器抛错 · 覆盖型多写冲突）
   **各自**被覆盖的用例数 ≥ **1**。
 
+⚠️ **2026-11-12 · 上游对齐（P1-0-2）**：触发源**恒为边**（上游 ``branch:to:<node>``
+· ``langgraph/graph/state.py:1531-1532``）⇒ 本文件的夹具一律带**入口边**
+（``edges={"__start__": ("首节点",)}`）⇒ ``subscribes`` **只**决定「读哪些通道」，
+**不再**是触发源。
+
 **签名头**（宪法原则 X）：本文件带署名头且模块 docstring 是首个语句。
 """
 
@@ -51,6 +56,18 @@ def _channels() -> dict[str, Channel]:
     }
 
 
+#: **入口哨兵节点**（上游 ``START`` 同款 · ``langgraph/constants.py:30``）。
+#:
+#: ⚠️ 它**无入边** ⇒ **永不执行**（永不进 ``executed``）⇒ 它只作「入口边」的**源**。
+#:
+#: ⚠️ **为什么它 MUST 在节点表里** —— ``GraphSpec`` 的校验规则 **V-2** 要求
+#: 「边的**源** MUST 在节点表里」⇒ 入口边 ``edges={"__start__": ("首节点",)}``
+#: 的源 ``__start__`` 也 MUST 在节点表里（上游的 ``START`` 是**编译期**补进去的
+#: 伪节点 · ``langgraph/graph/state.py:321`` ⇒ freegraph 在**手写图规格**层面
+#: 用「节点表里的一个哨兵节点」表达**同款**语义）。
+_ENTRY = NodeSpec(subscribes=(), run=lambda state: {})
+
+
 def _snapshot(channels: dict[str, Channel]) -> dict[str, Any]:
     """每个通道的「**值 / 有无值**」快照（原子性判定的基准）。"""
     snapshot: dict[str, Any] = {}
@@ -74,8 +91,11 @@ def test_a_node_exception_leaves_every_channel_unchanged() -> None:
 
     spec = GraphSpec(
         channels=channels,
-        nodes={"writer": NodeSpec(subscribes=("a",), run=node)},
-        edges={},
+        nodes={
+            "__start__": _ENTRY,
+            "writer": NodeSpec(subscribes=("a",), run=node),
+        },
+        edges={"__start__": ("writer",)},
     )
 
     with pytest.raises(RuntimeError):
@@ -96,11 +116,12 @@ def test_an_unknown_key_leaves_every_channel_unchanged() -> None:
     spec = GraphSpec(
         channels=channels,
         nodes={
+            "__start__": _ENTRY,
             "writer": NodeSpec(
                 subscribes=("a",), run=lambda state: {"a": 2, "ghost": 3}
-            )
+            ),
         },
-        edges={},
+        edges={"__start__": ("writer",)},
     )
 
     with pytest.raises(InvalidUpdateError):
@@ -126,11 +147,12 @@ def test_a_raising_reducer_rolls_back_the_whole_round() -> None:
     spec = GraphSpec(
         channels=channels,
         nodes={
+            "__start__": _ENTRY,
             "writer": NodeSpec(
                 subscribes=("a",), run=lambda state: {"a": 99, "b": ["boom"]}
-            )
+            ),
         },
-        edges={},
+        edges={"__start__": ("writer",)},
     )
 
     with pytest.raises(RuntimeError):
@@ -153,10 +175,11 @@ def test_an_overwrite_conflict_leaves_every_channel_unchanged() -> None:
     spec = GraphSpec(
         channels=channels,
         nodes={
+            "__start__": _ENTRY,
             "first": NodeSpec(subscribes=("a",), run=lambda state: {"a": 2}),
             "second": NodeSpec(subscribes=("a",), run=lambda state: {"a": 3}),
         },
-        edges={},
+        edges={"__start__": ("first", "second")},
     )
 
     with pytest.raises(InvalidChannelUpdateError):
@@ -182,13 +205,14 @@ def test_a_rollback_restores_a_channel_that_had_no_value() -> None:
     spec = GraphSpec(
         channels=channels,
         nodes={
+            "__start__": _ENTRY,
             "writer": NodeSpec(
                 subscribes=("a",),
                 # ``c`` 本轮**无值** ⇒ 它的快照**无值** ⇒ 回滚只 ``clear()``。
                 run=lambda state: {"c": 5, "b": ["boom"]},
-            )
+            ),
         },
-        edges={},
+        edges={"__start__": ("writer",)},
     )
 
     with pytest.raises(RuntimeError):
@@ -230,8 +254,11 @@ def test_no_round_leaves_a_partially_updated_state() -> None:
     for node, error_type in cases:
         spec = GraphSpec(
             channels=channels,
-            nodes={"writer": NodeSpec(subscribes=("a",), run=node)},
-            edges={},
+            nodes={
+                "__start__": _ENTRY,
+                "writer": NodeSpec(subscribes=("a",), run=node),
+            },
+            edges={"__start__": ("writer",)},
         )
         with pytest.raises(error_type):
             run_super_step(spec, SchedulerState())
@@ -240,10 +267,11 @@ def test_no_round_leaves_a_partially_updated_state() -> None:
     conflict_spec = GraphSpec(
         channels=channels,
         nodes={
+            "__start__": _ENTRY,
             "first": NodeSpec(subscribes=("a",), run=conflicting_node),
             "second": NodeSpec(subscribes=("a",), run=conflicting_node),
         },
-        edges={},
+        edges={"__start__": ("first", "second")},
     )
     with pytest.raises(InvalidChannelUpdateError):
         run_super_step(conflict_spec, SchedulerState())

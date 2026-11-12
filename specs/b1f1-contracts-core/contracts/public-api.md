@@ -27,10 +27,18 @@ from freegraph.contracts import (
     InvalidUpdateError,   # ├ 节点返回了 schema 中不存在的 key
     GraphRecursionError,  # ├ 递归超限
     GraphInterrupt,        # └ 节点主动中断
+    Interrupt,            # 中断信息（.value / .id）—— 2026-11-12 上游对齐 P3 新增
+    PregelTask,           # 一个任务的定格 —— 2026-11-12 上游对齐 P3 新增
 )
 ```
 
-**恰好 8 个**。不多、不少：
+**恰好 20 个**。不多、不少：
+
+> ⚠️ **2026-11-12 · 上游对齐 P3**：由 **18** 个增为 **20** 个（**只增**）——
+> 新增 `Interrupt`（上游同款 · 上游 `langgraph/types.py:575-620`）与 `PregelTask`
+> （上游同款 · 上游 `langgraph/types.py:637-646`）⇒ ① **C17** 的「元素须带 `.value` / `.id`」
+> 终于有了**类型载体**；② 快照的 `tasks` / `interrupts` 元素类型随之上游化。
+> ⇒ **需发起者追认**（冻结面**扩展**，**不破坏**既有 18 个的名字与语义）。
 
 > 本节是**公开符号面的唯一手工维护点** —— spec / plan / tasks / `README.md` 兼容矩阵中的同款
 > 清单均以本节为准（spec FR-015）。
@@ -83,25 +91,26 @@ class Command:
     goto: str | Sequence[str] | None = None
     update: StateDict | None = None
     resume: Any | None = None
+    graph: str | None = None
 
     PARENT: ClassVar[Literal["__parent__"]] = "__parent__"
 ```
 
-### 2.1 三个语义位
+### 2.1 四个语义位
 
 | 字段 | 类型 | 缺省 | 语义 |
 |---|---|---|---|
 | `goto` | `str \| Sequence[str] \| None` | `None` | 跳转目标。**单个** = 节点名字符串；**一组** = 任意序列（元组、列表都收）。目标**只能是节点名**（`Send` 归 B2F1） |
 | `update` | `StateDict \| None` | `None` | 要写入图状态的部分更新 |
 | `resume` | `Any \| None` | `None` | 恢复值（配对 `interrupt`，后者归 B2F1） |
+| `graph` | `str \| None` | `None` | 目标图（**上游同款** · 上游 `langgraph/types.py:821`）⇒ `graph=Command.PARENT` = 「跳向最近的父图」；⚠️ freegraph v1 **无子图** ⇒ 其**运行期语义**归 **B10F1** |
 
 ### 2.2 填写规则（**冻结**）
 
 | 情形 | 结果 |
 |---|---|
-| 三者**全为 `None`** | **抛 `FreegraphError`**（构造期 fail fast，对象不返回） |
-| 至少一位**不是 `None`** | 合法 |
-| 三者组合 | **任意组合**，互不排斥（「跳转+写入」、「恢复+跳转」均可） |
+| 四者**全为 `None`** | **合法**（= 什么都不做）—— ⚠️ **2026-11-12 上游对齐 P3**：原「抛 `FreegraphError`」的构造期 fail fast **已删除**（**上游同款** · 上游 `langgraph/types.py:798-848` **无任何构造期校验**） |
+| 各位的**任意组合** | 合法，互不排斥（「跳转+写入」、「恢复+跳转」均可） |
 | 某位**显式给了但内容为空**（`update={}` / `goto=()`） | 合法 —— 语义为「该位不产生动作」；与「未提供」（`None`）**严格区分** |
 
 ### 2.3 `Command.PARENT`
@@ -122,14 +131,15 @@ Command(update={"llm_calls": 1})                # 只写状态
 Command(goto=Command.PARENT)                    # 跳向最近的父图
 Command(goto="x", update={"n": 1})              # 跳转 + 写入（合法组合）
 Command(update={})                              # 合法：该位不产生动作
-Command()                                       # 非法 → FreegraphError
+Command()                                       # 合法：什么都不做（上游同款 · P3 订正）
+Command(graph=Command.PARENT)                   # 目标图 = 最近的父图（上游同款 · 运行期语义归 B10F1）
 ```
 
 ### 2.5 不变式
 
 - 浅不可变：对象本身不可改（`frozen=True`），但 `update` 装的是 `dict`、`goto` 装列表时**其内容仍可变**。
 - `goto` **不归一化**：传元组存元组、传列表存列表（与冻结注解逐字一致）。
-- `Command()` **必然**抛 `FreegraphError`。
+- `Command()` **不抛错**（**上游同款** · 2026-11-12 P3 订正）—— 四个语义位可全空。
 
 ---
 
@@ -141,10 +151,11 @@ class StateSnapshot:
     values: StateDict
     next: tuple[str, ...]
     config: RunConfig
-    metadata: Mapping[str, Any]
-    created_at: str
-    tasks: tuple[Any, ...]
-    interrupts: tuple[Any, ...]
+    metadata: Mapping[str, Any] | None
+    created_at: str | None
+    parent_config: RunConfig | None
+    tasks: tuple[PregelTask, ...]
+    interrupts: tuple[Interrupt, ...]
 ```
 
 | 字段 | 类型 | 语义 |
@@ -152,22 +163,26 @@ class StateSnapshot:
 | `values` | `StateDict` | 该时刻的**完整**状态（稀疏映射） |
 | `next` | `tuple[str, ...]` | 本步之后要执行的节点名。**空元组** = 无后续节点 |
 | `config` | `RunConfig` | 取回该快照所用的运行配置 |
-| `metadata` | `Mapping[str, Any]` | 附加信息（可为空映射，只读） |
-| `created_at` | `str` | 创建时刻 —— **UTC 的 ISO-8601 字符串**，例 `2026-11-05T10:20:30.123456+00:00`；**必填** |
-| `tasks` | `tuple[Any, ...]` | 本步任务列表（元素类型归 **B2F1**） |
-| `interrupts` | `tuple[Any, ...]` | 本步发生的中断（元素类型归 **B2F1**） |
+| `metadata` | `Mapping[str, Any] \| None` | 附加信息（**可为 None** · 上游同款 · 上游 `langgraph/types.py:692`） |
+| `created_at` | `str \| None` | 创建时刻 —— **UTC 的 ISO-8601 字符串**（**可为 None** · 上游同款 · 上游 `langgraph/types.py:694`） |
+| `parent_config` | `RunConfig \| None` | 取**父快照**所用的配置（**可为 None** · **上游同款** · 上游 `langgraph/types.py:696`） |
+| `tasks` | `tuple[PregelTask, ...]` | 本步任务列表（**上游同款** · 上游 `langgraph/types.py:698`） |
+| `interrupts` | `tuple[Interrupt, ...]` | 本步发生的中断（**上游同款** · 上游 `langgraph/types.py:700`） |
 
 **校验规则**
 
-- 七字段**全部必填**（无缺省值）—— 不存在「字段缺失的快照」。
-- `created_at` MUST 一律为 UTC ISO-8601 —— **各持久化后端不得各写各的**。
+- 八字段**全部必填**（无缺省值）—— 不存在「字段缺失的快照」。
+- `created_at` MUST 一律为 UTC ISO-8601 —— **各持久化后端不得各写各的**（**可为 None**）。
+- ⚠️ **2026-11-12 上游对齐 P3**：新增 `parent_config`；`created_at` / `metadata` 放宽为**可空**；
+  `tasks` / `interrupts` 的元素类型**收紧**为 `PregelTask` / `Interrupt` ⇒ 字段集合与上游**逐字同构**。
 - 本 feature **不提供**「生成快照」的功能（那是运行时的活），只定义形状与格式。
 
 **构造期的行为边界**
 
 - **容器防御性拷贝**：构造时把 `metadata` 拷为自身持有的新容器（`dict(metadata)`）——不与调用方传入的对象共用；拷贝为**浅拷贝**（嵌套容器仍与调用方共享）。
 - **只拷 `metadata`**：快照**没有** `tags` 字段（`tags` 属 `RunConfig`）。
-- **构造期只执行两条冻结校验**（`Command()` 三语义位全空、`RunConfig.from_dict` 未知键）——**不在构造期校验值**：`created_at` 格式不符**不抛错**（格式由生产者保证），`thread_id` 的实际类型、`tags` 的元素类型同样不校验。
+- **构造期只执行一条冻结校验**（`RunConfig.from_dict` 未知键）——**不在构造期校验值**：`created_at` 格式不符**不抛错**（格式由生产者保证），`thread_id` 的实际类型、`tags` 的元素类型同样不校验。
+  ⚠️ **2026-11-12 上游对齐 P3**：`Command()` 的「三语义位全空 ⇒ 抛错」校验**已删除**（上游同款）⇒ 现**只剩一条**。
 - 快照的 `metadata` 与配置的 `metadata` **一律声明为 `Mapping[str, Any]`**（只读映射）；实现时持有 `dict` 实例——注解与实现容器分离。
 
 ---
@@ -181,6 +196,13 @@ class RunConfig:
     context: Any = None
     metadata: Mapping[str, Any] = field(default_factory=dict)
     tags: Sequence[str] = field(default_factory=tuple)
+    configurable: Mapping[str, Any] = field(default_factory=dict)
+    max_concurrency: int | None = None
+    recursion_limit: int | None = None
+    run_name: str | None = None
+    run_id: str | None = None
+
+    def resolved_thread_id(self) -> str | None: ...
 
     @classmethod
     def from_dict(cls, d: Mapping[str, Any], *, ignore_unknown: bool = False) -> "RunConfig": ...
@@ -192,11 +214,21 @@ class RunConfig:
 | `context` | `Any` | `None` | **运行时上下文** —— 独立通道（C21），**不塞进 `configurable`** |
 | `metadata` | `Mapping[str, Any]` | 空映射 | 附加信息，**不参与标识** |
 | `tags` | `Sequence[str]` | 空序列 | 附加标签，**不参与标识** |
+| `configurable` | `Mapping[str, Any]` | 空映射 | **上游同款**的「任意键值袋」（上游 `langchain_core/runnables/config.py:115`）⇒ 下游 langchain 的 `RunnableConfig` 可**原样**落进来 |
+| `max_concurrency` | `int \| None` | `None` | **上游同款**的并发度上限（上游 `runnables/config.py:103`）⇒ `1` = 串行 |
+| `recursion_limit` | `int \| None` | `None` | **上游同款**的递归上限（上游 `runnables/config.py:109`） |
+| `run_name` | `str \| None` | `None` | **上游同款**的运行名（上游 `runnables/config.py:98`） |
+| `run_id` | `str \| None` | `None` | **上游同款**的单次运行标识（上游 `runnables/config.py:124`） |
+
+> ⚠️ **2026-11-12 · 上游对齐 P3**：新增后 5 个键（**上游同款**）⇒ **兼容下游 langchain** 的闭环。
+> ⚠️ 上游把 `thread_id` 放在 `configurable` **子字典**里（`langgraph/_internal/_constants.py:52`）
+> ⇒ freegraph 保留**顶层** `thread_id`（本层的冻结面）**并**由 `resolved_thread_id()`
+> 解析 `configurable["thread_id"]`（**优先**）⇒ **两种写法都work**。
 
 **构造期的行为边界**
 
-- 四个字段**全部可选**，均有缺省值 ⇒ 构造无前置条件。
-- **容器防御性拷贝**：构造时把 `metadata` / `tags` 拷为自身持有的新容器（`dict(...)` / `tuple(...)`）——不与调用方传入的对象共用；拷贝为**浅拷贝**（嵌套容器仍与调用方共享）。
+- 九个字段**全部可选**，均有缺省值 ⇒ 构造无前置条件。
+- **容器防御性拷贝**：构造时把 `metadata` / `tags` / `configurable` 拷为自身持有的新容器（`dict(...)` / `tuple(...)`）——不与调用方传入的对象共用；拷贝为**浅拷贝**（嵌套容器仍与调用方共享）。
 - **构造期只执行两条冻结校验**——`from_dict` 的未知键判定是其中之一；`thread_id` 的实际类型、`tags` 的元素类型等**不在构造期校验**（只做类型注解）。
 - `metadata` 声明为 `Mapping[str, Any]`（只读映射），实现时持有 `dict` 实例；需要新增键时由调用方**重建整个配置**，而非就地修改。
 
@@ -232,7 +264,7 @@ Exception
 └── FreegraphError            ← 统一基类（上层只捕获它即可兜住全部内核错误）
     ├── InvalidUpdateError    .invalid_keys
     ├── GraphRecursionError   .recursion_limit / .current_step
-    └── GraphInterrupt        .payload
+    └── GraphInterrupt        .payload（中断**序列**）
 ```
 
 ### 5.1 构造签名
@@ -240,7 +272,7 @@ Exception
 ```text
 InvalidUpdateError(invalid_keys: Iterable[str], *, message: str | None = None)
 GraphRecursionError(recursion_limit: int, current_step: int, *, message: str | None = None)
-GraphInterrupt(payload: Any, *, message: str | None = None)
+GraphInterrupt(interrupts: Sequence[Interrupt] = (), *, message: str | None = None)
 ```
 
 - 结构化属性作**位置参数**；`message` 为**可选关键字**，缺省时由属性自动生成一句摘要。
@@ -255,10 +287,12 @@ GraphInterrupt(payload: Any, *, message: str | None = None)
 | `InvalidUpdateError` | `invalid_keys` | `tuple[str, ...]` | 状态 schema 中**不存在**的 key 列表 |
 | `GraphRecursionError` | `recursion_limit` | `int` | 递归上限 |
 | `GraphRecursionError` | `current_step` | `int` | 已达步数 |
-| `GraphInterrupt` | `payload` | 本 feature `Any`；结构约定：载荷带 `.value` 与 `.id`（C17） | 中断载荷**对象** |
+| `GraphInterrupt` | `payload` | `tuple[Interrupt, ...]` | 中断**序列**（**上游同款** · 上游 `langgraph/errors.py:102-107`）⇒ **一次异常可携带多个中断**；异常实参 `args[0]` 即该序列（上游同款） |
 
-**为什么 `payload` 保持对象形态**：将来载荷加字段**不必**改动异常的 API（只需加载荷类的字段）。
-`payload` 的**具体类型**归 B2F1 —— 本 feature 收紧**注解**不构成契约破坏。
+**为什么 `payload` 是序列**：**上游同款** —— 上游的 `GraphInterrupt` 一次可携带**多个**中断
+（`langgraph/errors.py:102-107`）⇒ 上游的 `_panic_or_proceed` 把多个中断**合并**成一个异常抛出
+（`pregel/_runner.py:690`）⇒ freegraph 与上游**同构** ⇒ 下游 langchain 可直接消费。
+⚠️ **2026-11-12 上游对齐 P3**：原「单个载荷对象 + `Any` 注解」的口径**已改**。
 
 ### 5.3 用法
 
@@ -271,27 +305,59 @@ except FreegraphError as e:                     # 一次兜住全部内核错误
     elif isinstance(e, GraphRecursionError):
         print(e.recursion_limit, e.current_step)
     elif isinstance(e, GraphInterrupt):
-        print(e.payload.value, e.payload.id)     # 载荷对象带 .value / .id
+        for interrupt in e.payload:               # 序列 · 元素带 .value / .id
+            print(interrupt.value, interrupt.id)
 ```
 
 ---
 
-## 6. 冻结面速查（改动即破坏契约）
+## 6. `Interrupt` / `PregelTask` —— 中断信息与任务定格（**上游同款** · 2026-11-12 上游对齐 P3 新增）
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class Interrupt:
+    value: Any = None
+    id: str = ""
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PregelTask:
+    id: str
+    name: str
+    path: tuple[str | int | tuple, ...] = ()
+    error: Exception | None = None
+    interrupts: tuple[Interrupt, ...] = ()
+    state: RunConfig | StateSnapshot | None = None
+    result: Any | None = None
+```
+
+| 类型 | 字段 | 上游锚点 | 语义 |
+|---|---|---|---|
+| `Interrupt` | `value` / `id` | 上游 `langgraph/types.py:575-620` | 一次中断的载荷 —— **C17** 要求的「元素须带 `.value` 与 `.id`」的**类型载体**；`id` 的**自动生成**归 **B10F1**（上游按 checkpoint 命名空间派生） |
+| `PregelTask` | `id` / `name` / `path` / `error` / `interrupts` / `state` / `result` | 上游 `langgraph/types.py:637-646` | 一个任务的定格 —— 快照的 `tasks` 元素类型（**上游同款**） |
+
+---
+
+## 7. 冻结面速查（改动即破坏契约）
 
 | 类别 | 冻结项 |
 |---|---|
-| **符号名** | `StateDict` / `Command` / `StateSnapshot` / `RunConfig` / `FreegraphError` / `InvalidUpdateError` / `GraphRecursionError` / `GraphInterrupt`（恰好 8 个） |
-| **字段名** | `Command`: `goto` / `update` / `resume`；`StateSnapshot`: 七字段；`RunConfig`: 四字段 |
+| **符号名** | `StateDict` / `Command` / `StateSnapshot` / `RunConfig` / `FreegraphError` / `InvalidUpdateError` / `GraphRecursionError` / `GraphInterrupt` / `Interrupt` / `PregelTask`（**恰好 20 个** · ⚠️ 2026-11-12 P3 由 18 扩为 20 · **只增**） |
+| **字段名** | `Command`: `goto` / `update` / `resume` / `graph`；`StateSnapshot`: **八**字段；`RunConfig`: **九**字段；`Interrupt`: `value` / `id`；`PregelTask`: 七字段 |
 | **字段类型** | 见第 2 / 3 / 4 节（逐个冻结） |
 | **属性名** | `invalid_keys` / `recursion_limit` / `current_step` / `payload` |
 | **常量值** | `Command.PARENT == "__parent__"` |
 | **基类名** | `FreegraphError`（后续可**新增**子类，但基类名不得改） |
-| **行为** | `Command()` 必抛 `FreegraphError`；`from_dict` 默认对未知键抛错；自动生成的摘要为**英文**且点名关键值 |
-| **容器拷贝** | `StateSnapshot.metadata` 拷贝；`RunConfig.metadata` + `RunConfig.tags` 拷贝（均为**浅拷贝**） |
+| **行为** | `Command()` **不抛错**（上游同款 · 2026-11-12 P3 订正）；`from_dict` 默认对未知键抛错；自动生成的摘要为**英文**且点名关键值 |
+| **容器拷贝** | `StateSnapshot.metadata` 拷贝（可为 None ⇒ 不拷）；`RunConfig.metadata` + `RunConfig.tags` + `RunConfig.configurable` 拷贝（均为**浅拷贝**） |
 
-**不属于冻结面（可在后续 feature 无痛调整）**：`tasks` / `interrupts` / `payload` 的**元素类型**
-（归 B2F1；细化时不改动字段注解本身）、额外的便利方法（如 `to_dict()`）。
+**不属于冻结面（可在后续 feature 无痛调整）**：额外的便利方法（如 `to_dict()`）。
+⚠️ **2026-11-12 上游对齐 P3**：`tasks` / `interrupts` 的**元素类型**已**收紧**为 `PregelTask` /
+`Interrupt`（**上游同款**）⇒ 不再是「元素类型待定」。
 
-> **字段的注解本身已冻结**：`RunConfig` 四字段与 `StateSnapshot` 七字段的注解（`Mapping[str, Any]` /
-> `Sequence[str]` / `tuple[str, ...]` 等）自本 feature 起一并冻结 —— B4F1 / B8F3 只能**新增字段**、
-> 不得改动已有字段的注解（依据：spec Assumptions「`RunConfig` 四个字段的具体注解」条）。
+> **字段的注解本身已冻结**：`RunConfig` 与 `StateSnapshot` 各字段的注解自本 feature 起一并冻结 ——
+> B4F1 / B8F3 只能**新增字段**、不得改动已有字段的注解（依据：spec Assumptions「`RunConfig` 四个字段的
+> 具体注解」条）。
+> ⚠️ **2026-11-12 上游对齐 P3 的例外（已登记 · 需追认）**：为对齐上游，`RunConfig` **新增 5 个字段**、
+> `StateSnapshot` **新增 1 个字段**且 2 个字段**放宽为可空**、`Command` **新增 1 个字段**且**删除**一条
+> 构造期校验 ⇒ 既有字段的**名字**未变、**语义**只**放宽**（可空 ⇒ 更宽）⇒ 不构成破坏性变更。

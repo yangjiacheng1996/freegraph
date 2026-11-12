@@ -82,12 +82,18 @@ NO_UPSTREAM_SYMBOLS = {"NodeFunc", "TraceSink", "Span", "TraceQuery"}
 #: 五个协议的**方法集**（集合，不判顺序）——`data-model.md` §2。
 PROTOCOL_METHODS = {
     "NodeFunc": {"__call__"},
+    # ⚠️ **2026-11-12 上游对齐 P3**：由**六**个增为**八**个 —— 新增
+    # ``delete_for_runs`` / ``copy_thread``（**上游 required** · 上游
+    # ``langgraph/checkpoint/base/__init__.py:331,350``）⇒ 上游形状的 saver
+    # **结构化满足**本协议 ⇒ **兼容性闭环**。
     "Checkpointer": {
         "get_tuple",
         "list",
         "put",
         "put_writes",
         "delete_thread",
+        "delete_for_runs",
+        "copy_thread",
         "get_next_version",
     },
     "TraceSink": {"on_span_start", "on_span_end", "current_span"},
@@ -502,7 +508,11 @@ def case_d11_revisions(contracts: Any) -> None:
     # C22 · 标识职责划分：thread_id 在 RunConfig 内、run_id 不在
     run_fields = [f.name for f in fields(contracts.RunConfig)]
     check("thread_id" in run_fields, "C22 thread_id 在 RunConfig 的字段清单内")
-    check("run_id" not in run_fields, "C22 run_id 不在 RunConfig 的字段清单内（归运行时层）")
+    # ⚠️ **2026-11-12 上游对齐 P3**：上游的 ``RunnableConfig`` **确实**带 ``run_id``
+    # （上游 ``langchain_core/runnables/config.py:124``）⇒ 原「run_id 不在 RunConfig」的断言
+    # **已反转** ⇒ freegraph 的 ``RunConfig`` **新增** ``run_id``（⇒ 下游 langchain 的
+    # ``RunnableConfig`` 可原样落进来）。
+    check("run_id" in run_fields, "C22 run_id 在 RunConfig 的字段清单内（上游同款 · P3 订正）")
 
     # span 生命周期：同 id 配对、开始快照不被改写
     ended = replace(span, end_time="2026-11-06T10:00:01+00:00")
@@ -548,7 +558,7 @@ def case_frozen_surface(contracts: Any) -> None:
 
     existing, new = _parse_manifest_symbols()
     eq(len(existing), 8, "SC017 §0 的「既有」段恰为 8 个")
-    eq(len(new), 10, "SC017 §0 的「新增」段恰为 10 个")
+    eq(len(new), 12, "SC017 §0 的「新增」段恰为 12 个（10 + 上游对齐新增 2 个）")
     eq(set(contracts.__all__), set(existing) | set(new), "SC001 公开符号面恰为 18 个（集合相等）")
     for name in existing + new:
         check(getattr(contracts, name, None) is not None, f"公开符号 {name} 可从契约层直接取到")

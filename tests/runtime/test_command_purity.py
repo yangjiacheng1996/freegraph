@@ -2,11 +2,14 @@
 
 """**纯净性 / 结构纪律**的用例 —— 属 **B9F1**（tasks T030）。
 
+⚠️ **触发模型**（上游对齐 · 2026-11-12）：触发源**恒为边** ⇒ 每张图 MUST 有
+**入口边** ``{"__start__": (首节点,)}``（上游 ``add_edge(START, "a")`` 的同款写法）。
+
 覆盖的判定：
 
 * **SC-014** —— 内核路径对 ``langgraph`` / ``langchain*`` / ``langsmith`` 的导入
   次数 == **0**；环境变量读取 == **0** 次；出站 == **0** 次；导入**无副作用**；
-* **SC-015** —— L1 **18** / 门面 **7** / ``freegraph.runtime.__all__`` **20** 个
+* **SC-015** —— L1 **20** / 门面 **7** / ``freegraph.runtime.__all__`` **20** 个
   符号；``SuperStepResult`` 的字段数 == **4**；L2 → L3 / L4 / L5 的依赖边数
   == **0**；``NodeSpec.run`` 与 ``SchedulerState()`` 的**构造签名**与 B7F1 契约
   §1 **逐字相同**；
@@ -56,6 +59,16 @@ COMMAND_TEST_FILES = (
     "test_command_purity.py",
     "test_command_contract.py",
 )
+
+
+def _never(state: dict[str, Any]) -> dict[str, Any]:
+    """**入口哨兵**的节点函数 —— 恒**不被调用**（哨兵无入边 ⇒ 永不被触发）。
+
+    ⚠️ 触发源**恒为边**（上游对齐 · 2026-11-12）⇒ 每张图 MUST 有**入口边**
+    ``{"__start__": (首节点,)}``（上游 ``add_edge(START, "a")`` 的同款写法）⇒
+    入口哨兵（上游 ``START`` **伪节点**）作为**节点表**的一员承载这条边（V-2）。
+    """
+    raise AssertionError("入口哨兵 __start__ 恒不被执行")
 
 
 def _imported_modules(tree: ast.AST) -> list[str]:
@@ -245,7 +258,7 @@ def test_the_runtime_export_surface_holds_twenty_symbols() -> None:
 def test_the_contract_layer_and_the_facade_symbol_counts_are_unchanged(
     run_in_subprocess: Callable[..., Any],
 ) -> None:
-    """**SC-015**：契约层 **18** / 门面 **7** 个符号面**一字不动**。
+    """**SC-015**：契约层 **20** / 门面 **7** 个符号面**一字不动**。
 
     ⚠️ 判定在**子进程**里做 ⇒ 本用例**自身**零门面导入（⇒ 「用例零构建器
     导入」的判据**恒绿** · FR-022）。
@@ -262,7 +275,7 @@ print(json.dumps({
 """
     )
 
-    assert payload["contracts"] == 18
+    assert payload["contracts"] == 20
     assert payload["facade"] == 7
 
 
@@ -298,7 +311,9 @@ def test_the_l1_state_snapshot_next_field_exists() -> None:
     from freegraph.contracts import StateSnapshot
 
     assert "next" in StateSnapshot.__dataclass_fields__
-    assert "parent_config" not in StateSnapshot.__dataclass_fields__
+    # ⚠️ **2026-11-12 上游对齐 P3**：`parent_config` **已新增**（**上游同款** ·
+    # 上游 `langgraph/types.py:696`）⇒ 「不含」的旧断言**已反转**。
+    assert "parent_config" in StateSnapshot.__dataclass_fields__
 
 
 def test_the_node_spec_run_constructor_signature_is_unchanged() -> None:
@@ -321,6 +336,11 @@ def test_the_scheduler_state_constructor_signature_is_unchanged() -> None:
 
     ⚠️ ``dynamic_edges`` 是**带缺省值**的字段（工厂语义）⇒ **无参构造**仍合法
     ⇒ 既有调用方**零改动**（裁定 12 · 登记项 **R-3 ①**）。
+
+    ⚠️ **2026-11-12 · 上游对齐 P2-b**：新增 ``channels``（**带缺省值** · 工厂语义）⇒
+    **构造签名仍可零参调用**、既有调用方**零改动**；该字段承载**本次运行**的通道实例
+    （上游同款：``langgraph/pregel/_checkpoint.py:229-277`` 的 ``channels_from_checkpoint``
+    ⇒ **每个调度状态 = 一次运行** ⇒ 多会话隔离）。
     """
     import inspect
 
@@ -332,6 +352,7 @@ def test_the_scheduler_state_constructor_signature_is_unchanged() -> None:
         "channel_versions",
         "node_versions",
         "dynamic_edges",
+        "channels",
     ]
     for parameter in signature.parameters.values():
         assert parameter.default is not inspect.Parameter.empty
@@ -371,13 +392,16 @@ def test_the_command_semantics_run_without_any_builder_dependency() -> None:
     spec = GraphSpec(
         channels=channels,
         nodes={
+            # ⚠️ 触发源**恒为边**（上游对齐 · 2026-11-12）⇒ 入口边是**必需**的
+            # ⇒ 入口哨兵（``__start__``）作为**伪节点**进节点表（V-2）。
+            "__start__": NodeSpec(subscribes=(), run=_never),
             "writer": NodeSpec(
                 subscribes=("count",),
                 run=lambda state: Command(goto="target", update={"messages": ["x"]}),
             ),
             "target": NodeSpec(subscribes=(), run=lambda state: {}),
         },
-        edges={},
+        edges={"__start__": ("writer",)},
     )
 
     result = run_super_step(spec, SchedulerState())

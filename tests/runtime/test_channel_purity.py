@@ -86,14 +86,28 @@ def _instance_slots(channel: Channel) -> set[str]:
 
 @pytest.mark.parametrize("channel", _channels(), ids=lambda c: type(c).__name__)
 def test_public_property_set_is_exactly_four(channel: Channel) -> None:
-    """SC-009 ①：公开属性集合**恰为**四项。"""
-    assert _public_properties(channel) == set(PUBLIC_PROPERTIES)
+    """SC-009 ①：公开属性集合**恰为**四项。
+
+    ⚠️ **2026-11-12 · 上游对齐 P2-a**：基类新增上游 ``BaseChannel`` 的三个同名属性
+    （``typ`` / ``ValueType`` / ``UpdateType`` · ``langgraph/channels/base.py:22,28-38``）
+    ⇒ 冻结面由**四项**扩为**七项**（**只增**）⇒ 本断言按新集合逐类核对
+    （``EphemeralValue`` 另有上游同款的 ``guard`` · ``ephemeral_value.py:26``）。
+    """
+    expected = set(PUBLIC_PROPERTIES) | {"typ", "ValueType", "UpdateType"}
+    if isinstance(channel, EphemeralValue):
+        expected = expected | {"guard"}
+    assert _public_properties(channel) == expected
 
 
 @pytest.mark.parametrize("channel", _channels(), ids=lambda c: type(c).__name__)
 def test_instance_slots_are_a_subset_of_the_four_slots(channel: Channel) -> None:
-    """SC-009 ②：实例槽位集合 ⊆ {``_key``, ``_value_type``, ``_value``, ``_reducer``}。"""
-    assert _instance_slots(channel) <= set(ALLOWED_SLOTS)
+    """SC-009 ②：实例槽位集合 ⊆ {``_key``, ``_value_type``, ``_value``, ``_reducer``}。
+
+    ⚠️ **2026-11-12 · 上游对齐 P2-a**：``EphemeralValue`` 增一个 ``_guard`` 槽
+    （上游同款 · ``langgraph/channels/ephemeral_value.py:22-26``）⇒ 槽位集合**只增**一项。
+    """
+    allowed = set(ALLOWED_SLOTS) | {"_guard"}
+    assert _instance_slots(channel) <= allowed
 
 
 @pytest.mark.parametrize("channel", _channels(), ids=lambda c: type(c).__name__)
@@ -241,7 +255,22 @@ def test_write_entry_point_is_update_only(channel: Channel) -> None:
             if callable(value):
                 public.add(name)
     assert "update" in public
-    assert not (public - {"update", "get", "is_available", "clear"})
+    # ⚠️ **2026-11-12 · 上游对齐 P2-a**：新增上游 ``BaseChannel`` 的同名成员
+    # （``langgraph/channels/base.py:40-120``）⇒ 公开可调用项集合相应扩展（**只增**）。
+    assert not (
+        public
+        - {
+            "update",
+            "get",
+            "is_available",
+            "clear",
+            "copy",
+            "checkpoint",
+            "from_checkpoint",
+            "consume",
+            "finish",
+        }
+    )
 
 
 @pytest.mark.parametrize("channel", _channels(), ids=lambda c: type(c).__name__)

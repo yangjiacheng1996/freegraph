@@ -367,7 +367,9 @@ freegraph 的红线是「显式失败优于静默」⇒ 这条故事把上游的
 
 ### Edge Cases
 
-- **节点返回 `None`**（而非 `dict` / `Command`）⇒ MUST 视为**显式失败**（MUST NOT 静默当作「无写入」）。
+- **节点返回 `None`**（而非 `dict` / `Command`）⇒ MUST 视为**无写入**（零写入 + 零跳转）
+  ⇒ **上游同款**（**2026-11-12 上游对齐 P3** · 上游 `langgraph/graph/state.py:1459-1460`
+  的 `if input is None: return None`）⇒ 原「MUST 显式失败」的条款**已回溯修订**。
 - **节点返回 `list` / `str` / 其它类型** ⇒ MUST **显式失败**（类型错误）。
 - **节点返回 `Command()`**（三槽位全未提供）⇒ L1 构造期即抛 `FreegraphError` ⇒ **运行期不可达**
   （MUST NOT 由运行期另造一条失败路径）。
@@ -411,14 +413,19 @@ freegraph 的红线是「显式失败优于静默」⇒ 这条故事把上游的
 
 - **FR-001（节点返回值：`dict` / `Command` / 命令列表，并列）**：系统 MUST 支持节点函数返回 `Command`
   （与返回 `dict` **并列**）；返回值 MUST 是 `dict`、`Command` 或 `list[Command | dict]` 之一；
-  其它类型（含 `None`）⇒ MUST **显式失败**（内置 `TypeError` · 与 B7F1 的校验规则 **V-4** **同族**
+  其它类型⇒ MUST **显式失败**（内置 `TypeError` · 与 B7F1 的校验规则 **V-4** **同族**
   ⇒ 既有失败信号口径**不变**）。
+  ⚠️ **2026-11-12 上游对齐 P3**：**`None` 也是合法返回值** ⇒ **无写入**（**上游同款** ·
+  上游 `graph/state.py:1459-1460`）⇒ 原「其它类型（含 `None`）⇒ 显式失败」**已回溯修订**。
   ⚠️ **`NodeSpec.run` 的返回类型注解 MUST 由 `Callable[[dict[str, Any]], dict[str, Any]]`
   放宽为「`dict[str, Any]` 或 `Command` 或 `list[Command | dict]`」** —— **只放宽「接受面」**
   ⇒ B7F1 契约 **§1** 的**构造签名与名字逐字不变** ⇒ B7F2 / B7F3 / B8F1 / B12F1 **零改动**。
   ⚠️ **命令列表**（澄清轮第 2 次 Q1 · 发起者拍板 · **上游同款**）：`list` 的元素 MUST 是
   `Command` 或 `dict`；元素为其它类型 ⇒ MUST **显式失败**（内置 `TypeError`）；
-  **空列表** ⇒ **明确无操作**（零写入 + 零跳转 · 与裁定 10 的空槽位**同款**）。
+  **空列表** ⇒ **显式失败**（内置 `TypeError`）—— **上游同款**（**2026-11-12 上游对齐 P3** ·
+  上游的判据 `isinstance(input,(list,tuple)) and input and any(...)` ⇒ **空列表落 `else`**
+  ⇒ 抛 `InvalidUpdateError("Expected dict, got []")` · 上游 `graph/state.py:1488-1492`
+  ⇒ **类型不同 · 语义等价（都失败）**）⇒ 原「空列表 ⇒ 明确无操作」**已回溯修订**。
   ⚠️ **V-4 的返回值口径随本条放宽**（`dict` / `Command` / `list`）—— 属**协变放宽**
   （**接受面**变大 ⇒ 对既有调用方**零破坏** · 与**裁定 11** 同款）。
   ⚠️ **L1 协议 MUST 与运行时一致**（**裁定 21** · 2026-11-11 分析轮 · **发起者特批**）：
@@ -521,9 +528,12 @@ freegraph 的红线是「显式失败优于静默」⇒ 这条故事把上游的
   ⇒ MUST **NOT** 留下上一次的残影；`goto` 只影响**下一轮**（MUST NOT 跨轮持续触发）。
 
 - **FR-010（`Command.update` 的形态 MUST 合法）**：`Command.update` MUST 是 `dict`
-  （L1 冻结的 `StateDict`）；非 `dict`（含 `None` 之外的任何类型）⇒ MUST **显式失败**
-  （内置 `TypeError`）。
+  （L1 冻结的 `StateDict`）**或** **list/tuple of 2-tuples**（**上游同款** ·
+  **2026-11-12 上游对齐 P3** · 上游 `langgraph/types.py:836-840` —— 元素**必须是 tuple** ·
+  键**必须是 str**）；既非 `dict` 又非 2-tuples ⇒ MUST **显式失败**（内置 `TypeError`）。
   ⚠️ `update=None` ⇒ 该位**未提供** ⇒ **无写入**（合法）。
+  ⚠️ **上游的「其它形态 ⇒ 塞进 `__root__` 通道 ⇒ 静默丢弃」freegraph 不采纳**
+  ⇒ **比上游更严**（**已登记** · parity **P-14** / **X-4**）。
 
 - **FR-011（`resume` 本轮只被接受）**：`Command(resume=...)` MUST 被**接受**（不抛错）；
   本 feature MUST **NOT** 产生任何恢复效果（**不**写入任何通道、**不**产生跳转、**不**改变流程）

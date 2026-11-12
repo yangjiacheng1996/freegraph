@@ -193,7 +193,7 @@
 | **V-1** | 节点订阅了**不存在**的通道 key | 内置 **`ValueError`**（裁定 32 —— 原写「`KeyError` / 内置 `ValueError`」二选一 ⇒ **收敛为 `ValueError`**） | Edge Cases |
 | **V-2** | 边的源 / 目标**不在节点表**里 | 内置 `ValueError` | Edge Cases |
 | **V-3** | 图规格**没有任何节点** | 内置 `ValueError` | Edge Cases |
-| **V-4** | 节点返回值**不是 `dict`**（含 `None`） | 内置 `TypeError` | FR-009 · Edge Cases |
+| **V-4** | 节点返回值**既不是 `dict`**、**也不是** `Command` / `list` / **`None`** | 内置 `TypeError` | FR-009 · Edge Cases · ⚠️ **2026-11-12 上游对齐 P3**：`None` 已合法（无写入 · 上游 `state.py:1459-1460`） |
 | **V-5** | 节点返回**schema 外的 key** | `InvalidUpdateError`（L1 · `invalid_keys` 列全部） | FR-007 · C6 |
 | **V-6** | 同轮多写**覆盖型**通道 | `InvalidChannelUpdateError`（B5F1 · `key` 指向该通道） | FR-005 ② |
 | **V-7** | 归约器在合并时抛错 | 异常**原样**传播 | FR-005 · B5F1 FR-008 |

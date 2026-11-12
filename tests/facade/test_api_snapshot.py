@@ -219,8 +219,8 @@ class TestSnapshotSelfCheck:
         self._run_self_check(
             tmp_path,
             lambda text: text.replace(
-                "[method] add_node(self, name: str,",
-                "[method] add_node(self, node_name: str,",
+                "[method] add_node(self, node: str | Callable[..., Any],",
+                "[method] add_node(self, node_name: str | Callable[..., Any],",
             ),
             "node_name",
         )
@@ -230,8 +230,8 @@ class TestSnapshotSelfCheck:
         self._run_self_check(
             tmp_path,
             lambda text: text.replace(
-                "[method] add_edge(self, src: str | list[str], dst: str) -> Self",
-                "[method] add_edge(self, src: str | list[str], dst: str) -> Any",
+                "[method] add_edge(self, start_key: str | list[str], end_key: str) -> Self",
+                "[method] add_edge(self, start_key: str | list[str], end_key: str) -> Any",
             ),
             "-> Any",
         )

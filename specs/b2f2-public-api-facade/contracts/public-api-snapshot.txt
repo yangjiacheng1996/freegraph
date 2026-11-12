@@ -6,26 +6,39 @@
 [class] Command
     [attribute] PARENT: ClassVar[Literal['__parent__']] = '__parent__' (readonly)
     [attribute] goto: str | Sequence[str] | None = None (readonly)
+    [attribute] graph: str | None = None (readonly)
     [attribute] resume: Any | None = None (readonly)
-    [attribute] update: dict[str, Any] | None = None (readonly)
-    [method] __init__(self, *, goto: str | Sequence[str] | None = None, update: dict[str, Any] | None = None, resume: Any | None = None) -> None
+    [attribute] update: Any | None = None (readonly)
+    [method] __init__(self, *, goto: str | Sequence[str] | None = None, update: Any | None = None, resume: Any | None = None, graph: str | None = None) -> None
 [constant] END = '__end__'
 [class] RunConfig
+    [attribute] configurable: Mapping[str, Any] = {} (readonly)
     [attribute] context: Any = None (readonly)
+    [attribute] max_concurrency: int | None = None (readonly)
     [attribute] metadata: Mapping[str, Any] = {} (readonly)
+    [attribute] recursion_limit: int | None = None (readonly)
+    [attribute] run_id: str | None = None (readonly)
+    [attribute] run_name: str | None = None (readonly)
     [attribute] tags: Sequence[str] = () (readonly)
     [attribute] thread_id: str | None = None (readonly)
-    [method] __init__(self, *, thread_id: str | None = None, context: Any = None, metadata: Mapping[str, Any] = {}, tags: Sequence[str] = ()) -> None
+    [method] __init__(self, *, thread_id: str | None = None, context: Any = None, metadata: Mapping[str, Any] = {}, tags: Sequence[str] = (), configurable: Mapping[str, Any] = {}, max_concurrency: int | None = None, recursion_limit: int | None = None, run_name: str | None = None, run_id: str | None = None) -> None
     [method] from_dict(cls, d: Mapping[str, Any], *, ignore_unknown: bool = False) -> RunConfig
+    [method] resolved_thread_id(self) -> str | None
 [constant] START = '__start__'
 [class] Send
     [attribute] arg: Any = <required> (readonly)
     [attribute] node: str = <required> (readonly)
     [method] __init__(self, node: str, arg: Any) -> None
 [class] StateGraph
-    [method] __init__(self, schema: Any) -> None
-    [method] add_conditional_edges(self, src: str, path_fn: Callable[..., str | list[str]], path_map: list[str] | dict[str, str]) -> Self
-    [method] add_edge(self, src: str | list[str], dst: str) -> Self
-    [method] add_node(self, name: str, fn: NodeFunc, *, alias: str | None = None) -> Self
-    [method] compile(self, *, checkpointer: Checkpointer | None = None, store: Store | None = None) -> CompiledGraph
+    [method] __init__(self, state_schema: Any, context_schema: Any = None, *, input_schema: Any = None, output_schema: Any = None) -> None
+    [method] add_conditional_edges(self, source: str, path: Callable[..., str | list[str]], path_map: list[str] | dict[str, str] | None = None) -> Self
+    [method] add_edge(self, start_key: str | list[str], end_key: str) -> Self
+    [method] add_node(self, node: str | Callable[..., Any], action: Callable[..., Any] | None = None, *, alias: str | None = None, defer: bool = False, metadata: Mapping[str, Any] | None = None) -> Self
+    [method] add_sequence(self, nodes: Sequence[Any]) -> Self
+    [method] compile(self, checkpointer: Checkpointer | None = None, *, cache: Any = None, store: Store | None = None, interrupt_before: Any = None, interrupt_after: Any = None, debug: bool = False, name: str | None = None, transformers: Any = None) -> CompiledGraph
+    [method] set_conditional_entry_point(self, path: Callable[..., str | list[str]], path_map: list[str] | dict[str, str] | None = None) -> Self
+    [method] set_entry_point(self, key: str) -> Self
+    [method] set_finish_point(self, key: str) -> Self
+    [method] set_node_defaults(self, **kwargs) -> Self
+    [method] validate(self, interrupt: Sequence[str] | None = None) -> Self
 [function] interrupt(value: Any) -> Any

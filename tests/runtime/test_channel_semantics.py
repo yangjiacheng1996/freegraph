@@ -25,6 +25,7 @@ from typing import Annotated, Any, NotRequired, Required
 
 import pytest
 
+from freegraph.runtime.channel import MISSING
 from freegraph.runtime import (
     BinaryOperatorAggregate,
     Channel,
@@ -147,10 +148,15 @@ def test_last_value_clear_is_idempotent() -> None:
 
 
 def test_channel_public_property_set_is_frozen() -> None:
-    """SC-004 · SC-009 ① · SC-020 · SC-023：公开属性集合 **⊆** 四项。
+    """SC-004 · SC-009 ① · SC-020 · SC-023：公开属性集合 **⊆** 七项。
 
     ⚠️ 沿 **MRO** 收集（``type(ch).__dict__`` **只**含该类自身定义的属性
     —— 属性定义在基类上时取到**空集** ⇒ 裁定 17 ① · research D-17 实测）。
+
+    ⚠️ **2026-11-12 · 上游对齐 P2-a**：属性集合由**四项**扩为**七项** —— 新增
+    ``typ`` / ``ValueType`` / ``UpdateType``（上游 ``BaseChannel`` 的同名成员 ·
+    ``langgraph/channels/base.py:22,28-38``）⇒ **冻结面**相应扩展（**只增**，
+    不改既有四项的名字与语义）⇒ 用于支撑「每次运行新建通道实例」的多会话隔离。
     """
     channel = LastValue("k", int)
     properties = {
@@ -159,8 +165,17 @@ def test_channel_public_property_set_is_frozen() -> None:
         for name, value in klass.__dict__.items()
         if isinstance(value, property)
     }
-    assert properties <= {"key", "value_type", "value", "reducer"}
-    assert {"key", "value_type", "value", "reducer"} <= properties
+    expected = {
+        "key",
+        "value_type",
+        "value",
+        "reducer",
+        "typ",
+        "ValueType",
+        "UpdateType",
+    }
+    assert properties <= expected
+    assert expected <= properties
 
 
 # ── 归约语义（US2 · 验收判据 A1 · SC-002 · SC-010 · SC-021）──────────────
@@ -358,14 +373,22 @@ def test_ephemeral_value_starts_without_a_value() -> None:
         channel.get()
 
 
-def test_ephemeral_value_update_with_empty_sequence_is_a_no_op() -> None:
-    """FR-010：空序列 ⇒ **无操作**、返回**假**（⚠️ 清空走 ``clear()``）。"""
+def test_ephemeral_value_update_with_empty_sequence_clears() -> None:
+    """FR-010（**上游同款** · 2026-11-12 上游对齐 P2-a）：空序列 ⇒ **清空**。
+
+    ⚠️ 上游 ``EphemeralValue.update([])`` ⇒ 值 → 缺失、返回**真**（**仅当**原先有值）
+    （``langgraph/channels/ephemeral_value.py:56-61``）⇒ 调度层用它做**步末清空**
+    （上游 ``pregel/_algo.py:326-333``）⇒ **原先**的「空序列 = 无操作 + 清空走 ``clear()``」
+    口径与上游**不同款** ⇒ 已按上游改写。
+    """
     channel = EphemeralValue("route", str)
+    # 本来就无值 ⇒ 无操作、返回**假**
     assert channel.update([]) is False
     assert channel.is_available() is False
     channel.update(["x"])
-    assert channel.update([]) is False
-    assert channel.get() == "x"
+    # 有值 ⇒ **清空**、返回**真**
+    assert channel.update([]) is True
+    assert channel.is_available() is False
 
 
 def test_ephemeral_value_never_holds_a_reducer() -> None:
@@ -386,6 +409,14 @@ class _CustomChannel(Channel):
 
     __slots__ = ()
 
+
+    def from_checkpoint(self, checkpoint: Any) -> "Channel":
+        """按检查点**新建**同种通道（**上游同款** · ``langgraph/channels/base.py:60-65``
+        的 ``from_checkpoint`` 是**抽象方法** ⇒ 第三方自定义通道**必须**自己实现）。"""
+        empty = type(self)(self._key, self._value_type)
+        if checkpoint is not MISSING:
+            empty._value = checkpoint
+        return empty
     def __init__(self, key: str, value_type: Any) -> None:
         super().__init__(key, value_type)
         self._value = None
@@ -584,3 +615,98 @@ def test_conflict_fails_explicitly_in_every_combination(
         with pytest.raises(InvalidChannelUpdateError):
             channel.update([sample, sample])
         assert channel.get() == sample
+
+
+# ── 上游同款的通道成员（2026-11-12 上游对齐 P2-a）────────────────────────
+
+
+def test_typ_value_type_and_update_type_are_readable() -> None:
+    """``typ`` / ``ValueType`` / ``UpdateType`` MUST 直接可读（上游同款）。
+
+    ⚠️ 上游 ``BaseChannel`` 的同名成员（``langgraph/channels/base.py:22,28-38``）
+    ⇒ freegraph 的**冻结面**由四项扩为**七项**（**只增**）。
+    """
+    channel = LastValue("k", int)
+    assert channel.typ is int
+    assert channel.ValueType is int
+    assert channel.UpdateType is int
+
+
+def test_copy_returns_a_new_channel_with_the_same_value() -> None:
+    """``copy()`` MUST 返回**新通道**且带同样的值（上游同款 · ``base.py:40-47``）。"""
+    channel = LastValue("k", int)
+    channel.update([7])
+    copied = channel.copy()
+    assert copied is not channel
+    assert copied.get() == 7
+    assert copied.key == "k"
+
+
+def test_checkpoint_returns_the_value_or_the_missing_sentinel() -> None:
+    """``checkpoint()`` MUST 返回当前值；无值 ⇒ 返回**缺失哨兵**（上游同款 · ``base.py:49-58``）。"""
+    from freegraph.runtime.channel import MISSING
+
+    channel = LastValue("k", int)
+    assert channel.checkpoint() is MISSING
+    channel.update([3])
+    assert channel.checkpoint() == 3
+
+
+def test_from_checkpoint_builds_a_fresh_channel_with_the_given_value() -> None:
+    """``from_checkpoint()`` MUST **新建**同种通道并带上给定的值（上游同款 · ``base.py:60-65``）。"""
+    from freegraph.runtime.channel import MISSING
+
+    channel = LastValue("k", int)
+    rebuilt = channel.from_checkpoint(9)
+    assert rebuilt is not channel
+    assert rebuilt.get() == 9
+    assert rebuilt.key == "k"
+
+    empty = channel.from_checkpoint(MISSING)
+    assert empty.is_available() is False
+
+
+def test_the_reducer_channel_rebuild_keeps_its_reducer() -> None:
+    """归约型通道重建时 MUST **带上归约器**（上游同款 · ``binop.py:116-121``）。"""
+    channel = BinaryOperatorAggregate("k", list, operator.add)
+    rebuilt = channel.from_checkpoint(["x"])
+    assert rebuilt.reducer is operator.add
+    rebuilt.update([["y"]])
+    assert rebuilt.get() == ["x", "y"]
+
+
+def test_the_routing_channel_rebuild_keeps_its_guard() -> None:
+    """路由型通道重建时 MUST **带上 guard**（上游同款 · ``ephemeral_value.py:48-54``）。"""
+    channel = EphemeralValue("k", str, guard=False)
+    rebuilt = channel.from_checkpoint("v")
+    assert rebuilt.guard is False
+    assert rebuilt.get() == "v"
+    assert rebuilt.key == "k"
+
+
+def test_consume_and_finish_are_no_ops_by_default() -> None:
+    """``consume()`` / ``finish()`` 默认**无操作**（上游同款 · ``base.py:101-120``）。"""
+    channel = LastValue("k", int)
+    assert channel.consume() is False
+    assert channel.finish() is False
+
+
+def test_the_abstract_from_checkpoint_raises_for_the_base_class() -> None:
+    """基类的 ``from_checkpoint`` MUST 不可直接使用（**抽象方法** · 上游同款）。
+
+    ⚠️ 上游 ``BaseChannel.from_checkpoint`` 是 ``@abstractmethod``（``base.py:60-65``）
+    ⇒ 第三方自定义通道**必须**自己实现「按检查点重建」。
+    """
+    from freegraph.runtime.channel import Channel
+
+    with pytest.raises(NotImplementedError):
+        Channel.from_checkpoint(object(), 1)  # type: ignore[abstract]
+
+
+def test_the_reducer_channel_rebuild_from_the_missing_sentinel() -> None:
+    """归约型通道从**缺失哨兵**重建 ⇒ 新通道**无值**（上游同款）。"""
+    from freegraph.runtime.channel import MISSING
+
+    channel = BinaryOperatorAggregate("k", list, operator.add)
+    rebuilt = channel.from_checkpoint(MISSING)
+    assert rebuilt.get() == []

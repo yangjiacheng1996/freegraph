@@ -107,17 +107,23 @@ from freegraph.graph import (
 >
 > **⚠️ 参数名的冻结口径（2026-11-07 复核澄清）**：下表是 **freegraph 侧**的**冻结名**
 > （`schema` / `name` / `fn` / `src` / `dst` / `path_fn` / `path_map`），**逐字对齐宪法原则 III
-> 第 2–5 项**。立项书 §4.3「freegraph 义务」列里出现的 `node` / `action` / `start_key` /
-> `end_key` / `source` / `path` 是**上游 LangGraph 的参数名**（该列描述的是上游形状），
-> **不是** freegraph 的冻结面 —— 两者**不冲突**，差异登记在兼容矩阵的 `StateGraph` 行。
+> 第 2–5 项**。
+> ⚠️ **2026-11-12 上游对齐 P3 · 改写**：原先本节把 freegraph 的参数名（`schema` / `name` /
+> `fn` / `src` / `dst` / `path_fn`）定为 freegraph 的**自有冻结面**、把上游的参数名
+> （`node` / `action` / `start_key` / `end_key` / `source` / `path`）视为「只是上游形状」⇒
+> **现已逐字改为上游的参数名** ⇒
+> ① 立项书 §4.3 的「同名同签名」口径**直接达成**（原先是**偏离**）⇒
+> ② 兼容矩阵的 `StateGraph` 行由「部分等价」升为「行为等价」⇒
+> ③ **趁门面还是桩**（全部方法都抛 `NotImplementedError`）⇒ **零破坏**（无用户代码依赖旧名）。
 
 | 调用 | 形态 | 依据 |
 |---|---|---|
-| `StateGraph(schema)` | **恰一个**必填位置参数，参数名 `schema` | 宪法原则 III 第 2 项 · 裁定 4 |
-| `StateGraph.add_node(name, fn, *, alias=None)` | 位置 `(str, Callable)` + 关键字 `alias`（**keyword-only**） | 宪法原则 III 第 3 项 · C25 |
-| `StateGraph.add_edge(src, dst)` | `(str \| list[str], str)`，返回注解 `Self`（链式语义） | 宪法原则 III 第 4 项 · 裁定 5 |
-| `StateGraph.add_conditional_edges(src, path_fn, path_map)` | `path_map` **同时支持 list 与 dict**；**无缺省值** | 宪法原则 III 第 5 项 · C7 |
-| `StateGraph.compile(*, checkpointer=None, store=None)` | **无参可调用** + 两个 **keyword-only** 可选关键字 | 裁定 6 · C10 / C19 / C20 |
+| `StateGraph(state_schema, context_schema=None, *, input_schema=None, output_schema=None)` | **恰一个**必填位置参数；参数名**逐字对齐上游**（**上游同款** · 上游 `langgraph/graph/state.py:216-224`）；其余**可选** | 宪法原则 III 第 2 项 · **上游对齐 P3** |
+| `StateGraph.add_node(node, action=None, *, alias=None, defer=False, metadata=None)` | 位置 `(node, action)`（**上游同款** · 上游 `:667-682`）· 支持**单 callable 形态**（`add_node(fn)` ⇒ 取 `fn.__name__` · 上游 `:778-787`）· 关键字 `alias`（**keyword-only** · C25） | 宪法原则 III 第 3 项 · **上游对齐 P3** |
+| `StateGraph.add_edge(start_key, end_key)` | `(str \| list[str], str)`，参数名**逐字对齐上游**（上游 `:928`），返回注解 `Self`（链式语义） | 宪法原则 III 第 4 项 · **上游对齐 P3** |
+| `StateGraph.add_conditional_edges(source, path, path_map=None)` | 参数名**逐字对齐上游**（上游 `:982-989`）· `path_map` **同时支持 list 与 dict** · **可省略** | 宪法原则 III 第 5 项 · C7 · **上游对齐 P3** |
+| `StateGraph.add_sequence(nodes)` · `set_entry_point(key)` · `set_conditional_entry_point(path, path_map=None)` · `set_finish_point(key)` · `validate(interrupt=None)` · `set_node_defaults(**kwargs)` | **上游同款**的六个方法（上游 `:1032-1077` / `:1079` / `:1092` / `:1116` / `:1129-1175` / `:272-335`）⇒ 全部为**桩**（归 B6F1 接线） | **上游对齐 P3** |
+| `StateGraph.compile(checkpointer=None, *, cache=None, store=None, interrupt_before=None, interrupt_after=None, debug=False, name=None, transformers=None)` | **无参可调用**；`checkpointer` **位置或关键字**（上游同款 · 上游 `:1177-1188`）+ 其余**关键字** | 裁定 6 · C10 / C19 / C20 · **上游对齐 P3** |
 | `Send(node, arg)` | **位置或关键字皆可**；**不可变记录** | Q7 · C18 |
 | `interrupt(value)` | **位置或关键字皆可** | Q7 · C17 |
 | `Command` / `RunConfig` | **原样转出**（签名见契约层 `public-api.md` §1.2） | C16 / C22 |
@@ -129,7 +135,7 @@ from freegraph.graph import (
 
 | 调用 | 异常 | 消息 | 归属 |
 |---|---|---|---|
-| `add_node` / `add_edge` / `add_conditional_edges` | `NotImplementedError` | `<方法名> 尚未接线（由 B6F1 交付）` | **B6F1** |
+| `add_node` / `add_edge` / `add_conditional_edges` / `add_sequence` / `set_entry_point` / `set_conditional_entry_point` / `set_finish_point` / `validate` / `set_node_defaults` | `NotImplementedError` | `<方法名> 尚未接线（由 B6F1 交付）` | **B6F1** |
 | `compile` | `NotImplementedError` | `compile 尚未接线（由 B7F2 交付）` | **B7F2** |
 | `interrupt(...)` | `NotImplementedError` | `interrupt 尚未接线（由 B10F1 交付）` | **B10F1** |
 

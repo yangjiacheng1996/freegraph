@@ -25,7 +25,7 @@ from freegraph.contracts.errors import (
     GraphRecursionError,
     InvalidUpdateError,
 )
-from freegraph.contracts.types import Command
+from freegraph.contracts.types import Command, Interrupt
 
 
 class TestBaseError:
@@ -70,7 +70,7 @@ class TestSubErrors:
         [
             InvalidUpdateError(["a"]),
             GraphRecursionError(25, 25),
-            GraphInterrupt(object()),
+            GraphInterrupt([Interrupt(value="v", id="i")]),
         ],
         ids=["InvalidUpdateError", "GraphRecursionError", "GraphInterrupt"],
     )
@@ -79,13 +79,14 @@ class TestSubErrors:
         with pytest.raises(FreegraphError):
             raise exc
 
-    def test_command_construction_error_is_caught_by_base(self) -> None:
-        """构造「三语义位全缺省」的 ``Command`` 抛出的错误 MUST 可被基类捕获。
+    def test_command_construction_does_not_raise(self) -> None:
+        """构造「四语义位全缺省」的 ``Command`` MUST **不抛错**（**上游同款**）。
 
-        （SC-005 后半句 · 跨故事的一条：US1 的构造期校验错误与 US2 的异常族同源。）
+        ⚠️ **2026-11-12 上游对齐 P3**：上游的 ``Command`` **无任何构造期校验**
+        （上游 ``langgraph/types.py:798-848``）⇒ 原「构造期必抛 ``FreegraphError``」
+        的口径**已删除**（= 语义**放宽**：原先抛错的情形现在**合法**）。
         """
-        with pytest.raises(FreegraphError):
-            Command()
+        assert Command() is not None
 
     def test_invalid_update_error_structured_attribute(self) -> None:
         """``invalid_keys`` MUST 直接可读，无须解析错误消息（I-13）。"""
@@ -104,34 +105,40 @@ class TestSubErrors:
         assert exc.current_step == 25
 
     def test_graph_interrupt_payload_is_the_same_object(self) -> None:
-        """``payload`` MUST 保持**对象**形态（同一个对象，不是它的拷贝）。"""
-        payload = object()
-        exc = GraphInterrupt(payload)
-        assert exc.payload is payload
+        """``payload`` MUST 保持**元素同一对象**（不是拷贝）——**上游同款**。
+
+        ⚠️ **2026-11-12 上游对齐 P3**：``payload`` 由「单个载荷对象」改为
+        「**中断序列**」（上游 ``langgraph/errors.py:102-107``）⇒ 异常可一次携带**多个**中断。
+        """
+        interrupt = Interrupt(value="v", id="i")
+        exc = GraphInterrupt([interrupt])
+        assert exc.payload == (interrupt,)
+        assert exc.payload[0] is interrupt
+        assert exc.args[0] == (interrupt,)
 
     def test_graph_interrupt_payload_keeps_value_and_id(self) -> None:
-        """载荷按契约 C17 带 ``.value`` 与 ``.id``——异常侧原样承载，不拆解。"""
+        """载荷按契约 C17 带 ``.value`` 与 ``.id``——由 ``Interrupt`` 承载（**上游同款**）。
 
-        class Payload:
-            value = "v"
-            id = "i"
-
-        payload = Payload()
-        exc = GraphInterrupt(payload)
-        assert exc.payload.value == "v"
-        assert exc.payload.id == "i"
+        ⚠️ **2026-11-12 上游对齐 P3**：C17 的 ``.value`` / ``.id`` 终于有了**类型载体**
+        （L1 的 ``Interrupt`` · 上游 ``langgraph/types.py:575-620`` 同款）。
+        """
+        exc = GraphInterrupt([Interrupt(value="v", id="i")])
+        assert exc.payload[0].value == "v"
+        assert exc.payload[0].id == "i"
 
     def test_default_message_is_generated(self) -> None:
         """``message`` 缺省时 MUST 自动生成一句摘要。"""
         assert str(InvalidUpdateError(["a"]))
         assert str(GraphRecursionError(25, 25))
-        assert str(GraphInterrupt(object()))
+        assert str(GraphInterrupt([Interrupt(value="v", id="i")]))
 
     def test_message_keyword_overrides_the_summary(self) -> None:
         """可选关键字 ``message="..."`` MUST 覆盖自动生成的摘要。"""
         assert str(InvalidUpdateError(["a"], message="自定义摘要")) == "自定义摘要"
         assert str(GraphRecursionError(1, 2, message="自定义摘要")) == "自定义摘要"
-        assert str(GraphInterrupt(object(), message="自定义摘要")) == "自定义摘要"
+        assert "自定义摘要" in str(
+            GraphInterrupt([Interrupt(value="v", id="i")], message="自定义摘要")
+        )
 
     def test_default_summary_is_english_and_names_the_unknown_key(self) -> None:
         """默认摘要 MUST 为英文且**点名未知 key**（US2 验收场景 3）。"""

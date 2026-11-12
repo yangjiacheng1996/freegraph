@@ -439,8 +439,8 @@ def test_the_ci_installs_the_upstream_only_through_the_differential_group() -> N
 
 
 def test_public_api_surface_is_unchanged() -> None:
-    """T049 · SC-015 · FR-015：契约层仍 **18** 个 · 门面仍 **7** 个符号。"""
-    assert len(_public_symbols("src/freegraph/contracts/__init__.py")) == 18
+    """T049 · SC-015 · FR-015：契约层仍 **20** 个 · 门面仍 **7** 个符号。"""
+    assert len(_public_symbols("src/freegraph/contracts/__init__.py")) == 20
     assert len(_public_symbols("src/freegraph/graph.py")) == 7
 
 
@@ -514,7 +514,7 @@ def test_new_source_files_carry_signature_header_and_leading_docstring() -> None
 def test_compat_matrix_has_no_new_row_for_this_feature() -> None:
     """T055 · SC-015：兼容矩阵**零新增行**（行数不变 ⇒ 双向防漂移）。
 
-    矩阵的 freegraph 符号集合 MUST 恒等于「契约层 18 个 + 门面 7 个」
+    矩阵的 freegraph 符号集合 MUST 恒等于「契约层 20 个 + 门面 7 个」
     ⇒ 本 feature（L2 内部 API）**不新增**任何行。
     """
     readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")

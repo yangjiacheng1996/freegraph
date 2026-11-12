@@ -20,7 +20,7 @@
 * **V3** 脱离构建器（**验收判据 A3** · 零上游导入 · 零出站 · 零环境变量）；
 * **V4** 触发判定与版本号（**逐触发源**的合取项 · 同版本不重复触发 ·
   值逐字相等仍触发）；
-* **V5** 收敛与步数上限（空任务集立即终止 · 缺省上限 **25** ·
+* **V5** 收敛与步数上限（空任务集立即终止 · 缺省上限 **10007**（上游同款）·
   自环在上限处抛 ``GraphRecursionError`` · 多轮跨轮累计）；
 * **V6** 一轮 super-step 的**原子性**（四类错误场景）；
 * **V7** C4 回归的**节点边界**口径 + **读取层口径并存** + 挂载点**零改动**；
@@ -92,7 +92,7 @@ INTERPRETER = sys.executable
 PROJECT_VENV_PYTHON = REPO_ROOT / ".venv" / "bin" / "python"
 
 #: 契约层 / 门面 / L2 内部 API 的公开符号面（**冻结面** · SC-015 / SC-016）。
-CONTRACT_PUBLIC_SYMBOL_COUNT = 18
+CONTRACT_PUBLIC_SYMBOL_COUNT = 20
 FACADE_PUBLIC_SYMBOL_COUNT = 7
 RUNTIME_PUBLIC_SYMBOL_COUNT = 20
 
@@ -150,8 +150,10 @@ FORBIDDEN_NAMES = (
     "async",
 )
 
-#: 契约 §7 冻结的**不变量编号**（**逐条** · I-1…I-15）。
-EXPECTED_INVARIANTS = tuple(f"I-{index}" for index in range(1, 16))
+#: 契约 §7 冻结的**不变量编号**（**逐条** · I-1…I-16）。
+#: ⚠️ **2026-11-12 · 上游对齐 P2-b**：新增 **I-16**（运行期的通道值住在调度状态里 ⇒
+#: **同一份图规格可并发跑多次而互不干扰** · 多会话隔离 · **上游同款**）。
+EXPECTED_INVARIANTS = tuple(f"I-{index}" for index in range(1, 17))
 
 #: 调度内核的**用例**文件（AST 级扫描的扫描域 · SC-005）。
 SCHEDULER_TEST_FILES = (
@@ -424,7 +426,7 @@ def case_single_super_step(runtime: Any) -> None:
     spec = GraphSpec(
         channels=channels,
         nodes={"writer": NodeSpec(subscribes=("messages",), run=writer)},
-        edges={},
+        edges={"__start__": ("writer",)},
     )
 
     result = run_super_step(spec, SchedulerState())
@@ -482,7 +484,7 @@ def case_write_merge(runtime: Any) -> None:
                     subscribes=("count",), run=lambda s: {"messages": ["from-b"]}
                 ),
             },
-            edges={},
+            edges={"__start__": ("a", "b")},
         )
 
     result = run_super_step(build(), SchedulerState())
@@ -502,7 +504,7 @@ def case_write_merge(runtime: Any) -> None:
                     "a": NodeSpec(subscribes=("count",), run=lambda s: {"count": 1}),
                     "b": NodeSpec(subscribes=("count",), run=lambda s: {"count": 2}),
                 },
-                edges={},
+                edges={"__start__": ("a", "b")},
             ),
             SchedulerState(),
         )
@@ -521,7 +523,7 @@ def case_write_merge(runtime: Any) -> None:
                         run=lambda s: {"count": 1, "ghost_a": 2, "ghost_b": 3},
                     )
                 },
-                edges={},
+                edges={"__start__": ("a",)},
             ),
             SchedulerState(),
         )
@@ -623,18 +625,22 @@ def case_trigger_and_versions(runtime: Any) -> None:
             "writer": NodeSpec(subscribes=("seed",), run=writer),
             "sink": NodeSpec(subscribes=("count",), run=sink),
         },
-        edges={},
+        edges={"__start__": ("writer",), "writer": ("sink",)},
     )
     state = SchedulerState()
 
+    # ⚠️ **上游同款**（2026-11-12 · 上游对齐）：触发源**恒为边** ⇒ 写入方由**入口边**触发，
+    # 下游由**写入方的边**触发 ⇒ 下游在**下一轮**才跑（旧的「通道触发」口径已退场）。
     run_super_step(spec, state)
-    eq(calls, ["writer", "sink"], "第 1 轮：写入方与订阅者各执行一次")
+    eq(calls, ["writer"], "第 1 轮：**入口边**触发写入方（下游在**下一轮**才触发）")
 
-    # ⚠️ 通道的值**完全没变**（仍是 5）⇒ 版本推进 ⇒ 订阅者**仍被触发**。
+    # ⚠️ 通道的值**完全没变**（仍是 5）⇒ 但写入方**执行成功** ⇒ 其**执行版本**推进
+    # ⇒ **边**下游**仍被触发**（上游同款：边触发看的是**源节点的执行版本**）。
     run_super_step(spec, state)
-    eq(calls, ["writer", "sink", "sink"], "第 2 轮：**逐字相等**的写入仍触发订阅者")
+    eq(calls, ["writer", "sink"], "第 2 轮：写入方的**执行版本**推进 ⇒ **边**下游被触发")
     eq(channels["count"].get(), 5, "通道的值**完全没变**")
-    eq(state.channel_versions["count"], 2, "写入版本推进（`update()` 返回**真**）")
+    eq(state.channel_versions["count"], 1,
+       "写入版本推进（`update()` 返回**真**）· 初始值豁免 ⇒ 基值 **0**")
 
     # 同一版本不重复触发
     plain = {"count": LastValue("count", int)}
@@ -647,7 +653,7 @@ def case_trigger_and_versions(runtime: Any) -> None:
                 subscribes=("count",), run=lambda s: plain_calls.append("node") or {}
             )
         },
-        edges={},
+        edges={"__start__": ("node",)},
     )
     plain_state = SchedulerState()
     run_super_step(plain_spec, plain_state)
@@ -664,7 +670,7 @@ def case_convergence(runtime: Any) -> None:
     * **不显式指定上限**时实际生效的上限 == **25**；
     * 多轮入口的**跨轮累计**语义。
     """
-    section("V5 · 收敛与步数上限（缺省 25 · 跨轮累计）")
+    section("V5 · 收敛与步数上限（缺省 **10007** · 跨轮累计）")
     import inspect
 
     from freegraph.contracts import GraphRecursionError
@@ -678,7 +684,9 @@ def case_convergence(runtime: Any) -> None:
     )
 
     default = inspect.signature(run_super_steps).parameters["max_steps"].default
-    eq(default, 25, "**签名缺省值** == 25")
+    eq(default, 10007, "**签名缺省值** == **10007**（**上游同款** · 上游 "
+       "`langgraph/_internal/_config.py:32`；⚠️ 上游可由环境变量覆盖，freegraph **MUST NOT** "
+       "读环境变量 ⇒ 硬编码）")
 
     empty = GraphSpec(
         channels={"count": LastValue("count", int)},
@@ -695,7 +703,7 @@ def case_convergence(runtime: Any) -> None:
         return GraphSpec(
             channels=channels,
             nodes={"worker": NodeSpec(subscribes=("count",), run=lambda s: {})},
-            edges={},
+            edges={"__start__": ("worker",)},
         )
 
     one = run_super_steps(one_round_spec())
@@ -715,14 +723,15 @@ def case_convergence(runtime: Any) -> None:
                     run=lambda s: {"count": s["count"] + 1},
                 )
             },
-            edges={},
+            edges={"__start__": ("loop",), "loop": ("loop",)},
         )
 
     try:
-        run_super_steps(self_loop_spec())
+        # ⚠️ **显式**给一个小上限（否则要跑满缺省的 10007 轮）⇒ 上限**行为**与**缺省值**解耦
+        run_super_steps(self_loop_spec(), max_steps=25)
         check(False, "自环规格 ⇒ 在上限处抛 `GraphRecursionError`", "未抛错")
     except GraphRecursionError as error:
-        eq(error.recursion_limit, 25, "`recursion_limit` == **25**（行为值与缺省一致）")
+        eq(error.recursion_limit, 25, "`recursion_limit` == **25**（显式上限）")
         eq(error.current_step, 25, "`current_step` == **25**")
 
     # 跨轮累计：同名节点的同一通道按轮次先后拼接
@@ -740,10 +749,11 @@ def case_convergence(runtime: Any) -> None:
             "s2": NodeSpec(subscribes=("ax",), run=lambda s: {"ay": 2}),
             "p": NodeSpec(subscribes=("ax", "ay"), run=lambda s: {"out": "written"}),
         },
-        edges={},
+        edges={"__start__": ("s1",), "s1": ("s2", "p"), "s2": ("p",)},
     )
     chained = run_super_steps(chain)
-    eq(chained.executed, ("s1", "s2", "p", "p"), "`executed` == 各轮执行序列的**顺序拼接**")
+    eq(chained.executed, ("s1", "p", "s2", "p"),
+       "`executed` == 各轮执行序列的**顺序拼接**（**上游同款** · 同轮顺序 = **节点名序**）")
     eq(chained.node_writes["p"]["out"], ("written", "written"),
        "`node_writes` 同名节点同一通道 == **按轮次先后拼接**")
 
@@ -797,7 +807,7 @@ def case_atomicity(runtime: Any) -> None:
         spec = GraphSpec(
             channels=built,
             nodes={"writer": NodeSpec(subscribes=("a",), run=node)},
-            edges={},
+            edges={"__start__": ("writer",)},
         )
         try:
             run_super_step(spec, SchedulerState())
@@ -814,7 +824,7 @@ def case_atomicity(runtime: Any) -> None:
             "a": NodeSpec(subscribes=("a",), run=lambda s: {"a": 2}),
             "b": NodeSpec(subscribes=("a",), run=lambda s: {"a": 3}),
         },
-        edges={},
+        edges={"__start__": ("a", "b")},
     )
     try:
         run_super_step(conflict, SchedulerState())
@@ -860,9 +870,11 @@ def case_c4_regression(runtime: Any) -> None:
 def case_step_end_clearing(runtime: Any) -> None:
     """**V8** · 步末清空范围（SC-012）。
 
-    * 步末对**覆盖型 / 归约型**通道调 ``clear()`` 的次数 == **0**；
-    * 步末对**本轮写过的**路由型通道调 ``clear()`` 的次数 == **0**；
+    * 步末对**覆盖型 / 归约型**通道的**空序列写入**次数 == **0**；
+    * 步末对**本轮写过的**路由型通道的**空序列写入**次数 == **0**；
     * 步末对**本轮未写的**路由型通道调用的比例 == **100%**；
+    ⚠️ **2026-11-12 · 上游对齐 P2-a**：口径由「``clear()`` 调用」改为「**空序列**写入」
+    （上游 ``langgraph/pregel/_algo.py:326-333`` 的 ``update(EMPTY_SEQ)``）⇒ **可观察语义等价**。
     * **两个入口**的清空**调用集合与次数逐项相等**。
     """
     section("V8 · 步末清空范围（只清本轮未写入的路由型通道）")
@@ -877,6 +889,9 @@ def case_step_end_clearing(runtime: Any) -> None:
         run_super_steps,
     )
 
+    # ⚠️ **2026-11-12 · 上游对齐 P2-a**：步末清空的**机制**改为**上游同款**的
+    # 「对**未更新且仍有值**的通道调 ``update([])``」（上游 ``langgraph/pregel/_algo.py:326-333``）
+    # ⇒ 计数口径由「``clear()`` 调用」改为「**空序列**写入」的次数。
     class _CountingLastValue(LastValue):
         def __init__(self, key: str, value_type: Any) -> None:
             super().__init__(key, value_type)
@@ -886,14 +901,24 @@ def case_step_end_clearing(runtime: Any) -> None:
             self.clear_calls += 1
             return super().clear()
 
+        def update(self, values):  # type: ignore[no-untyped-def]
+            if not values:
+                self.clear_calls += 1
+            return super().update(values)
+
     class _CountingEphemeral(EphemeralValue):
-        def __init__(self, key: str, value_type: Any) -> None:
-            super().__init__(key, value_type)
+        def __init__(self, key: str, value_type: Any, guard: bool = True) -> None:
+            super().__init__(key, value_type, guard)
             self.clear_calls = 0
 
         def clear(self) -> bool:
             self.clear_calls += 1
             return super().clear()
+
+        def update(self, values):  # type: ignore[no-untyped-def]
+            if not values:
+                self.clear_calls += 1
+            return super().update(values)
 
     class _CountingBinaryOperator(BinaryOperatorAggregate):
         def __init__(self, key: str, value_type: Any, reducer: Any) -> None:
@@ -903,6 +928,11 @@ def case_step_end_clearing(runtime: Any) -> None:
         def clear(self) -> bool:
             self.clear_calls += 1
             return super().clear()
+
+        def update(self, values):  # type: ignore[no-untyped-def]
+            if not values:
+                self.clear_calls += 1
+            return super().update(values)
 
     def build(writes: dict[str, Any] | None = None) -> tuple[Any, dict[str, Any]]:
         built: dict[str, Any] = {
@@ -918,32 +948,44 @@ def case_step_end_clearing(runtime: Any) -> None:
             nodes={
                 "writer": NodeSpec(subscribes=("seed",), run=lambda s: dict(payload))
             },
-            edges={},
+            edges={"__start__": ("writer",)},
         )
         return spec, built
 
     spec, built = build()
-    run_super_step(spec, SchedulerState())
-    eq(built["overwrite"].clear_calls, 0, "步末对**覆盖型**通道调 `clear()` 的次数 == **0**")
-    eq(built["reduce"].clear_calls, 0, "步末对**归约型**通道调 `clear()` 的次数 == **0**")
-    eq(built["route"].clear_calls, 1, "步末对**本轮未写入的**路由型通道调用 == **100%**")
-    eq(built["route"].is_available(), False, "路由型通道被清空 ⇒ 无值")
+    # ⚠️ **上游同款**：路由通道**有值**且本轮**未**写入 ⇒ 被通知一次 ⇒ **清空**
+    # （上游 ``langgraph/pregel/_algo.py:326-333`` 的
+    # ``if channels[chan].is_available() and chan not in updated_channels``）
+    built["route"].update(["payload"])
+    state = SchedulerState()
+    run_super_step(spec, state)
+    # ⚠️ 观测**本次运行**的通道实例（**上游同款** · P2-b：每次运行从规格**新建**实例
+    # ⇒ 图规格里的通道是**模板**）
+    run_channels = state.channels
+    eq(run_channels["overwrite"].clear_calls, 0, "步末对**覆盖型**通道的**空序列写入**次数 == **0**")
+    eq(run_channels["reduce"].clear_calls, 0, "步末对**归约型**通道的**空序列写入**次数 == **0**")
+    eq(run_channels["route"].clear_calls, 1, "步末对**本轮未写入的**路由型通道调用 == **100%**")
+    eq(run_channels["route"].is_available(), False, "路由型通道被清空 ⇒ 无值")
 
     written_spec, written = build({"route": "payload"})
-    run_super_step(written_spec, SchedulerState())
-    eq(written["route"].clear_calls, 0, "步末对**本轮写过的**路由型通道调 `clear()` == **0**")
-    eq(written["route"].get(), "payload", "本轮写过的路由型通道的值**保留到下一轮**")
+    written_state = SchedulerState()
+    run_super_step(written_spec, written_state)
+    eq(written_state.channels["route"].clear_calls, 0,
+       "步末对**本轮写过的**路由型通道的**空序列写入** == **0**")
+    eq(written_state.channels["route"].get(), "payload",
+       "本轮写过的路由型通道的值**保留到下一轮**")
 
     single_calls: list[int] = []
     multi_calls: list[int] = []
     for sink in (single_calls, multi_calls):
         spec, built = build()
         built["route"].update(["payload"])
+        state = SchedulerState()
         if sink is single_calls:
-            run_super_step(spec, SchedulerState())
+            run_super_step(spec, state)
         else:
-            run_super_steps(spec)
-        sink.append(built["route"].clear_calls)
+            run_super_steps(spec, state)
+        sink.append(state.channels["route"].clear_calls)
     eq(single_calls, multi_calls, "**两个入口**的清空**调用集合与次数逐项相等**")
 
 
@@ -951,7 +993,7 @@ def case_export_and_frozen_surface(runtime: Any) -> None:
     """**V9** · 导出面（**14 → 20**）与既有冻结面（SC-016 / SC-015）。
 
     * ``freegraph.runtime.__all__`` == **20** 且含 **6** 个新符号；
-    * 契约层 == **18** · 门面 == **7**；
+    * 契约层 == **20** · 门面 == **7**；
     * ``Requires-Dist`` **整体为空**（零新增依赖）。
     """
     section("V9 · 导出面（14 → 20）与既有冻结面")
@@ -965,7 +1007,7 @@ def case_export_and_frozen_surface(runtime: Any) -> None:
     eq(
         len(_public_symbols(contracts_path)),
         CONTRACT_PUBLIC_SYMBOL_COUNT,
-        "契约层的公开符号面 == **18**（**一字未动**）",
+        "契约层的公开符号面 == **20**（上游对齐 P3 · **只增**）",
     )
     eq(
         len(_public_symbols(facade_path)),
@@ -988,10 +1030,10 @@ def case_export_and_frozen_surface(runtime: Any) -> None:
 def case_contract_guard(runtime: Any) -> None:
     """**V10** · 契约守卫（SC-017 的判据侧）。
 
-    * 契约 §7 的不变量编号集合 == **I-1…I-15**（**逐条**）；
+    * 契约 §7 的不变量编号集合 == **I-1…I-16**（**逐条**）；
     * 每条不变量**都有**「编号 → 断言」的绑定（守卫用例**真**存在）。
     """
-    section("V10 · 契约守卫（I-1…I-15 逐条绑定）")
+    section("V10 · 契约守卫（I-1!I-16 逐条绑定）")
     eq(
         _contract_invariants(),
         list(EXPECTED_INVARIANTS),

@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 from freegraph.contracts import Checkpointer, RunConfig, Span, Store, TraceSink
@@ -66,6 +67,17 @@ class InMemoryCheckpointer:
         self._versions.pop(thread_id, None)
         return None
 
+
+    def delete_for_runs(self, run_ids: Sequence[str]) -> Any:
+        """删除若干**运行**的数据（**上游同款** · 上游
+        ``langgraph/checkpoint/base/__init__.py:331``）。"""
+        for run_id in run_ids:
+            self._runs.pop(run_id, None)
+
+    def copy_thread(self, source_thread_id: str, target_thread_id: str) -> Any:
+        """复制一个**会话**的数据（**上游同款** · 上游
+        ``langgraph/checkpoint/base/__init__.py:350``）。"""
+        self._threads[target_thread_id] = dict(self._threads.get(source_thread_id, {}))
     def get_next_version(self, *args: Any, **kwargs: Any) -> Any:
         """生成**下一个版本号**（单调递增）。"""
         thread_id = kwargs.get("thread_id") or (args[0] if args else "")
@@ -95,11 +107,13 @@ class InMemoryStore:
             return tuple(part for part in namespace.split(".") if part)
         return tuple(str(part) for part in namespace)
 
-    def get(self, namespace: Any, key: str) -> Any:
+    def get(self, namespace: tuple[str, ...], key: str) -> Any:
         """按 **(命名空间, 键)** 取一项。"""
         return self._data.get(self._as_path(namespace), {}).get(key)
 
-    def search(self, namespace_prefix: Any, *args: Any, **kwargs: Any) -> Any:
+    def search(
+        self, namespace_prefix: tuple[str, ...], *args: Any, **kwargs: Any
+    ) -> Any:
         """在命名空间**前缀**下检索多项。"""
         prefix = self._as_path(namespace_prefix)
         hits: list[dict[str, Any]] = []
@@ -108,19 +122,21 @@ class InMemoryStore:
                 hits.append({"namespace": path, "items": dict(bucket)})
         return hits
 
-    def put(self, namespace: Any, key: str, value: Any) -> Any:
+    def put(self, namespace: tuple[str, ...], key: str, value: Any) -> Any:
         """写入一项。"""
         self._data.setdefault(self._as_path(namespace), {})[key] = value
         return None
 
-    def delete(self, namespace: Any, key: str) -> Any:
+    def delete(self, namespace: tuple[str, ...], key: str) -> Any:
         """删除一项。"""
         bucket = self._data.get(self._as_path(namespace))
         if bucket is not None:
             bucket.pop(key, None)
         return None
 
-    def list_namespaces(self, *, prefix: Any = None, **kwargs: Any) -> Any:
+    def list_namespaces(
+        self, *, prefix: tuple[str, ...] | None = None, **kwargs: Any
+    ) -> Any:
         """列出命名空间（层级路径）。"""
         prefix_path = self._as_path(prefix)
         return [

@@ -6,11 +6,17 @@
 
 * **SC-001** —— 手写图规格跑**一轮** super-step 后状态变更完全符合预期；
   五阶段产物（**执行记录** / **待写入** / **合并后状态** / **轮数**）**逐项可观测**；
-* **SC-004** —— 订阅**无值**通道的节点执行次数 == **0**；
+* **SC-004** —— **无入边**的节点执行次数 == **0**；
 * **SC-009 / SC-013** —— 节点入参是**普通 `dict`**且只含「订阅集 ∩ 有值集」；
 * **SC-015** —— 图规格校验与返回值校验的**四条显式失败路径**（校验规则 **V-1…V-4**）；
 * **SC-020** —— 节点异常**原样**传播；
 * **SC-025** —— 「条件边」字段**恒空**；非空即**显式失败**。
+
+⚠️ **2026-11-12 · 上游对齐（P1-0-2）**：触发源**恒为边**（上游 ``branch:to:<node>``
+· ``langgraph/graph/state.py:1531-1532``）⇒ 本文件的夹具一律带**入口边**
+（``edges={"__start__": ("首节点",)}` · 上游 ``add_edge(START, "a")``）⇒
+``subscribes`` **只**决定「读哪些通道」（上游 ``langgraph/graph/state.py:1534``），
+**不再**是触发源。
 
 **签名头**（宪法原则 X）：本文件带署名头且模块 docstring 是首个语句。
 """
@@ -22,6 +28,7 @@ from typing import Any
 
 import pytest
 
+from freegraph.runtime.channel import MISSING
 from freegraph.runtime import (
     BinaryOperatorAggregate,
     Channel,
@@ -57,6 +64,18 @@ def _plain_channels() -> dict[str, Channel]:
     }
 
 
+#: **入口哨兵节点**（上游 ``START`` 同款 · ``langgraph/constants.py:30``）。
+#:
+#: ⚠️ 它**无入边** ⇒ **永不执行**（永不进 ``executed``）⇒ 它只作「入口边」的**源**。
+#:
+#: ⚠️ **为什么它 MUST 在节点表里** —— ``GraphSpec`` 的校验规则 **V-2** 要求
+#: 「边的**源** MUST 在节点表里」⇒ 入口边 ``edges={"__start__": ("首节点",)}``
+#: 的源 ``__start__`` 也 MUST 在节点表里（上游的 ``START`` 是**编译期**补进去的
+#: 伪节点 · ``langgraph/graph/state.py:321`` ⇒ freegraph 在**手写图规格**层面
+#: 用「节点表里的一个哨兵节点」表达**同款**语义）。
+_ENTRY = NodeSpec(subscribes=(), run=lambda state: {})
+
+
 class _ProbeChannel(Channel):
     """**探针通道** —— 记录 ``update`` / ``clear`` 的调用次数。
 
@@ -64,6 +83,17 @@ class _ProbeChannel(Channel):
     「执行期间通道的**正式值**被改写的次数 == 0」（SC-008）。
     """
 
+
+    def from_checkpoint(self, checkpoint: Any) -> "Channel":
+        """按检查点**新建**同种通道（**上游同款** · ``langgraph/channels/base.py:60-65``
+        的 ``from_checkpoint`` 是**抽象方法** ⇒ 第三方自定义通道**必须**自己实现）。
+
+        ⚠️ 本夹具的构造签名带第三个参数（``inner``）⇒ 子类的 ``from_checkpoint``
+        MUST 与其**构造签名自洽**（上游同款约束）。"""
+        empty = type(self)(self._key, self._value_type, self._inner)
+        if checkpoint is not MISSING:
+            empty._value = checkpoint
+        return empty
     def __init__(self, key: str, value_type: Any, inner: Channel) -> None:
         super().__init__(key, value_type)
         self._inner = inner
@@ -88,10 +118,14 @@ class _ProbeChannel(Channel):
 # ── T018 · 一轮 super-step 跑通（SC-001 / SC-004）──────────────────────
 
 
-def test_a_subscribed_node_runs_exactly_once_and_the_state_merges() -> None:
-    """**SC-001**：订阅**有值**通道的节点执行**恰好一次**；合并后状态符合预期。
+def test_an_entry_node_runs_exactly_once_and_the_state_merges() -> None:
+    """**SC-001**：**入口边**指向的节点执行**恰好一次**；合并后状态符合预期。
 
-    ⚠️ 初始值由**调用方在跑之前**直接写通道对象（**初始化写入豁免** · 裁定 31）。
+    ⚠️ 触发源**恒为边**（上游同款）⇒ 本用例的节点由**入口边**
+    （``edges={"__start__": ("writer",)}``）触发 ⇒ 它**恰好**在**第 1 轮**执行一次。
+
+    ⚠️ 初始值由**调用方在跑之前**直接写通道对象（**初始化写入豁免** · 裁定 31）
+    ⇒ 该值是**入参**（读得到），**不**是触发依据。
     """
     channels = _reducer_channels()
     channels["messages"].update([["seed"]])
@@ -103,8 +137,11 @@ def test_a_subscribed_node_runs_exactly_once_and_the_state_merges() -> None:
 
     spec = GraphSpec(
         channels=channels,
-        nodes={"writer": NodeSpec(subscribes=("messages",), run=node)},
-        edges={},
+        nodes={
+            "__start__": _ENTRY,
+            "writer": NodeSpec(subscribes=("messages",), run=node),
+        },
+        edges={"__start__": ("writer",)},
     )
 
     result = run_super_step(spec, SchedulerState())
@@ -115,25 +152,80 @@ def test_a_subscribed_node_runs_exactly_once_and_the_state_merges() -> None:
     assert result.state["count"] == 7
 
 
-def test_a_node_subscribing_an_empty_channel_does_not_run() -> None:
-    """**SC-004**：订阅**无值**通道的节点执行次数 == **0**。"""
+def test_a_node_without_an_incoming_edge_does_not_run() -> None:
+    """**SC-004**：**无入边**的节点执行次数 == **0**（上游同款）。
+
+    ⚠️ 触发源**恒为边**（上游 ``branch:to:<node>``）⇒ 「订阅了某个通道」
+    **不是**触发依据 ⇒ 没有入边 ⇒ ``sources(N)`` 为空 ⇒ **永不**执行。
+
+    ⚠️ 图里另有一个**入口节点**（由**入口边**触发）⇒ 图确实「跑起来了」⇒
+    被断言的「无入边」节点**一次都没跑**（不是「整张图都没跑」的空洞断言）。
+    """
+    channels = _plain_channels()
     calls: list[dict[str, Any]] = []
+    executed: list[str] = []
+
+    def entry(state: dict[str, Any]) -> dict[str, Any]:
+        executed.append("entry")
+        return {}
 
     def node(state: dict[str, Any]) -> dict[str, Any]:
         calls.append(state)
         return {"count": 1}
 
     spec = GraphSpec(
-        channels=_plain_channels(),
-        nodes={"writer": NodeSpec(subscribes=("count",), run=node)},
-        edges={},
+        channels=channels,
+        nodes={
+            "__start__": _ENTRY,
+            "entry": NodeSpec(subscribes=(), run=entry),
+            "writer": NodeSpec(subscribes=("count",), run=node),
+        },
+        edges={"__start__": ("entry",)},
     )
 
     result = run_super_step(spec, SchedulerState())
 
     assert calls == []
-    assert result.executed == ()
+    assert executed == ["entry"]
+    assert result.executed == ("entry",)
     assert result.state == {}
+
+
+def test_a_subscriber_without_an_incoming_edge_never_runs() -> None:
+    """**SC-004** · **上游同款**：**订阅了有值通道**却**无入边**的节点 ⇒ **永不执行**。
+
+    ⚠️ 这是「纯边触发」与旧「通道触发」的可观察分界：节点 ``reader`` **订阅**了
+    通道 ``log``，而 ``log`` 在第 1 轮里被 ``writer`` 写出了值 ⇒ 旧模型会执行
+    ``reader``（并自触发循环）⇒ **纯边触发**下 ``reader`` **无入边** ⇒
+    ``ran == ["writer"]``（上游 ``langgraph`` 的**同款**结果）。
+    """
+    channels = _plain_channels()
+    channels["log"] = LastValue("log", str)
+    executed: list[str] = []
+
+    def writer(state: dict[str, Any]) -> dict[str, Any]:
+        executed.append("writer")
+        return {"log": "written"}
+
+    def reader(state: dict[str, Any]) -> dict[str, Any]:
+        executed.append("reader")
+        return {}
+
+    spec = GraphSpec(
+        channels=channels,
+        nodes={
+            "__start__": _ENTRY,
+            "writer": NodeSpec(subscribes=("count",), run=writer),
+            "reader": NodeSpec(subscribes=("log",), run=reader),
+        },
+        edges={"__start__": ("writer",)},
+    )
+
+    result = run_super_steps(spec)
+
+    assert executed == ["writer"]
+    assert result.executed == ("writer",)
+    assert result.state["log"] == "written"
 
 
 def test_a_node_updates_only_the_keys_it_returns() -> None:
@@ -144,8 +236,11 @@ def test_a_node_updates_only_the_keys_it_returns() -> None:
 
     spec = GraphSpec(
         channels=channels,
-        nodes={"writer": NodeSpec(subscribes=("count",), run=lambda state: {"count": 4})},
-        edges={},
+        nodes={
+            "__start__": _ENTRY,
+            "writer": NodeSpec(subscribes=("count",), run=lambda state: {"count": 4}),
+        },
+        edges={"__start__": ("writer",)},
     )
 
     result = run_super_step(spec, SchedulerState())
@@ -174,10 +269,11 @@ def test_an_edge_target_is_scheduled_in_the_next_round() -> None:
     spec = GraphSpec(
         channels=channels,
         nodes={
+            "__start__": _ENTRY,
             "source": NodeSpec(subscribes=("count",), run=source),
             "target": NodeSpec(subscribes=("other",), run=target),
         },
-        edges={"source": ("target",)},
+        edges={"__start__": ("source",), "source": ("target",)},
     )
 
     result = run_super_steps(spec)
@@ -201,11 +297,12 @@ def test_the_five_phase_products_are_all_observable() -> None:
     spec = GraphSpec(
         channels=channels,
         nodes={
+            "__start__": _ENTRY,
             "writer": NodeSpec(
                 subscribes=("messages",), run=lambda state: {"messages": ["more"]}
-            )
+            ),
         },
-        edges={},
+        edges={"__start__": ("writer",)},
     )
 
     result = run_super_step(spec, SchedulerState())
@@ -232,8 +329,11 @@ def test_the_node_input_is_a_plain_dict_with_only_the_available_subscriptions() 
 
     spec = GraphSpec(
         channels=channels,
-        nodes={"reader": NodeSpec(subscribes=("count", "other"), run=node)},
-        edges={},
+        nodes={
+            "__start__": _ENTRY,
+            "reader": NodeSpec(subscribes=("count", "other"), run=node),
+        },
+        edges={"__start__": ("reader",)},
     )
 
     run_super_step(spec, SchedulerState())
@@ -263,8 +363,11 @@ def test_the_node_input_equals_the_sparse_read_of_the_sub_mapping() -> None:
 
     spec = GraphSpec(
         channels=channels,
-        nodes={"reader": NodeSpec(subscribes=("other", "count"), run=node)},
-        edges={},
+        nodes={
+            "__start__": _ENTRY,
+            "reader": NodeSpec(subscribes=("other", "count"), run=node),
+        },
+        edges={"__start__": ("reader",)},
     )
 
     run_super_step(spec, SchedulerState())
@@ -315,15 +418,21 @@ def test_an_empty_node_table_fails_at_construction_time() -> None:
 
 
 def test_a_node_returning_a_non_dict_fails_at_runtime() -> None:
-    """**V-4**：节点返回值**不是 `dict`**（含 ``None``）⇒ 运行期抛内置 ``TypeError``。"""
+    """**V-4**：节点返回值**不是 `dict`** ⇒ 运行期抛内置 ``TypeError``。
+
+    ⚠️ **2026-11-12 上游对齐 P3**：``None`` **已合法**（**无写入**）⇒ 非法样例里去掉它。
+    """
     channels = _plain_channels()
     channels["count"].update([1])
 
-    for bad in (None, 42, "text", ["not", "a", "dict"]):
+    for bad in (42, "text", ["not", "a", "dict"]):
         spec = GraphSpec(
             channels=channels,
-            nodes={"writer": NodeSpec(subscribes=("count",), run=lambda state: bad)},
-            edges={},
+            nodes={
+                "__start__": _ENTRY,
+                "writer": NodeSpec(subscribes=("count",), run=lambda state: bad),
+            },
+            edges={"__start__": ("writer",)},
         )
         with pytest.raises(TypeError):
             run_super_step(spec, SchedulerState())
@@ -399,16 +508,19 @@ def test_a_node_does_not_see_another_nodes_write_of_the_same_round() -> None:
     spec = GraphSpec(
         channels={"count": probe},
         nodes={
+            "__start__": _ENTRY,
             "reader": NodeSpec(subscribes=("count",), run=reader),
             "writer": NodeSpec(subscribes=("count",), run=writer),
         },
-        edges={},
+        edges={"__start__": ("reader", "writer")},
     )
 
-    result = run_super_step(spec, SchedulerState())
+    state = SchedulerState()
+    result = run_super_step(spec, state)
 
     assert seen == [1, 0]
-    assert probe.get() == 99
+    # ⚠️ 观测**本次运行**的通道实例（上游同款 · P2-b）⇒ 而非图规格里的**模板**
+    assert state.channels["count"].get() == 99
     assert result.state["count"] == 99
 
 
@@ -426,8 +538,11 @@ def test_a_node_exception_propagates_as_the_very_same_object() -> None:
 
     spec = GraphSpec(
         channels=channels,
-        nodes={"writer": NodeSpec(subscribes=("count",), run=node)},
-        edges={},
+        nodes={
+            "__start__": _ENTRY,
+            "writer": NodeSpec(subscribes=("count",), run=node),
+        },
+        edges={"__start__": ("writer",)},
     )
 
     with pytest.raises(RuntimeError) as excinfo:
@@ -464,19 +579,30 @@ def test_the_delivered_specs_keep_the_conditional_edges_field_empty() -> None:
 # ── T063 · 初始化写入豁免的两条边界（SC-003）────────────────────────────
 
 
-def test_a_value_written_before_the_run_triggers_its_subscriber() -> None:
-    """**SC-003**：跑**之前**由调用方直接写通道对象 ⇒ 订阅者**被触发**（版本 == 1）。"""
+def test_a_value_written_before_the_run_is_visible_to_the_entry_node() -> None:
+    """**SC-003**：跑**之前**由调用方直接写通道对象 ⇒ 入口节点**读得到**该初始值。
+
+    ⚠️ **上游同款**：触发源**恒为边** ⇒ 跑之前的直接写入**不是**触发依据
+    （旧口径的「有值即版本 1 ⇒ 订阅者被触发」**已删除**）⇒ 节点**只**由**入口边**
+    触发；该直接写入**不进**版本推进路径（裁定 31）⇒ 该通道的写入版本仍为
+    **基值 0**。
+    """
     channels = _plain_channels()
     executed: list[str] = []
+    captured: list[dict[str, Any]] = []
 
     def node(state: dict[str, Any]) -> dict[str, Any]:
         executed.append("writer")
+        captured.append(dict(state))
         return {}
 
     spec = GraphSpec(
         channels=channels,
-        nodes={"writer": NodeSpec(subscribes=("count",), run=node)},
-        edges={},
+        nodes={
+            "__start__": _ENTRY,
+            "writer": NodeSpec(subscribes=("count",), run=node),
+        },
+        edges={"__start__": ("writer",)},
     )
     state = SchedulerState()
 
@@ -485,14 +611,16 @@ def test_a_value_written_before_the_run_triggers_its_subscriber() -> None:
 
     assert executed == ["writer"]
     assert result.executed == ("writer",)
-    assert state.channel_versions["count"] == 1
+    assert captured[0] == {"count": 1}
+    # 跑之前的直接写入**不进**版本推进路径 ⇒ 该通道的写入版本仍为**基值 0**。
+    assert state.channel_versions.get("count", 0) == 0
 
 
 def test_a_value_written_after_the_run_triggers_nothing() -> None:
     """**SC-003**：跑**之后**再直接往通道塞值 ⇒ 调度器**看不见** ⇒ 不触发任何节点。
 
     ⚠️ 用**同一个**调度状态续跑（裁定 31：「跑之后」的直接写入 MUST NOT 成为
-    触发依据）。
+    触发依据）⇒ 入口哨兵的版本**恒为 1** ⇒ 第 2 轮**无**节点被触发。
     """
     channels = _plain_channels()
     executed: list[str] = []
@@ -503,19 +631,22 @@ def test_a_value_written_after_the_run_triggers_nothing() -> None:
 
     spec = GraphSpec(
         channels=channels,
-        nodes={"writer": NodeSpec(subscribes=("count",), run=node)},
-        edges={},
+        nodes={
+            "__start__": _ENTRY,
+            "writer": NodeSpec(subscribes=("count",), run=node),
+        },
+        edges={"__start__": ("writer",)},
     )
     state = SchedulerState()
 
     first = run_super_step(spec, state)
-    assert executed == []
-    assert first.executed == ()
+    assert executed == ["writer"]
+    assert first.executed == ("writer",)
 
     channels["count"].update([1])
     second = run_super_step(spec, state)
 
-    assert executed == []
+    assert executed == ["writer"]
     assert second.executed == ()
 
 
@@ -532,8 +663,11 @@ def test_the_channel_mapping_can_be_augmented_after_construction() -> None:
     channels["count"].update([1])
     spec = GraphSpec(
         channels=channels,
-        nodes={"reader": NodeSpec(subscribes=("count",), run=lambda state: {})},
-        edges={},
+        nodes={
+            "__start__": _ENTRY,
+            "reader": NodeSpec(subscribes=("count",), run=lambda state: {}),
+        },
+        edges={"__start__": ("reader",)},
     )
 
     spec.channels["route"] = EphemeralValue("route", str)
@@ -541,7 +675,9 @@ def test_the_channel_mapping_can_be_augmented_after_construction() -> None:
 
     assert "route" in spec.channels
 
-    result = run_super_step(spec, SchedulerState())
+    state = SchedulerState()
+    result = run_super_step(spec, state)
 
     assert "route" not in result.state
-    assert spec.channels["route"].is_available() is False
+    # ⚠️ 观测**本次运行**的通道实例（上游同款 · P2-b）
+    assert state.channels["route"].is_available() is False

@@ -28,6 +28,7 @@ import pytest
 
 from freegraph.runtime import (
     BinaryOperatorAggregate,
+    EphemeralValue,
     InvalidChannelUpdateError,
     LastValue,
     build_channels,
@@ -278,3 +279,36 @@ def test_third_party_channel_subclass_is_readable() -> None:
     assert read_channels(channels) == {"custom": 1}
     assert local_read(channels, {"custom": [2]}, fresh=True) == {"custom": 2}
     assert channel.get() == 1
+
+
+# ── 上游同款（2026-11-12 上游对齐 P3）──────────────────────────────────────
+
+
+def test_the_fresh_view_drops_the_routing_channel_like_upstream() -> None:
+    """fresh 视图 MUST 对**每个**通道建副本 ⇒ **路由型**通道的副本被 ``update([])`` 清空
+    ⇒ 它在 fresh 视图里**缺席**（**上游同款**）。
+
+    ⚠️ **2026-11-12 上游对齐 P3**：上游对**每一个**通道都 ``copy()`` 一份、再
+    ``update(updated[k])``（无写入者 ⇒ ``update([])``）· 上游
+    ``langgraph/pregel/_algo.py:209-215`` ⇒ 路由型通道（上游 ``ephemeral_value.py:56-61`` 的
+    ``update([])`` 会清空）在 fresh 视图里**缺席**。
+
+    ⇒ 实测两侧**逐字相同**：上游 fresh 视图 = ``{'a': 7, 'acc': ['x']}``（路由通道不在其中）。
+    """
+    channels = {
+        "a": LastValue("a", int),
+        "route": EphemeralValue("route", str),
+        "acc": BinaryOperatorAggregate("acc", list, operator.add),
+    }
+    channels["a"].update([2])
+    channels["route"].update(["prev"])
+    channels["acc"].update([["x"]])
+
+    view = local_read(channels, {"a": [7]}, fresh=True)
+
+    assert view == {"a": 7, "acc": ["x"]}
+    # 路由通道在 fresh 视图里**缺席**（上游同款）⇒ **B8F1** 的条件边路由读需知晓此点
+    assert "route" not in view
+    # 原始通道**不受影响**（读侧零污染）
+    assert channels["route"].get() == "prev"
+    assert channels["a"].get() == 2

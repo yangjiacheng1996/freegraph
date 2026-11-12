@@ -20,7 +20,7 @@ SC-013 / SC-014 / SC-015 / SC-016 / SC-017 / SC-018** 逐条落成**可判定的
 * **A3** **顶层包惰性**（``import freegraph`` 不连带加载任何子模块）
 * **形状门禁** 门面**零实现体** · **依赖卫生**（零第三方 / 零环境变量 / 零 I/O）
 * **未接线语义** 四个方法与 ``interrupt`` 一律抛 ``NotImplementedError``
-* **冻结面审计** 兼容矩阵覆盖门面 7 个符号 · 契约层 18 个符号面未受影响
+* **冻结面审计** 兼容矩阵覆盖门面 7 个符号 · 契约层 20 个符号面未受影响（上游对齐 P3）
 
 依赖
 ----
@@ -240,11 +240,16 @@ def case_constructor_and_not_wired(graph: Any) -> None:
     instance = graph.StateGraph({"count": 0})
     check(instance is not None, "SC010 StateGraph(schema) 构造成功")
     eq(sorted(vars(instance)), ["_schema"], "SC010 构造零副作用（只存私有的 _schema）")
+    # ⚠️ **2026-11-12 上游对齐 P3**：构造签名**逐字对齐上游**
+    # （``state_schema`` / ``context_schema`` / … · 上游 ``langgraph/graph/state.py:216-224``）
+    # ⇒ **第二个位置参数** = ``context_schema``（**可选**）⇒ **合法** ⇒ 越界点顺延到**第三个**。
+    two = graph.StateGraph({"count": 0}, {"user": "x"})
+    check(two is not None, "SC010 StateGraph(schema, context_schema) 构造成功（上游同款）")
     try:
-        graph.StateGraph({"count": 0}, "extra")
-        check(False, "SC010 StateGraph(schema, extra) 抛 TypeError", "未抛异常")
+        graph.StateGraph({"count": 0}, {"user": "x"}, "extra")
+        check(False, "SC010 StateGraph(schema, ctx, extra) 抛 TypeError", "未抛异常")
     except TypeError:
-        check(True, "SC010 StateGraph(schema, extra) 抛 TypeError")
+        check(True, "SC010 StateGraph(schema, ctx, extra) 抛 TypeError")
 
     pattern = re.compile(
         r"(?:add_node|add_edge|add_conditional_edges|compile) 尚未接线（由 B\dF\d 交付）"
@@ -493,7 +498,7 @@ def case_frozen_surface(graph: Any) -> None:
 
     import freegraph.contracts as contracts
 
-    eq(len(contracts.__all__), 18, "SC015 契约层公开符号面仍恰为 18 个")
+    eq(len(contracts.__all__), 20, "SC015 契约层公开符号面仍恰为 20 个（上游对齐 P3）")
     check(
         not hasattr(contracts, "Send") and not hasattr(contracts, "interrupt"),
         "SC015 契约层仍不导出 Send / interrupt",

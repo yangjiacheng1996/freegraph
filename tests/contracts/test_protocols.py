@@ -35,12 +35,18 @@ from freegraph.contracts import (
 )
 
 #: 五个协议的方法集（**集合**）——与 ``contracts/public-api.md`` §1.1 一致。
+#: ⚠️ **2026-11-12 上游对齐 P3**：由**六**个增为**八**个 —— 新增
+#: ``delete_for_runs`` 与 ``copy_thread``（**上游 required** · 上游
+#: ``langgraph/checkpoint/base/__init__.py:331,350``）⇒ 上游形状的 saver
+#: **结构化满足**本协议 ⇒ **兼容性闭环**。
 CHECKPOINTER_METHODS = {
     "get_tuple",
     "list",
     "put",
     "put_writes",
     "delete_thread",
+    "delete_for_runs",
+    "copy_thread",
     "get_next_version",
 }
 
@@ -155,8 +161,8 @@ class TestNodeFunc:
 class TestCheckpointer:
     """US1 · 检查点协议 —— 恰 6 个方法、纯抽象、缺方法判假。"""
 
-    def test_method_set_is_exactly_six(self) -> None:
-        """方法集 MUST **集合恰为**那 6 个（不判顺序）。"""
+    def test_method_set_is_exactly_eight(self) -> None:
+        """方法集 MUST **集合恰为**那 8 个（不判顺序 · 上游同款 · P3）。"""
         assert _protocol_methods(Checkpointer) == CHECKPOINTER_METHODS
 
     @pytest.mark.parametrize("missing", sorted(CHECKPOINTER_METHODS))

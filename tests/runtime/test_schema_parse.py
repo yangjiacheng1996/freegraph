@@ -56,18 +56,27 @@ def test_annotated_list_add_is_recognised_as_binary_reducer() -> None:
     assert channel.reducer is operator.add
     assert channel.has_reducer is True
     assert channel.semantics == "reduce"
-    assert channel.value_type is list
+    # ⚠️ **上游同款**（2026-11-12 P3）：``value_type`` 保留 ``Annotated`` 原样
+    assert channel.value_type.__origin__ is list
 
 
-def test_value_type_is_the_base_type_without_annotated_wrapper() -> None:
-    """FR-002 · I-6：`value_type` = 归约前的基类型 `T`。"""
+def test_value_type_keeps_the_annotated_wrapper() -> None:
+    """FR-002 · I-6：`value_type` = **原始注解**（**保留** ``Annotated`` · **上游同款**）。
+
+    ⚠️ **2026-11-12 上游对齐 P3**：上游把**原始注解**交给通道
+    （``LastValue(annotation)`` / ``BinaryOperatorAggregate(annotation)`` ·
+    上游 ``langgraph/graph/state.py:1862-1872``）⇒ 通道的 ``typ`` **带** ``Annotated``
+    ⇒ freegraph 的 ``value_type`` **同款**。
+    ⇒ **空值推导**那一侧仍由 B5F1 的宽口径剥离负责（上游 ``binop.py:22-30``）⇒ 两端口径一致。
+    """
 
     class Generic(TypedDict):
         messages: Annotated[list[int], operator.add]
 
     spec = parse_state_schema(Generic)
-    assert spec.channels["messages"].value_type == list[int]
-    assert getattr(spec.channels["messages"].value_type, "__metadata__", None) is None
+    value_type = spec.channels["messages"].value_type
+    assert getattr(value_type, "__metadata__", None) is not None
+    assert value_type.__origin__ == list[int]
 
 
 def test_reducer_is_held_by_reference_and_never_invoked() -> None:
@@ -417,32 +426,35 @@ def test_class_with_non_binary_init_is_one_of_the_negative_cases() -> None:
     assert excinfo.value.reason == "reducer_not_binary"
 
 
-def test_non_typed_dict_inputs_are_rejected() -> None:
-    """SC-006 · FR-007 ①：非 `TypedDict` ⇒ `not_a_typed_dict` + `key is None`。"""
+def test_inputs_without_annotations_are_rejected() -> None:
+    """SC-006 · FR-007 ①：**无** ``__annotations__`` ⇒ ``not_a_state_schema`` + ``key is None``。
 
-    class FakeModel:
-        """**零依赖**的「Pydantic 形态」替身（有 `__annotations__` · 非 dict 子类）。"""
-
-        __annotations__ = {"value": int}
+    ⚠️ **2026-11-12 上游对齐 P3**：上游的判据**只有一条** ——「**有** ``__annotations__``」
+    （上游 ``langgraph/graph/state.py:1818``）⇒ **pydantic 模型 / dataclass / 普通类**
+    **一律接受** ⇒ freegraph 采**同一条**判据（**放宽**）。
+    ⇒ 剩下**无** ``__annotations__`` 的对象被拒（上游对这类建**单根** ``__root__`` 通道 ⇒
+    该形态的运行期语义归 **B7F1 / B8F1**）。
+    """
 
     candidates = [
         {},
         {"a": 1},
         dict[str, int],
-        FakeModel(),
-        FakeModel,
     ]
 
     for candidate in candidates:
         with pytest.raises(InvalidSchemaError) as excinfo:
             parse_state_schema(candidate)
 
-        assert excinfo.value.reason == "not_a_typed_dict"
+        assert excinfo.value.reason == "not_a_state_schema"
         assert excinfo.value.key is None
 
 
-def test_real_pydantic_model_is_rejected_when_available() -> None:
-    """SC-006：`pydantic` 形态的**真身**（若环境已装）⇒ 同样被拒绝。
+def test_real_pydantic_model_is_accepted_when_available() -> None:
+    """SC-006：`pydantic` 形态的**真身**（若环境已装）⇒ **被接受**（**上游同款**）。
+
+    ⚠️ **2026-11-12 上游对齐 P3**：上游的判据**只有**「有 ``__annotations__``」
+    （上游 ``langgraph/graph/state.py:1818``）⇒ pydantic 模型**直接可解析**。
 
     ⚠️ ``importorskip`` MUST 置于**测试函数内**（模块级 skip 会连带跳过
     本文件内**其余全部**用例）。
@@ -452,11 +464,9 @@ def test_real_pydantic_model_is_rejected_when_available() -> None:
     class Model(pydantic.BaseModel):
         value: int
 
-    with pytest.raises(InvalidSchemaError) as excinfo:
-        parse_state_schema(Model)
-
-    assert excinfo.value.reason == "not_a_typed_dict"
-    assert excinfo.value.key is None
+    spec = parse_state_schema(Model)
+    assert "value" in spec.channels
+    assert spec.channels["value"].value_type is int
 
 
 def test_unresolvable_annotation_names_the_offending_key() -> None:
@@ -517,12 +527,16 @@ def test_error_carries_structured_fields_and_closed_reason_domain() -> None:
     class NotDict:
         pass
 
+    # ⚠️ **2026-11-12 上游对齐 P3**：空类（无注解）**被接受**（Python 3.10+ 自动给
+    # 空 ``__annotations__``）⇒ 产出**零条**通道（**合法** · B4F1 的既有口径）；
+    # ⇒ 被拒的是**根本不是类**的对象（``{}`` / ``dict[str, int]`` / 实例）。
+
     class Unresolvable(TypedDict):
         bad: "Annotated[list[Missing], operator.add]"
 
     cases = [
         (Bad, "bad", "reducer_not_binary"),
-        (NotDict, None, "not_a_typed_dict"),
+        ({}, None, "not_a_state_schema"),
         (Unresolvable, "bad", "annotation_unresolvable"),
     ]
 

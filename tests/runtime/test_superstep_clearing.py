@@ -10,6 +10,11 @@
   步末对**本轮未被写入的**路由型通道调用的比例 == **100%**；
 * 步末清空**不推进**通道的写入版本（清空**不是**写入）。
 
+⚠️ **2026-11-12 · 上游对齐（P1-0-2）**：触发源**恒为边**（上游 ``branch:to:<node>``
+· ``langgraph/graph/state.py:1531-1532``）⇒ 本文件的夹具一律带**入口边**
+（``edges={"__start__": ("writer",)}`）⇒ ``subscribes`` **只**决定「读哪些通道」，
+**不再**是触发源。
+
 ⚠️ **计数窗口 MUST 限定在「步末清空阶段」** —— 合并阶段的**回滚路径**也会调
 `clear()`，那些调用**不计入**本文件的判据（裁定 29 的豁免）。
 
@@ -58,6 +63,12 @@ class _CountingLastValue(_CountingMixin, LastValue):
         self.clear_calls += 1
         return super().clear()
 
+    def update(self, values):  # type: ignore[no-untyped-def]
+        """计入「**空序列**写入」—— 上游同款的**步末清空**口径。"""
+        if not values:
+            self.clear_calls += 1
+        return super().update(values)
+
 
 class _CountingBinaryOperator(_CountingMixin, BinaryOperatorAggregate):
     """**计数归约型**通道（``isinstance(..., BinaryOperatorAggregate)`` 仍成立）。"""
@@ -70,17 +81,29 @@ class _CountingBinaryOperator(_CountingMixin, BinaryOperatorAggregate):
         self.clear_calls += 1
         return super().clear()
 
+    def update(self, values):  # type: ignore[no-untyped-def]
+        """计入「**空序列**写入」—— 上游同款的**步末清空**口径。"""
+        if not values:
+            self.clear_calls += 1
+        return super().update(values)
+
 
 class _CountingEphemeral(_CountingMixin, EphemeralValue):
     """**计数路由型**通道（``isinstance(channel, EphemeralValue)`` 仍成立）。"""
 
-    def __init__(self, key: str, value_type: Any) -> None:
-        super().__init__(key, value_type)
+    def __init__(self, key: str, value_type: Any, guard: bool = True) -> None:
+        super().__init__(key, value_type, guard)
         self.clear_calls = 0
 
     def clear(self) -> bool:
         self.clear_calls += 1
         return super().clear()
+
+    def update(self, values):  # type: ignore[no-untyped-def]
+        """计入「**空序列**写入」—— 上游同款的**步末清空**口径。"""
+        if not values:
+            self.clear_calls += 1
+        return super().update(values)
 
 
 def _channels() -> dict[str, Channel]:
@@ -92,14 +115,29 @@ def _channels() -> dict[str, Channel]:
     }
 
 
+#: **入口哨兵节点**（上游 ``START`` 同款 · ``langgraph/constants.py:30``）。
+#:
+#: ⚠️ 它**无入边** ⇒ **永不执行**（永不进 ``executed``）⇒ 它只作「入口边」的**源**。
+#:
+#: ⚠️ **为什么它 MUST 在节点表里** —— ``GraphSpec`` 的校验规则 **V-2** 要求
+#: 「边的**源** MUST 在节点表里」⇒ 入口边 ``edges={"__start__": ("writer",)}``
+#: 的源 ``__start__`` 也 MUST 在节点表里（上游的 ``START`` 是**编译期**补进去的
+#: 伪节点 · ``langgraph/graph/state.py:321`` ⇒ freegraph 在**手写图规格**层面
+#: 用「节点表里的一个哨兵节点」表达**同款**语义）。
+_ENTRY = NodeSpec(subscribes=(), run=lambda state: {})
+
+
 def _spec(channels: dict[str, Channel], writes: dict[str, Any]) -> GraphSpec:
-    """构造一份「跑一轮、写指定内容」的图规格。"""
+    """构造一份「跑一轮、写指定内容」的图规格（**入口边**触发 ``writer``）。"""
     channels["seed"] = LastValue("seed", int)
     channels["seed"].update([1])
     return GraphSpec(
         channels=channels,
-        nodes={"writer": NodeSpec(subscribes=("seed",), run=lambda state: writes)},
-        edges={},
+        nodes={
+            "__start__": _ENTRY,
+            "writer": NodeSpec(subscribes=("seed",), run=lambda state: writes),
+        },
+        edges={"__start__": ("writer",)},
     )
 
 
@@ -126,10 +164,12 @@ def test_a_routing_channel_written_this_round_is_kept() -> None:
     channels = _channels()
     spec = _spec(channels, {"route": "payload"})
 
-    run_super_step(spec, SchedulerState())
+    state = SchedulerState()
+    run_super_step(spec, state)
 
-    assert channels["route"].clear_calls == 0
-    assert channels["route"].get() == "payload"
+    # ⚠️ 观测**本次运行**的通道实例（上游同款 · P2-b）⇒ 而非图规格里的**模板**
+    assert state.channels["route"].clear_calls == 0
+    assert state.channels["route"].get() == "payload"
 
 
 def test_every_unwritten_routing_channel_is_cleared() -> None:
@@ -138,10 +178,12 @@ def test_every_unwritten_routing_channel_is_cleared() -> None:
     channels["route"].update(["payload"])
     spec = _spec(channels, {"overwrite": 5})
 
-    run_super_step(spec, SchedulerState())
+    state = SchedulerState()
+    run_super_step(spec, state)
 
-    assert channels["route"].clear_calls == 1
-    assert channels["route"].is_available() is False
+    # ⚠️ 观测**本次运行**的通道实例（上游同款 · P2-b）
+    assert state.channels["route"].clear_calls == 1
+    assert state.channels["route"].is_available() is False
 
 
 def test_both_entries_clear_the_routing_channels_the_same_way() -> None:
@@ -156,11 +198,13 @@ def test_both_entries_clear_the_routing_channels_the_same_way() -> None:
         channels = _channels()
         channels["route"].update(["payload"])
         spec = _spec(channels, {"overwrite": 5})
+        state = SchedulerState()
         if sink is single_calls:
-            run_super_step(spec, SchedulerState())
+            run_super_step(spec, state)
         else:
-            run_super_steps(spec)
-        sink.append(channels["route"].clear_calls)
+            run_super_steps(spec, state)
+        # ⚠️ 观测**本次运行**的通道实例（上游同款 · P2-b）
+        sink.append(state.channels["route"].clear_calls)
 
     assert single_calls == multi_calls == [1]
 

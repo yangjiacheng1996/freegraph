@@ -21,10 +21,18 @@
 | 抽象方法 | `update(values)` · `get()` · `is_available()` |
 | 默认实现 | `clear()` = **无操作**（返回假）· **本 feature 的三类通道全部覆写**它（§3） |
 | 构造签名 | `Channel(key: str, value_type: Any)` |
-| 属性（只读） | `key: str` · `value_type: Any` · `value: Any` · `reducer: Callable \| None` |
-| 公开属性集合 | **恰好** {`key`, `value_type`, `value`, `reducer`}（MUST NOT 更多） |
+| 属性（只读） | `key: str` · `value_type: Any` · `value: Any` · `reducer: Callable \| None` · `typ: Any` · `ValueType: Any` · `UpdateType: Any` |
+| 公开属性集合 | **恰好** {`key`, `value_type`, `value`, `reducer`, `typ`, `ValueType`, `UpdateType`}（MUST NOT 更多）<br>⚠️ **2026-11-12 · 上游对齐 P2-a**：由**四项**扩为**七项**（**只增**）—— 新增 `typ` / `ValueType` / `UpdateType`（上游 `BaseChannel` 的同名成员 · `langgraph/channels/base.py:22,28-38`）⇒ 支撑「**每次运行新建通道实例**」的多会话隔离 |
+| **上游同款的方法**（**2026-11-12 · P2-a**） | `copy()` · `checkpoint()` · `from_checkpoint(value)` · `consume()` · `finish()`（上游 `base.py:40-120`）⇒ 见 §2.1 |
+| **路由型的 `guard`** | `EphemeralValue(key, value_type, guard=True)`（上游 `ephemeral_value.py:23-26`）⇒ `guard=False` 时**一步内多值不报错**、取**末值**（上游的路由用途） |
 
 ## 2. 四个操作的语义（**逐字冻结**）
+
+> ⚠️ **2026-11-12 · 上游对齐 P2-a 补**：四个操作**保持不变**（冻结面**未动**）⇒ 另新增
+> **§2.1 的上游同款方法**（**只增**）⇒ 目的是让「**每次运行新建通道实例**」得以实现
+> （上游同款 · `langgraph/pregel/_checkpoint.py:229-277` 的 `channels_from_checkpoint`）
+> ⇒ **多会话隔离**（同一份图规格可并发跑多次而互不干扰）。
+
 
 | 操作 | 入参 | 返回 | 语义 | 失败行为 |
 |---|---|---|---|---|
@@ -125,7 +133,7 @@
 
 | # | 不变量 |
 |---|---|
-| I-1 | **公开**属性（4 个 `property`）集合**恰为** {`key`, `value_type`, `value`, `reducer`} **且** **实例槽位**集合 ⊆ {`_key`, `_value_type`, `_value`, `_reducer`}（澄清轮 **Q15** · MUST NOT 以 `dir()` / `vars()` 判定）· **子类 MUST NOT 引入新槽**（⇒ 实例 MUST NOT 拥有 `__dict__` · 裁定 17 ①）· **公开属性的收集 MUST 沿 MRO**（`type(ch).__dict__` 只含该类自身定义的属性） |
+| I-1 | **公开**属性（7 个 `property`）集合**恰为** {`key`, `value_type`, `value`, `reducer`, `typ`, `ValueType`, `UpdateType`} **且** **实例槽位**集合 ⊆ {`_key`, `_value_type`, `_value`, `_reducer`} ∪ {`_guard`}（澄清轮 **Q15** · MUST NOT 以 `dir()` / `vars()` 判定）· **子类 MUST NOT 引入新槽**（除 `EphemeralValue` 的 `_guard` · 上游同款）（⇒ 实例 MUST NOT 拥有 `__dict__` · 裁定 17 ①）· **公开属性的收集 MUST 沿 MRO**（`type(ch).__dict__` 只含该类自身定义的属性）<br>⚠️ **2026-11-12 · 上游对齐 P2-a**：由 4 项扩为 **7 项**（**只增** · 上游 `BaseChannel` 同名成员） |
 | I-2 | 通道**不持有**其它通道 / 状态表的引用 ⇒ ① **引用类型白名单**（直接引用集合中 MUST NOT 出现 `dict` / `SchemaSpec` / 其它 `Channel` 实例 · 裁定 17 ③）；② `len(gc.get_referents(ch))` 与 schema 的 key 数**无关**（**辅助**判据 · **探针口径逐字冻结** · MUST NOT 用墙钟耗时 / 数行） |
 | I-3 | 「无值」与「值为 `None`」严格可分 |
 | I-4 | `is_available()` **恒不抛错**；`get()` 在无值时**必抛** `EmptyChannelError` |
@@ -144,7 +152,7 @@
 | I-17 | 映射保序；通道数 == key 数 |
 | I-18 | 归约型通道的 `reducer` **就是**规格里的引用 |
 | I-19 | 导入无副作用（`sys.modules` 增量中非标准库条目数 == 0 · 环境变量读取 == 0 · 出站 == 0） |
-| I-20 | 通道**无同步原语**；写入入口**只有** `update()` |
+| I-20 | 通道**无同步原语**；写入入口**只有** `update()`（**2026-11-12 · P2-a**：公开可调用项集合随上游同款方法扩为 {`update`, `get`, `is_available`, `clear`, `copy`, `checkpoint`, `from_checkpoint`, `consume`, `finish`} ⇒ 其中**写入**入口仍**只有** `update()`） |
 | I-21 | 错误结构化字段齐备；**不携带**用户值 |
 | I-22 | 二者均可被 `except FreegraphError` 捕获；`EmptyChannelError` **不是** `ValueError` |
 | I-23 | 名字面逐字一致（4 操作 + 4 属性 + 4 类名 + 2 映射入口 + 2 错误名） |

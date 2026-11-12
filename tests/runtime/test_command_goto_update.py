@@ -2,6 +2,9 @@
 
 """**跳转 + 更新同时生效**的用例 —— 属 **B9F1**（tasks T013 / T014 / T015 / T016）。
 
+⚠️ **触发模型**（上游对齐 · 2026-11-12）：触发源**恒为边** ⇒ 每张图 MUST 有
+**入口边** ``{"__start__": (首节点,)}``（上游 ``add_edge(START, "a")`` 的同款写法）。
+
 覆盖的判定：
 
 * **SC-001** —— 返回 ``Command(goto=Y)`` 的用例中，Y 在**下一轮**被执行；
@@ -38,14 +41,47 @@ from freegraph.runtime import (
 def _channels() -> dict[str, Channel]:
     """构造通道状态：**归约型**（``messages``）+ **覆盖型**（``count``）。
 
-    ⚠️ 另备一个 ``seed``（覆盖型）—— 用作**触发源**，与写入目标**分离**
-    ⇒ 避免「节点写入自己订阅的通道」导致的自触发回环（B7F1 的既有语义）。
+    ⚠️ 另备一个 ``seed``（覆盖型）—— 只作**入参**，与写入目标**分离**
+    ⇒ 触发源**恒为边**（上游对齐 · 2026-11-12）⇒ 通道**不**再是触发源。
     """
     return {
         "messages": BinaryOperatorAggregate("messages", list, operator.add),
         "count": LastValue("count", int),
         "seed": LastValue("seed", int),
     }
+
+
+#: **入口哨兵**（上游 ``START`` 的值 · ``langgraph/constants.py:30``）——
+#: 触发源**恒为边**（上游 ``branch:to:<node>`` · ``langgraph/graph/state.py:1531``）
+#: ⇒ 每张图 MUST 有**入口边** ``{"__start__": (首节点,)}``（上游
+#: ``add_edge(START, "a")`` 的同款写法 · ``langgraph/graph/state.py:321``）。
+_START = "__start__"
+
+
+def _never(state: dict[str, Any]) -> dict[str, Any]:
+    """**入口哨兵**的节点函数 —— 恒**不被调用**（哨兵无入边 ⇒ 永不被触发）。"""
+    raise AssertionError("入口哨兵 __start__ 恒不被执行")
+
+
+#: **入口哨兵节点**（上游 ``START`` **伪节点**）—— 恒**不被执行**。
+_SENTINEL = NodeSpec(subscribes=(), run=_never)
+
+
+def _graph(
+    channels: dict[str, Channel],
+    nodes: dict[str, NodeSpec],
+    edges: dict[str, tuple[str, ...]],
+) -> GraphSpec:
+    """组装图规格 —— **注入**入口哨兵节点（``edges`` MUST 已含**入口边**）。
+
+    ⚠️ 边的**源** MUST 在节点表里（V-2）⇒ 入口边的**源**（``__start__``）由
+    **哨兵节点**承载（上游的 ``START`` 亦是图里的**伪节点**）。
+    """
+    return GraphSpec(
+        channels=channels,
+        nodes={_START: _SENTINEL, **nodes},
+        edges=edges,
+    )
 
 
 def test_goto_end_applies_the_update_without_producing_a_jump() -> None:
@@ -58,7 +94,7 @@ def test_goto_end_applies_the_update_without_producing_a_jump() -> None:
     channels = _channels()
     channels["seed"].update([1])
 
-    spec = GraphSpec(
+    spec = _graph(
         channels=channels,
         nodes={
             "writer": NodeSpec(
@@ -68,7 +104,7 @@ def test_goto_end_applies_the_update_without_producing_a_jump() -> None:
                 ),
             )
         },
-        edges={},
+        edges={_START: ("writer",)},
     )
 
     result = run_super_step(spec, SchedulerState())
@@ -94,13 +130,13 @@ def test_goto_next_executes_the_target_and_merges_the_update() -> None:
         executed.append("target")
         return {}
 
-    spec = GraphSpec(
+    spec = _graph(
         channels=channels,
         nodes={
             "writer": NodeSpec(subscribes=("seed",), run=writer),
             "target": NodeSpec(subscribes=(), run=target),
         },
-        edges={},
+        edges={_START: ("writer",)},
     )
 
     result = run_super_steps(spec)
@@ -126,13 +162,13 @@ def test_the_goto_target_runs_only_in_the_next_round() -> None:
         rounds.append(["target"])
         return {}
 
-    spec = GraphSpec(
+    spec = _graph(
         channels=channels,
         nodes={
             "writer": NodeSpec(subscribes=("seed",), run=writer),
             "target": NodeSpec(subscribes=(), run=target),
         },
-        edges={},
+        edges={_START: ("writer",)},
     )
 
     run_super_step(spec, SchedulerState())
@@ -148,7 +184,7 @@ def test_the_command_update_is_attributed_to_the_source_node() -> None:
     channels = _channels()
     channels["seed"].update([1])
 
-    spec = GraphSpec(
+    spec = _graph(
         channels=channels,
         nodes={
             "writer": NodeSpec(
@@ -156,7 +192,7 @@ def test_the_command_update_is_attributed_to_the_source_node() -> None:
                 run=lambda state: Command(update={"messages": ["via-command"]}),
             )
         },
-        edges={},
+        edges={_START: ("writer",)},
     )
 
     result = run_super_step(spec, SchedulerState())
@@ -172,7 +208,7 @@ def test_the_goto_target_is_registered_as_an_edge_trigger_source() -> None:
     channels = _channels()
     channels["seed"].update([1])
 
-    spec = GraphSpec(
+    spec = _graph(
         channels=channels,
         nodes={
             "writer": NodeSpec(
@@ -180,7 +216,7 @@ def test_the_goto_target_is_registered_as_an_edge_trigger_source() -> None:
             ),
             "target": NodeSpec(subscribes=(), run=lambda state: {}),
         },
-        edges={},
+        edges={_START: ("writer",)},
     )
 
     state = SchedulerState()

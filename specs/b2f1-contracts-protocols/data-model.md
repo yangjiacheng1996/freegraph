@@ -85,7 +85,13 @@
 | `put` | `(config: RunConfig, <其余参数待定>) -> Any` | 写入一个**快照** |
 | `put_writes` | `(config: RunConfig, <其余参数待定>) -> Any` | 写入**待写入数据**（pending writes） |
 | `delete_thread` | `(thread_id: str) -> Any` | 删除某**会话**的全部快照与写入 |
+| `delete_for_runs` | `(run_ids: Sequence[str]) -> Any` | 删除若干**运行**的数据（**上游同款** · 上游 `langgraph/checkpoint/base/__init__.py:331`） |
+| `copy_thread` | `(source_thread_id: str, target_thread_id: str) -> Any` | 复制一个**会话**的数据（**上游同款** · 上游 `:350`） |
 | `get_next_version` | `(<参数待定>) -> Any` | 生成**下一个版本号**（单调递增） |
+
+> ⚠️ **2026-11-12 上游对齐 P3**：``delete_for_runs`` 与 ``copy_thread`` 在**上游是必须实现**的
+> （无默认实现）⇒ 补上后 **上游形状的 saver 结构化满足本协议** ⇒ **兼容性闭环**；
+> ⚠️ **不补**上游的**异步变体**（freegraph v1 **无 async** ⇒ 契约层 MUST NOT 声明 async 成员）。
 
 - **已冻结的最小约束（四条）**：① 方法集合**恰为**上述六个；② **方法名与参数名**（如上）；
   ③ 读写面 MUST 能承载**检查点标识**（C23 要求 span 必带它）；④ 载荷 MUST 为**纯数据**
@@ -113,11 +119,15 @@
 
 | 成员 | 签名（**参数名已冻结** · D-06；**载体类型挂起 v2**） | 语义 |
 |---|---|---|
-| `get` | `(namespace, key) -> Any` | 按 **(命名空间, 键)** 取一项 |
-| `search` | `(namespace_prefix, <其余参数待定>) -> Any` | 在命名空间**前缀**下检索多项 |
-| `put` | `(namespace, key, value) -> Any` | 写入一项 |
-| `delete` | `(namespace, key) -> Any` | 删除一项 |
-| `list_namespaces` | `(prefix, <其余参数待定>) -> Any` | 列出命名空间（层级路径） |
+| `get` | `(namespace: tuple[str, ...], key) -> Any` | 按 **(命名空间, 键)** 取一项 |
+| `search` | `(namespace_prefix: tuple[str, ...], <其余参数待定>) -> Any` | 在命名空间**前缀**下检索多项 |
+| `put` | `(namespace: tuple[str, ...], key, value) -> Any` | 写入一项 |
+| `delete` | `(namespace: tuple[str, ...], key) -> Any` | 删除一项 |
+| `list_namespaces` | `(prefix: tuple[str, ...] \| None, <其余参数待定>) -> Any` | 列出命名空间（层级路径） |
+
+> ⚠️ **2026-11-12 上游对齐 P3**：命名空间类型由 ``Any`` **收紧**为 ``tuple[str, ...]``
+> （**上游同款** · 上游 ``langgraph/store/base/__init__.py:311`` 的 ``NamespacePath``
+> 是**层级元组**）⇒ 上游形状的 store **直接满足**本协议。
 | `batch` | `(ops, <其余参数待定>) -> Any` | **批量**执行多个操作 |
 
 - **已冻结的语义层（四条）**：① 方法集合**恰为**上述六个；② **方法名与参数名**（如上——

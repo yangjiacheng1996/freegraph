@@ -40,15 +40,29 @@ from freegraph.contracts import (
     Edge,                  # 边元素
     Span,                  # 可观测事件载体
     TraceQuery,            # trace 查询请求（C27 数据面）
+
+    # ── B12F1 上游对齐新增的 2 个（P3 · 上游同款）──
+    Interrupt,             # 中断信息（.value / .id）—— C17 的类型载体
+    PregelTask,            # 一个任务的定格
 )
 ```
 
-**恰好 18 个**。不多、不少：
+**恰好 20 个**。不多、不少：
+
+> ⚠️ **2026-11-13 订正（上游对齐批次 P3 · 发起者已批准）**：本节清单原为 **18** 个
+> （= B1F1 的 8 + B2F1 的 10）⇒ **批次 P3**（`harness/proposals/上游对齐审计.md` §3 · P3-2 / P3-4 / P3-5）
+> 把 **L1 的公开符号面由 18 扩为 20**（新增 `Interrupt` · `PregelTask` · **上游同款**）⇒
+> **本节的「恰好 N 个」文案随之由 18 改为 20** ⇒ ⇒ **G7 门禁恒绿**（**清单驱动** ⇒
+> 判据取「本节清单」，**不硬编码个数** ⇒ 判据零改动）⇒
+> ⇒ **登记**：见 `specs/b12f1-concurrency-errors/spec.md` 的 **R-10**（承接登记 ·
+> 回溯修订已在本节与 `specs/b2f1-contracts-protocols/spec.md` 完成 ⇒ **不重复追认**）。
+> ⇒ **B2F1 spec 的「18 个」为交付时点记述**（B2F1 交付时确为 18）⇒ **不改写历史**，
+> 以**回溯注记**标明当前权威为本节。
 
 > 本节是**公开符号面的唯一手工维护点** —— spec / plan / tasks / `README.md` 兼容矩阵中的同款
 > 清单均以本节为准（spec FR-012）。
 
-- `__all__` **集合相等**断言为这 18 个名字（集合断言才能抓住「偷偷多导出一个」）。
+- `__all__` **集合相等**断言为这 20 个名字（集合断言才能抓住「偷偷多导出一个」）。
 - 契约层**不得**出现名为 `Send` / `interrupt` 的公开符号（v2；归 B11F1 / B10F1）。
 - `import freegraph.contracts` **不得**连带加载任何 freegraph 内部层模块。
 
@@ -61,9 +75,9 @@ from freegraph.contracts import (
 | 协议 | 方法集（**恰为**） | 签名摘要 | 契约 |
 |---|---|---|---|
 | `NodeFunc` | `__call__` | `(state: StateDict) -> StateDict \| Command \| list[Command \| StateDict] \| None` | C5 / C6 |
-| `Checkpointer` | `get_tuple` / `list` / `put` / `put_writes` / `delete_thread` / `get_next_version` | **方法名与参数名已冻结**（逐字见 `data-model.md` §2.2）；**返回类型占位**（`Any`）——**载荷形状挂起 B14F1** | C19 |
+| `Checkpointer` | `get_tuple` / `list` / `put` / `put_writes` / `delete_thread` / **`delete_for_runs`** / **`copy_thread`** / `get_next_version` | **方法名与参数名已冻结**（逐字见 `data-model.md` §2.2）；**返回类型占位**（`Any`）——**载荷形状挂起 B14F1**<br>⚠️ **2026-11-12 上游对齐 P3**：由**六**方法增为**八**（**只增**）—— 新增 `delete_for_runs` / `copy_thread`（**上游 required** · 上游 `langgraph/checkpoint/base/__init__.py:331,350`）⇒ **上游形状的 saver 直接满足本协议** | C19 |
 | `TraceSink` | `on_span_start` / `on_span_end` / `current_span` | `(span: Span) -> None` ×2；`() -> Span \| None` | C23 / C24 |
-| `Store` | `get` / `search` / `put` / `delete` / `list_namespaces` / `batch` | **方法名与参数名已冻结**（逐字见 `data-model.md` §2.4）；命名空间为层级路径、**载体形态挂起 v2** | C20 |
+| `Store` | `get` / `search` / `put` / `delete` / `list_namespaces` / `batch` | **方法名与参数名已冻结**（逐字见 `data-model.md` §2.4）；命名空间为层级路径<br>⚠️ **2026-11-12 上游对齐 P3**：命名空间类型由 `Any` **收紧**为 `tuple[str, ...]`（**上游同款** · 上游 `langgraph/store/base/__init__.py:311`）⇒ 上游形状的 store **直接满足**本协议；**不补**上游的**异步变体**（v1 无 async） | C20 |
 | `CompiledGraph` | `invoke` / `stream` / `get_graph` / `get_state` / `get_state_history` / `update_state` | 返回类别已冻结；**参数名按 `data-model.md` §2.5 冻结为占位名**（B2F1 复核裁定） | C10 / C11 / C12 / C13 |
 
 **各协议的上游来源**（宪法原则 VIII · 证据门禁；FR-014 要求「协议语义与上游同名能力的
@@ -185,7 +199,7 @@ from freegraph.contracts import (
 | C16 | 命令原语 | 已冻结 | — | `Command` + `NodeFunc` 引用它 | **B1F1 已冻结**；本 feature 不改 `Command` |
 | C17 | 中断原语 | 挂起 | D11 | B10F1 | 恢复 MUST 挂 checkpointer ⇒ 本 feature 的 `Checkpointer` 协议面承载「检查点标识」 |
 | C18 | 动态 fan-out | 挂起 | — | v2（B11F1） | 本 feature **不导出** `Send` |
-| C19 | **检查点接口** | 已冻结 | — | `Checkpointer` 六方法 | **方法集 + 最小约束 + 参数名**已冻结（逐字见 `data-model.md` §2.2）；**载荷形状与返回类型挂起 B14F1** |
+| C19 | **检查点接口** | 已冻结 | — | `Checkpointer` **八**方法（2026-11-12 P3 由六增八） | **方法集 + 最小约束 + 参数名**已冻结（逐字见 `data-model.md` §2.2）；**载荷形状与返回类型挂起 B14F1** |
 | C20 | 存储接口 | 已冻结 | — | `Store` 六方法 | **方法集 + 寻址语义 + 参数名**已冻结（逐字见 `data-model.md` §2.4）；**v1 无实现**（B17 已砍）；命名空间载体形态挂起 v2 |
 | C21 | 运行时上下文 | 已冻结 | — | `RunConfig.context` | **B1F1 已冻结**；独立通道，不塞 `configurable` |
 | C22 | **运行配置** | 已冻结 | D11 | `RunConfig` 四字段 | 标识职责划分已落进类型定义——`thread_id` 在 `RunConfig` 内；**`run_id` 不进 `RunConfig`** |
@@ -230,7 +244,7 @@ C18 / C26）· **「修订」列非空 4 处**（C17 / C22 / C23 / C27 · 正交
 
 | 门禁 | 内容 | 状态 |
 |---|---|---|
-| G7 | 公开符号面**恰为 18 个**（由 8 扩展） | 本 feature 修改 |
+| G7 | 公开符号面**恰为 18 个**（由 8 扩展）⚠️ **2026-11-13 订正**：**当前为 20 个**（批次 P3 新增 `Interrupt` / `PregelTask`）—— 门禁**清单驱动**（期望值从本节 §0 解析 ⇒ **不硬编码个数**）⇒ 判据零改动 | 本 feature 修改 |
 | G8 | 文档合规门禁：**兼容矩阵逐符号覆盖 `public-api.md` §0 所列符号**（期望值从 §0 解析）；**保持 4 列**（既有 8 行逐字不动 ⇒ 不可新增列），**行内上游来源行号只对「有上游同名符号」的**新增 10 行**成立**——**写在「差异说明」单元格末尾**；**无上游同名符号者**——`NodeFunc` / `TraceSink` / `Span` / `TraceQuery`——写「无上游对应」+ 契约条目号） | 本 feature 修改（改为清单驱动 + 逐符号；**本 feature 起即可启用**——本层 10 行已在本 feature 补入） |
 | G10 | 协议**纯抽象**（方法体只有 `...`） | 本 feature 新增 |
 | G11 | 结构化子类型判定可用（完整实现判真 / 缺方法判假） | 本 feature 新增 |
@@ -256,7 +270,7 @@ C18 / C26）· **「修订」列非空 4 处**（C17 / C22 / C23 / C27 · 正交
 | 11 | `README.md` **兼容矩阵**补本层 **10 个**新符号（等价判定：协议面 / 数据面分别标注；**保持 4 列**，**来源行号写进该行的「差异说明」单元格末尾**——既有 8 行逐字不动 ⇒ 不可新增列；**有上游同名符号者附来源行号，无对应者写「无上游对应」+ 契约条目号**） | **B24F1**（全库补全与定稿） | **本 feature 已填入本层 10 行**（FR-017 / SC-021）；B24F1 只做全库总校对与定稿 |
 | 12 | `THIRD_PARTY_NOTICES` 的补登 | **B24F1** | 本 feature **零**新增第三方依赖 ⇒ **无需新增登记**（依赖登记表不变） |
 | 13 | 架构断言接入 CI 流水线 | **B3F1** | 本 feature 只交付 pytest 断言；CI 须**先装包**，否则 G3 恒 skip |
-| 14 | `Send` / `interrupt` 的导出 | **v2**（B11F1 / B10F1） | 公开符号面严格 = 18 个 |
+| 14 | `Send` / `interrupt` 的导出 | **v2**（B11F1 / B10F1） | 公开符号面严格 = **20** 个（⚠️ **2026-11-13 订正** · 原 18 · 批次 P3 扩为 20） |
 | 15 | **B18F1 提示词**的交付物口径 | **B18F1** | 收窄为「span **生产**行为」（类型面以本文件为准） |
 | 16 | **B22F1 提示词**的 `Graph` / `Node` / `Edge` 命名 | **B22F1** | **不变**（与本文件一致） |
 | 17 | 契约层两个转出符号（`Command` / `RunConfig`）的**调用签名快照** | **B2F2**（已交付） | 门面 `freegraph.graph` 的 API 签名快照见 `specs/b2f2-public-api-facade/contracts/public-api-snapshot.txt`（**机器生成** · 由 `pytest tests/facade/test_api_snapshot.py --update-api-snapshot` 重新生成）——本文件的**字段语义与契约条目归属**仍是 `Command` / `RunConfig` 的权威，两处**各管一面、不重复** |

@@ -47,6 +47,7 @@ def _snapshot(**overrides: Any) -> StateSnapshot:
         "config": RunConfig(),
         "metadata": {},
         "created_at": UTC_ISO_EXAMPLE,
+        "parent_config": None,
         "tasks": (),
         "interrupts": (),
     }
@@ -87,16 +88,18 @@ class TestStateDict:
 class TestCommand:
     """I-02 / I-03 / I-04 / I-05 / I-06 / I-14 · 命令原语。"""
 
-    def test_empty_command_raises(self) -> None:
-        """``Command()``（三语义位全空）MUST 抛 ``FreegraphError``（fail fast）。"""
-        with pytest.raises(FreegraphError):
-            Command()
+    def test_empty_command_does_not_raise(self) -> None:
+        """``Command()``（四语义位全空）MUST **不抛错**（**上游同款**）。
 
-    def test_empty_command_error_is_freegraph_error(self) -> None:
-        """抛出的 MUST 正是 ``FreegraphError`` 本身（而非某个子类）。"""
-        with pytest.raises(FreegraphError) as excinfo:
-            Command()
-        assert type(excinfo.value) is FreegraphError
+        ⚠️ **2026-11-12 上游对齐 P3**：上游的 ``Command`` **无任何构造期校验**
+        （上游 ``langgraph/types.py:798-848``）⇒ 原「三语义位全空 ⇒ 抛 ``FreegraphError``」
+        的 fail fast **已删除**（= 语义**放宽**：原先抛错的情形现在**合法**）。
+        """
+        command = Command()
+        assert command.goto is None
+        assert command.update is None
+        assert command.resume is None
+        assert command.graph is None
 
     @pytest.mark.parametrize(
         ("kwargs", "label"),
@@ -154,14 +157,22 @@ class TestCommand:
 
     def test_fields_count(self) -> None:
         """``Command`` MUST 恰有 3 个字段（``goto`` / ``update`` / ``resume``）。"""
-        assert [f.name for f in fields(Command)] == ["goto", "update", "resume"]
+        assert [f.name for f in fields(Command)] == ["goto", "update", "resume", "graph"]
 
     def test_repr_contains_field_names(self) -> None:
-        """``repr`` MUST 含全部字段名。"""
+        """``repr`` MUST 含**已填**字段名（**上游同款**）。
+
+        ⚠️ **2026-11-12 上游对齐 P3**：上游 ``langgraph/types.py:826-831`` 的
+        ``__repr__`` **跳过假值**字段（``if value``）⇒ ``Command(goto="a")`` 的
+        ``repr`` **只有** ``goto=`` ⇒ 原「含全部字段名」的判据**已随上游口径修订**。
+        """
         text = repr(Command(goto="a"))
         assert text.startswith("Command(")
-        for name in ("goto=", "update=", "resume="):
-            assert name in text
+        assert "goto=" in text
+        # 假值字段**不出现**（上游同款）
+        assert "update=" not in text
+        assert "resume=" not in text
+        assert repr(Command()) == "Command()"
 
     def test_field_level_equality(self) -> None:
         """字段级相等语义：同值相等、异值不等。"""
@@ -227,10 +238,16 @@ class TestTypeHintResolution:
         assert type(None) in typing.get_args(hint)
 
     def test_state_snapshot_metadata_is_mapping(self) -> None:
-        """快照的 ``metadata`` 注解 MUST 是 ``Mapping`` 形态（只读映射）。"""
+        """快照的 ``metadata`` 注解 MUST 是 ``Mapping | None`` 形态（**上游同款**）。
+
+        ⚠️ **2026-11-12 上游对齐 P3**：上游的 ``metadata`` **可为 None**
+        （上游 ``langgraph/types.py:692``）⇒ 注解放宽为**可空**（**只放宽**，不破坏）。
+        """
         hint = typing.get_type_hints(StateSnapshot)["metadata"]
-        assert typing.get_origin(hint) is Mapping
-        assert typing.get_args(hint) == (str, Any)
+        args = typing.get_args(hint)
+        assert typing.get_origin(args[0]) is Mapping
+        assert typing.get_args(args[0]) == (str, Any)
+        assert type(None) in args
 
     def test_state_snapshot_values_is_state_dict(self) -> None:
         """快照的 ``values`` 注解 MUST 是 ``dict[str, Any]`` 形态。"""
@@ -251,14 +268,15 @@ class TestStateSnapshot:
     def test_field_names_are_frozen(self) -> None:
         """七字段清单即冻结面，不得增删。"""
         assert [f.name for f in fields(StateSnapshot)] == [
-            "values",
-            "next",
-            "config",
-            "metadata",
-            "created_at",
-            "tasks",
-            "interrupts",
-        ]
+        "values",
+        "next",
+        "config",
+        "metadata",
+        "created_at",
+        "parent_config",
+        "tasks",
+        "interrupts",
+    ]
 
     @pytest.mark.parametrize(
         "field_name",
@@ -325,11 +343,16 @@ class TestRunConfig:
     def test_field_names_are_frozen(self) -> None:
         """四字段清单即冻结面，不得增删。"""
         assert [f.name for f in fields(RunConfig)] == [
-            "thread_id",
-            "context",
-            "metadata",
-            "tags",
-        ]
+        "thread_id",
+        "context",
+        "metadata",
+        "tags",
+        "configurable",
+        "max_concurrency",
+        "recursion_limit",
+        "run_name",
+        "run_id",
+    ]
 
     def test_all_fields_are_optional(self) -> None:
         """四字段均有缺省，``RunConfig()`` MUST 可全空构造（I-11）。"""
@@ -363,11 +386,16 @@ class TestRunConfig:
     def test_from_dict_uses_field_metadata_not_hardcoded_list(self) -> None:
         """未知键比对 MUST 以 ``dataclasses.fields()`` 为准——不得硬编码字段名清单。"""
         assert {f.name for f in fields(RunConfig)} == {
-            "thread_id",
-            "context",
-            "metadata",
-            "tags",
-        }
+        "thread_id",
+        "context",
+        "metadata",
+        "tags",
+        "configurable",
+        "max_concurrency",
+        "recursion_limit",
+        "run_name",
+        "run_id",
+    }
 
     def test_is_not_hashable(self) -> None:
         """本类不可哈希——``hash()`` 抛 ``TypeError``（``metadata`` 装的是 dict）。"""

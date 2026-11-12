@@ -100,7 +100,9 @@
 
 - **Q7（第二轮澄清 · 错误对象要不要带结构化字段）** → **A** —— **带结构化字段**：
   错误对象上放「**出错的 key**」+「**原因码**」（取值域封闭）：
-  `not_a_typed_dict` / `reducer_not_binary` / `annotation_unresolvable`（与 FR-007 的三类非法输入一一对应）；
+  `not_a_state_schema` / `reducer_not_binary` / `annotation_unresolvable`（与 FR-007 的三类非法输入一一对应）
+  —— ⚠️ **2026-11-12 上游对齐 P3**：原名 `not_a_typed_dict` **改名**（判定口径已从
+  「是不是 `TypedDict`」放宽为「**是类 + 有 `__annotations__``」· 上游同款）；
   消息文本**只作英文摘要**（沿用仓库既有约定 `contracts/errors.py`：「缺省摘要为**英文**」），
   上层 MUST **无须解析消息**即可取到全部细节。
   **理由**：① 与仓库既有异常体系**同构**（`InvalidUpdateError` 暴露 `invalid_keys` 结构化字段，

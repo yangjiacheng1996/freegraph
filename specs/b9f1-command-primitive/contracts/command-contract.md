@@ -37,6 +37,16 @@
 | **部分状态** | `dict` | 该 dict 的 items（键序 = 插入序） | （无） |
 | **单条命令** | `Command` | `command.update`（若 `not None`）的 items | `command.goto`（若 `not None`） |
 | **命令列表** | `list[Command \| dict]` | **按列表顺序**把各元素归入同一份 | 各条命令 `goto` 的**并集**（保序去重） |
+| **无写入** | `None` | **零写入**（该位**不产生动作**） | （无） |
+
+⚠️ **2026-11-12 上游对齐 P3**（**上游同款**）：
+* **`None` 是合法形态**（**无写入**）—— 上游 `langgraph/graph/state.py:1459-1460`
+  的 `if input is None: return None` ⇒ 原「`None` 属非法形态（V-9）」**已取消**；
+* **空列表是**非法**形态**（**失败**）—— 上游的判据是
+  `isinstance(input,(list,tuple)) and input and any(...)` ⇒ **空列表落 `else`**
+  ⇒ 抛 `InvalidUpdateError("Expected dict, got []")`（上游 `graph/state.py:1488-1492`）
+  ⇒ freegraph 抛内置 `TypeError`（**类型不同 · 语义等价**）⇒ 原「空列表 = 无操作」
+  **已取消**。
 
 **统一形状**（内部中间产物 · **不进公开面**）：
 
@@ -114,12 +124,18 @@
 
 | # | 场景 | 信号 | 消息 MUST 点名 |
 |---|---|---|---|
-| **V-9** | 返回值形态非法（含 `None`） | `TypeError` | 返回值的类型 |
+| **V-9** | 返回值形态非法（**不含** `None` · **含空列表**） | `TypeError` | 返回值的类型 |
 | **V-10** | 列表元素类型非法 | `TypeError` | 元素的类型 |
-| **V-11** | `update` 非 `dict` | `TypeError` | `update` 的类型 |
+| **V-11** | `update` **既非 `dict`** **又非** list/tuple of 2-tuples | `TypeError` | `update` 的类型 |
 | **V-12** | `goto` 形态非法 | `TypeError` | 元素的类型 |
 | **V-13** | `goto` 目标不在节点表 / 空串 / `START` | `ValueError` | **该目标名** |
 | **V-14** | `goto == Command.PARENT` | `NotImplementedError` | `__parent__` + 「子图属 v2 能力」 |
+| **V-14'** | `Command.graph == Command.PARENT` | `NotImplementedError` | `__parent__` + 「子图属 v2 能力」 |
+
+⚠️ **2026-11-12 上游对齐 P3**：**V-14'** 是**上游同款**（上游
+`langgraph/graph/state.py:1761-1762` 抛 `ParentCommand` · 上游 `errors.py:129-133`）
+⇒ freegraph **失败**而非静默 ⇒ 异常**类型**与上游不同（内置 `NotImplementedError`
+vs 上游 `ParentCommand`）· **语义等价（都是失败）** ⇒ 与 **V-14** 同一口径。
 
 ⚠️ **V-13 与 V-14 MUST NOT 合并** ⇒ 「**写错了**」与「**合法但未实现**」**可区分**（SC-005）。
 
@@ -140,7 +156,7 @@
 
 | # | 不变量 | 可判定方式 |
 |---|---|---|
-| **I-1** | 返回值**只有三种合法形态** | 形态穷举 + 非法形态 ⇒ `TypeError` |
+| **I-1** | 返回值**只有四种合法形态**（`dict` / `Command` / 列表 / **`None`**）<br>⚠️ **2026-11-12 上游对齐 P3**：`None` 已合法（**无写入** · 上游 `graph/state.py:1459-1460`） | 形态穷举 + 非法形态 ⇒ `TypeError` |
 | **I-2** | 三形态归一后**共用同一条合并路径** | 同一 key 三种写法 ⇒ 结果**逐项相等** |
 | **I-3** | `Command.update` 归**源节点** | `node_writes` 的 key 集合 |
 | **I-4** | 列表写入**按列表顺序**合并 | 与「按序逐条写入」**逐元素相等** |
@@ -152,7 +168,7 @@
 | **I-10** | 目标**读得到**本次 `update` | 目标入参含该内容 |
 | **I-11** | 动态边与静态边**叠加** | 两个目标都被触发 |
 | **I-12** | `END` **不跳转、不终止** | 静态边目标仍被执行 + 更新生效 |
-| **I-13** | 空槽位 / 空列表 = **无操作** | 零写入 + 零跳转 + 计入执行记录 |
+| **I-13** | 空槽位（`update={}` / `goto=()`）= **无操作**<br>⚠️ **2026-11-12 上游对齐 P3**：**空列表 ≠ 无操作** ⇒ **失败**（上游同款） | 零写入 + 零跳转 + 计入执行记录 |
 | **I-14** | 结果对象**四字段** | 字段数断言 |
 
 ---

@@ -118,13 +118,16 @@ def _fresh_read(
                 received_count=_safe_len(writes[key]),
                 expected_count=1,
             )
+    # ⚠️ **上游同款**（**2026-11-12 上游对齐 P3** · 上游 ``langgraph/pregel/_algo.py:209-215``）：
+    # 上游对**每一个**通道都 ``copy()`` 一份、再 ``update(updated[k])``（无写入者 ⇒ ``update([])``）
+    # ⇒ **路由型**通道的副本被 ``update([])`` **清空**（上游 ``ephemeral_value.py:56-61``）
+    # ⇒ 它在 fresh 视图里**缺席**（实测：上游 fresh 视图 = ``{'a': 2}`` · 路由通道不在其中）。
+    # ⇒ freegraph 原先「只给**有写入**的通道建副本」⇒ 路由通道**被保留** ⇒ 与上游**不同款**
+    # ⇒ 本次**照抄上游**（每个通道都建副本）。
     result: dict[str, Any] = {}
     for key, channel in channels.items():
-        if key in writes:
-            merged = copy.copy(channel)
-            merged.update(writes[key])
-        else:
-            merged = channel
+        merged = copy.copy(channel)
+        merged.update(writes.get(key, ()))
         if merged.is_available():
             result[key] = merged.get()
     return result

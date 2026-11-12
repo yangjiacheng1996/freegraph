@@ -10,6 +10,11 @@
 * **SC-023** —— 同轮双写**覆盖型**通道 ⇒ 抛 `InvalidChannelUpdateError`，
   其 `key` 字段指向该通道。
 
+⚠️ **2026-11-12 · 上游对齐（P1-0-2）**：触发源**恒为边**（上游 ``branch:to:<node>``
+· ``langgraph/graph/state.py:1531-1532``）⇒ 本文件的夹具一律带**入口边**
+（``edges={"__start__": ("首节点",)}`）⇒ ``subscribes`` **只**决定「读哪些通道」，
+**不再**是触发源。
+
 **签名头**（宪法原则 X）：本文件带署名头且模块 docstring 是首个语句。
 """
 
@@ -41,21 +46,34 @@ def _channels() -> dict[str, Channel]:
     }
 
 
+#: **入口哨兵节点**（上游 ``START`` 同款 · ``langgraph/constants.py:30``）。
+#:
+#: ⚠️ 它**无入边** ⇒ **永不执行**（永不进 ``executed``）⇒ 它只作「入口边」的**源**。
+#:
+#: ⚠️ **为什么它 MUST 在节点表里** —— ``GraphSpec`` 的校验规则 **V-2** 要求
+#: 「边的**源** MUST 在节点表里」⇒ 入口边 ``edges={"__start__": ("首节点",)}``
+#: 的源 ``__start__`` 也 MUST 在节点表里（上游的 ``START`` 是**编译期**补进去的
+#: 伪节点 · ``langgraph/graph/state.py:321`` ⇒ freegraph 在**手写图规格**层面
+#: 用「节点表里的一个哨兵节点」表达**同款**语义）。
+_ENTRY = NodeSpec(subscribes=(), run=lambda state: {})
+
+
 def _two_writers(first: Any, second: Any) -> GraphSpec:
     """构造一份「**两个节点同轮各写一次**」的图规格（节点表顺序 = ``a`` → ``b``）。
 
-    ⚠️ 两个节点**同轮**被触发 ⇒ 触发它们的通道**必须有值** ⇒ 调用方在跑之前
-    直接写通道对象（**初始化写入豁免** · 裁定 31）。
+    ⚠️ 两个节点**同轮**被触发 ⇒ 触发它们的**入口边** MUST **同时**指向两者
+    （触发源**恒为边** · 上游同款）⇒ ``edges={"__start__": ("a", "b")}``。
     """
     channels = _channels()
     channels["count"].update([0])
     return GraphSpec(
         channels=channels,
         nodes={
+            "__start__": _ENTRY,
             "a": NodeSpec(subscribes=("count",), run=lambda state: {"messages": first}),
             "b": NodeSpec(subscribes=("count",), run=lambda state: {"messages": second}),
         },
-        edges={},
+        edges={"__start__": ("a", "b")},
     )
 
 
@@ -102,10 +120,11 @@ def test_two_nodes_writing_the_overwriting_channel_fail_explicitly() -> None:
     spec = GraphSpec(
         channels=channels,
         nodes={
+            "__start__": _ENTRY,
             "a": NodeSpec(subscribes=("count",), run=lambda state: {"count": 1}),
             "b": NodeSpec(subscribes=("count",), run=lambda state: {"count": 2}),
         },
-        edges={},
+        edges={"__start__": ("a", "b")},
     )
 
     with pytest.raises(InvalidChannelUpdateError) as excinfo:
@@ -123,10 +142,11 @@ def test_the_overwriting_channel_keeps_its_value_after_the_conflict() -> None:
     spec = GraphSpec(
         channels=channels,
         nodes={
+            "__start__": _ENTRY,
             "a": NodeSpec(subscribes=("count",), run=lambda state: {"count": 1}),
             "b": NodeSpec(subscribes=("count",), run=lambda state: {"count": 2}),
         },
-        edges={},
+        edges={"__start__": ("a", "b")},
     )
 
     with pytest.raises(InvalidChannelUpdateError):
@@ -149,11 +169,12 @@ def test_a_node_writing_an_unknown_key_fails_explicitly() -> None:
     spec = GraphSpec(
         channels=channels,
         nodes={
+            "__start__": _ENTRY,
             "a": NodeSpec(
                 subscribes=("count",), run=lambda state: {"count": 1, "ghost": 2}
-            )
+            ),
         },
-        edges={},
+        edges={"__start__": ("a",)},
     )
 
     with pytest.raises(InvalidUpdateError) as excinfo:
@@ -169,12 +190,13 @@ def test_all_unknown_keys_are_reported_at_once() -> None:
     spec = GraphSpec(
         channels=channels,
         nodes={
+            "__start__": _ENTRY,
             "a": NodeSpec(
                 subscribes=("count",),
                 run=lambda state: {"count": 1, "ghost_a": 2, "ghost_b": 3},
-            )
+            ),
         },
-        edges={},
+        edges={"__start__": ("a",)},
     )
 
     with pytest.raises(InvalidUpdateError) as excinfo:

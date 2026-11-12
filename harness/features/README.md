@@ -2,7 +2,7 @@
 
 > **本目录是「人看的导航 + 机器用的提示词」的组合体。**
 >
-> 本目录共 **31** 个 feature 初稿（每个 `B<n>F<m>_*.md` 文件是一个 feature 的 `/speckit.specify` 提示词初稿）——
+> 本目录共 **32** 个 feature 初稿（每个 `B<n>F<m>_*.md` 文件是一个 feature 的 `/speckit.specify` 提示词初稿）——
 > 执行 `/speckit.specify` 时，把该文件正文中的「提示词正文」整段作为特性描述传入。
 >
 > **权威来源**：本目录的一切内容派生自 `harness/proposals/立项书.md`：
@@ -35,29 +35,30 @@
 | 8 | **B7F1** | [B7F1_任务准备与super-step循环.md](B7F1_任务准备与super-step循环.md) | L2 | M1 | B5F1,B5F2 | **1,480** | 单 super-step 可执行；状态按归约器合并；**可脱离构建器验收**；**C4 回归测试推进到真实节点入参**（承接 B5F2）；**步末只清路由型 + 写入只由调度层发起 + 通道映射可变**（承接 B5F1）；**稀疏读唯一实现**（承接 B5F2） | |
 | 9 | **B9F1** | [B9F1_Command原语.md](B9F1_Command原语.md) | L2 | M1 | B7F1 | 880 | `Command` 跳转 + 状态更新同时生效 | |
 | 10 | **B12F1** | [B12F1_并发执行与错误传播.md](B12F1_并发执行与错误传播.md) | L2 | M1 | B7F1,B9F1 | 1,080 | 并行节点不串行化；首个异常正确抛出 | |
-| 11 | **B10F1** | [B10F1_interrupt与resume.md](B10F1_interrupt与resume.md) | L2 | M1 | B9F1 | 1,160 | HITL 中断/恢复闭环；从节点起点重跑 | |
-| 12 | **B11F1** | [B11F1_Send动态fan-out.md](B11F1_Send动态fan-out.md) | L2 | M1 | B7F1 | 980 | map-reduce 模式可运行 | |
-| 13 | **B13F1** | [B13F1_静态中断点与递归上限.md](B13F1_静态中断点与递归上限.md) | L2 | M1 | B10F1 | 680 | 递归超限抛明确异常 | |
-| 14 | **B6F1** | [B6F1_StateGraph构建器.md](B6F1_StateGraph构建器.md) | L3 | M2 | B4F1 | 1,320 | 构建器 API 与 LangGraph 同名同签名 | ★ |
-| 15 | **B7F2** | [B7F2_compile编译.md](B7F2_compile编译.md) | L3 | M2 | B6F1 | 1,200 | 图可编译；`compile()` 无参可调用 | ★ |
-| 16 | **B7F3** | [B7F3_invoke返回完整状态.md](B7F3_invoke返回完整状态.md) | L2 | M2 | B7F1,B12F1 | 980 | `invoke` 返回 `{'messages': [...], 'llm_calls': N}` 完整状态 | ★ |
-| 17 | **B8F1** | [B8F1_条件边路由与fresh读.md](B8F1_条件边路由与fresh读.md) | L2 | M2 | B5F2,B7F1 | 1,100 | C8 独立回归测试通过：路由函数看到本节点刚写入的值；差分夹具比对路由判定；**复用 B5F2 差分夹具**（条件边字段已预留）；**B7F1 侧已预留 `GraphSpec.conditional_edges`**（本轮恒空 · 填值即失败 ⇒ B8F1 **只需填值**即可复用，不新造第三套） | ★ |
-| 18 | **B8F2** | [B8F2_stream多模式流式.md](B8F2_stream多模式流式.md) | L2 | M2 | B7F3 | 1,180 | 多模式流式输出 | |
-| 19 | **B22F1** | [B22F1_get_graph与draw_mermaid.md](B22F1_get_graph与draw_mermaid.md) | L3 | M2 | B7F2 | 1,140 | `draw_mermaid()` 离线必然成功、零出站 | ★ |
-| 20 | **B23F1** | [B23F1_draw_mermaid_png离线不阻断.md](B23F1_draw_mermaid_png离线不阻断.md) | L3 | M2 | B22F1 | 1,080 | PNG 路径离线不抛阻断性异常 | ★ |
-| 21 | **B8F3** | [B8F3_节点别名与context通道.md](B8F3_节点别名与context通道.md) | L3 | M2 | B7F3 | 580 | C21（`context` 通道）/ C22（`RunConfig` 标识）/ C25（节点别名）落地 | |
-| 22 | **B18F1** | [B18F1_Span数据类生产.md](B18F1_Span数据类生产.md) | L5 | M3 | B7F3 | 1,140 | span 属性命名符合 OTel GenAI semconv；未注入 tracer 时零副作用、零开销 | |
-| 23 | **B19F1** | [B19F1_TraceSink与current_span.md](B19F1_TraceSink与current_span.md) | L5 | M3 | B18F1 | 840 | 嵌套 span 父子关系正确；不注入 tracer 时零副作用 | |
-| 24 | **B20F1** | [B20F1_本地Trace存储JSONL.md](B20F1_本地Trace存储JSONL.md) | L5 | M3 | B19F1 | 820 | trace 落盘，零出站 | |
-| 25 | **B20F2** | [B20F2_Trace查询API与SQLite后端.md](B20F2_Trace查询API与SQLite后端.md) | L5 | M3 | B20F1 | 1,020 | 可按 thread / 时间 / 节点名检索 | |
-| 26 | **B14F1** | [B14F1_Checkpointer协议与MemorySaver.md](B14F1_Checkpointer协议与MemorySaver.md) | L4 | M3 | B7F3 | 1,200 | 快照 + pending writes 双层持久化 | |
-| 27 | **B15F1** | [B15F1_SqliteSaver与状态历史.md](B15F1_SqliteSaver与状态历史.md) | L4 | M3 | B14F1 | 1,240 | 历史快照可枚举 | |
-| 28 | **B16F1** | [B16F1_update_state与时间旅行.md](B16F1_update_state与时间旅行.md) | L4 | M3 | B15F1 | 1,040 | 可从历史 checkpoint 重放 | |
-| 29 | **B21F1** | [B21F1_OTLP导出插件与后端对接.md](B21F1_OTLP导出插件与后端对接.md) | L5 | M4 | B20F2 | 700 | OTLP exporter（可选 extra）+ 三个后端最小对接示例 + 失效风险说明；默认关闭 | |
-| 30 | **B24F1** | [B24F1_打包分发与兼容矩阵.md](B24F1_打包分发与兼容矩阵.md) | — | M4 | B23F1,B16F1 | 900 | 发行包就绪；兼容矩阵与归属清单齐备；**发行产物纯度门禁通过** | |
-| 31 | **B25F1** | [B25F1_双跑验收与迁移说明.md](B25F1_双跑验收与迁移说明.md) | — | M4 | B24F1 | 620 | **MVP 完成**：双跑通过，框架零出站断言通过 | |
+| 11 | **B7F4** | [B7F4_多源汇合边与屏障.md](B7F4_多源汇合边与屏障.md) | L2 | M1 | B7F1,B12F1 | 620 | `edges` 支持多源 `tuple[str, ...]`；目标节点在**所有**源跑完后才被触发（**上游同款** · 上游 `add_edge([a,b], c)`）；**破 B7F1 的 `edges` 冻结面**（发起者 2026-11-12 同意） | |
+| 12 | **B10F1** | [B10F1_interrupt与resume.md](B10F1_interrupt与resume.md) | L2 | M1 | B9F1 | 1,160 | HITL 中断/恢复闭环；从节点起点重跑 | |
+| 13 | **B11F1** | [B11F1_Send动态fan-out.md](B11F1_Send动态fan-out.md) | L2 | M1 | B7F1 | 980 | map-reduce 模式可运行 | |
+| 14 | **B13F1** | [B13F1_静态中断点与递归上限.md](B13F1_静态中断点与递归上限.md) | L2 | M1 | B10F1 | 680 | 递归超限抛明确异常 | |
+| 15 | **B6F1** | [B6F1_StateGraph构建器.md](B6F1_StateGraph构建器.md) | L3 | M2 | B4F1 | 1,320 | 构建器 API 与 LangGraph 同名同签名 | ★ |
+| 16 | **B7F2** | [B7F2_compile编译.md](B7F2_compile编译.md) | L3 | M2 | B6F1 | 1,200 | 图可编译；`compile()` 无参可调用 | ★ |
+| 17 | **B7F3** | [B7F3_invoke返回完整状态.md](B7F3_invoke返回完整状态.md) | L2 | M2 | B7F1,B12F1 | 980 | `invoke` 返回 `{'messages': [...], 'llm_calls': N}` 完整状态 | ★ |
+| 18 | **B8F1** | [B8F1_条件边路由与fresh读.md](B8F1_条件边路由与fresh读.md) | L2 | M2 | B5F2,B7F1 | 1,100 | C8 独立回归测试通过：路由函数看到本节点刚写入的值；差分夹具比对路由判定；**复用 B5F2 差分夹具**（条件边字段已预留）；**B7F1 侧已预留 `GraphSpec.conditional_edges`**（本轮恒空 · 填值即失败 ⇒ B8F1 **只需填值**即可复用，不新造第三套） | ★ |
+| 19 | **B8F2** | [B8F2_stream多模式流式.md](B8F2_stream多模式流式.md) | L2 | M2 | B7F3 | 1,180 | 多模式流式输出 | |
+| 20 | **B22F1** | [B22F1_get_graph与draw_mermaid.md](B22F1_get_graph与draw_mermaid.md) | L3 | M2 | B7F2 | 1,140 | `draw_mermaid()` 离线必然成功、零出站 | ★ |
+| 21 | **B23F1** | [B23F1_draw_mermaid_png离线不阻断.md](B23F1_draw_mermaid_png离线不阻断.md) | L3 | M2 | B22F1 | 1,080 | PNG 路径离线不抛阻断性异常 | ★ |
+| 22 | **B8F3** | [B8F3_节点别名与context通道.md](B8F3_节点别名与context通道.md) | L3 | M2 | B7F3 | 580 | C21（`context` 通道）/ C22（`RunConfig` 标识）/ C25（节点别名）落地 | |
+| 23 | **B18F1** | [B18F1_Span数据类生产.md](B18F1_Span数据类生产.md) | L5 | M3 | B7F3 | 1,140 | span 属性命名符合 OTel GenAI semconv；未注入 tracer 时零副作用、零开销 | |
+| 24 | **B19F1** | [B19F1_TraceSink与current_span.md](B19F1_TraceSink与current_span.md) | L5 | M3 | B18F1 | 840 | 嵌套 span 父子关系正确；不注入 tracer 时零副作用 | |
+| 25 | **B20F1** | [B20F1_本地Trace存储JSONL.md](B20F1_本地Trace存储JSONL.md) | L5 | M3 | B19F1 | 820 | trace 落盘，零出站 | |
+| 26 | **B20F2** | [B20F2_Trace查询API与SQLite后端.md](B20F2_Trace查询API与SQLite后端.md) | L5 | M3 | B20F1 | 1,020 | 可按 thread / 时间 / 节点名检索 | |
+| 27 | **B14F1** | [B14F1_Checkpointer协议与MemorySaver.md](B14F1_Checkpointer协议与MemorySaver.md) | L4 | M3 | B7F3 | 1,200 | 快照 + pending writes 双层持久化 | |
+| 28 | **B15F1** | [B15F1_SqliteSaver与状态历史.md](B15F1_SqliteSaver与状态历史.md) | L4 | M3 | B14F1 | 1,240 | 历史快照可枚举 | |
+| 29 | **B16F1** | [B16F1_update_state与时间旅行.md](B16F1_update_state与时间旅行.md) | L4 | M3 | B15F1 | 1,040 | 可从历史 checkpoint 重放 | |
+| 30 | **B21F1** | [B21F1_OTLP导出插件与后端对接.md](B21F1_OTLP导出插件与后端对接.md) | L5 | M4 | B20F2 | 700 | OTLP exporter（可选 extra）+ 三个后端最小对接示例 + 失效风险说明；默认关闭 | |
+| 31 | **B24F1** | [B24F1_打包分发与兼容矩阵.md](B24F1_打包分发与兼容矩阵.md) | — | M4 | B23F1,B16F1 | 900 | 发行包就绪；兼容矩阵与归属清单齐备；**发行产物纯度门禁通过** | |
+| 32 | **B25F1** | [B25F1_双跑验收与迁移说明.md](B25F1_双跑验收与迁移说明.md) | — | M4 | B24F1 | 620 | **MVP 完成**：双跑通过，框架零出站断言通过 | |
 
-**合计**：**31 feature / 24 功能块 / 30,600 行 / 93 人日 / 报价 186,000 元 / 94 天**。
+**合计**：**32 feature / 24 功能块 / 31,220 行 / 96 人日 / 报价 192,000 元 / 96 天**。
 
 > **B17（`Store` 长期记忆）已于 2026-11-05 砍掉**——理由：freegraph 是**通用图框架**
 > （智能体 / RPA 自动化 / 脚本编排 / 在一定程度上替代 `main` 函数 / 可视化工作流编排），
@@ -72,10 +73,10 @@
 | 里程碑 | 步次 | feature | 天数区间 | 达成状态 |
 |---|---|---|---|---|
 | **M0 地基** | 1–4 | B1F1 · B2F1 · B2F2 · B3F1 | 第 3 → 12 天 | 契约冻结，CI 门禁生效 |
-| **M1 运行时内核** | 5–13 | B4F1 · B5F1 · B5F2 · B7F1 · B9F1 · B12F1 · B10F1 · B11F1 · B13F1 | 第 15 → 39 天 | 状态模型、super-step、Command/HITL/Send/并发就绪；**运行时可独立验收（不依赖构建器）** |
-| **M2 图定义与对外 API** | 14–21 | B6F1 · B7F2 · B7F3 · B8F1 · B8F2 · B22F1 · B23F1 · B8F3 | 第 42 → 63 天 | 构建器 + compile + invoke + 路由 + stream + 图导出；**固定脚本跑通（fake 模型）= MVP 验收点（第 20 步 / 第 60 天）** |
-| **M3 可诊断** | 22–28 | B18F1 · B19F1 · B20F1 · B20F2 · B14F1 · B15F1 · B16F1 | 第 64 → 84 天 | checkpoint + trace + 时间旅行（**四类诊断能力齐备**） |
-| **M4 生态** | 29–31 | B21F1 · B24F1 · B25F1 | 第 85 → 93 天 | 打包、兼容矩阵、双跑验收、文档（**v1.0 收口**） |
+| **M1 运行时内核** | 5–14 | B4F1 · B5F1 · B5F2 · B7F1 · B9F1 · B12F1 · **B7F4** · B10F1 · B11F1 · B13F1 | 第 15 → 42 天 | 状态模型、super-step、Command/HITL/Send/并发就绪；**运行时可独立验收（不依赖构建器）** |
+| **M2 图定义与对外 API** | 15–22 | B6F1 · B7F2 · B7F3 · B8F1 · B8F2 · B22F1 · B23F1 · B8F3 | 第 45 → 66 天 | 构建器 + compile + invoke + 路由 + stream + 图导出；**固定脚本跑通（fake 模型）= MVP 验收点（第 21 步 / 第 63 天）** |
+| **M3 可诊断** | 23–29 | B18F1 · B19F1 · B20F1 · B20F2 · B14F1 · B15F1 · B16F1 | 第 67 → 87 天 | checkpoint + trace + 时间旅行（**四类诊断能力齐备**） |
+| **M4 生态** | 30–32 | B21F1 · B24F1 · B25F1 | 第 88 → 96 天 | 打包、兼容矩阵、双跑验收、文档（**v1.0 收口**） |
 
 **关键路径（15 个 feature / 45 天）**：
 `B1F1 → B2F1 → B2F2 → B4F1 → B5F1 → B5F2 → B7F1 → B9F1 → B12F1 → B7F3 → B14F1 → B15F1 → B16F1 → B24F1 → B25F1`
@@ -83,7 +84,7 @@
 **可并行的次长链（可观测链，15 个 feature，与交付终点无依赖边）**：
 `B1F1 → B2F1 → B2F2 → B4F1 → B5F1 → B5F2 → B7F1 → B9F1 → B12F1 → B7F3 → B18F1 → B19F1 → B20F1 → B20F2 → B21F1`
 
-> 单人按 M0→M4 串行；多人可并行：`B10F1`/`B11F1`、`B20F1`/`B14F1`。
+> 单人按 M0→M4 串行；多人可并行：`B10F1`/`B11F1`、`B20F1`/`B14F1`、`B7F4`/`B10F1`。
 
 ---
 

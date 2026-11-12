@@ -22,7 +22,7 @@
 * **依赖隔离**（FR-018 / FR-020 · SC-008 / SC-010）—— 内核路径对上游的导入
   次数 == **0** · ``Requires-Dist`` **整体为空**；
 * **冻结面断言**（FR-021 / FR-026 · SC-011 / SC-029）—— ``freegraph.runtime``
-  的 ``__all__`` == **20** · ``freegraph.contracts`` == **18** ·
+  的 ``__all__`` == **20** · ``freegraph.contracts`` == **20** ·
   ``freegraph.graph`` == **7**。
 
 **签名头**（宪法原则 X）：本文件带署名头且模块 docstring 是首个语句。
@@ -65,13 +65,13 @@ EXPECTED_ERROR_SYMBOLS = (
     "InvalidChannelUpdateError",
     "InvalidSchemaError",
     "REASON_ANNOTATION_UNRESOLVABLE",
-    "REASON_NOT_A_TYPED_DICT",
+    "REASON_NOT_A_STATE_SCHEMA",
     "REASON_REDUCER_NOT_BINARY",
     "SCHEMA_ERROR_REASONS",
 )
 
 #: 契约层（``freegraph.contracts``）的**冻结符号数**。
-CONTRACT_SYMBOL_COUNT = 18
+CONTRACT_SYMBOL_COUNT = 20
 
 #: 门面（``freegraph.graph``）的**冻结符号数**。
 FACADE_SYMBOL_COUNT = 7
@@ -572,7 +572,7 @@ def test_the_runtime_export_surface_holds_twenty_symbols() -> None:
 
 
 def test_the_contract_layer_and_the_facade_symbol_counts_are_unchanged() -> None:
-    """FR-026 · SC-011：契约层 **18** 个 · 门面 **7** 个符号**一字不动**。"""
+    """FR-026 · SC-011：契约层 **20** 个 · 门面 **7** 个符号**一字不动**。"""
     import freegraph.contracts as contracts
     import freegraph.graph as graph
 

@@ -173,9 +173,23 @@ def case_core_types(contracts: Any) -> None:
     # C1 · StateDict = dict[str, Any] 的类型别名（不是新造类）
     eq(contracts.StateDict, dict[str, Any], "C1 StateDict 是 dict[str, Any] 的别名")
 
-    # C22 · RunConfig 四字段 + 承载 thread_id
+    # C22 · RunConfig 九字段（**上游同款** · 2026-11-12 上游对齐 P3）
     run_fields = [f.name for f in fields(contracts.RunConfig)]
-    eq(run_fields, ["thread_id", "context", "metadata", "tags"], "C22 RunConfig 四字段逐字一致")
+    eq(
+        run_fields,
+        [
+            "thread_id",
+            "context",
+            "metadata",
+            "tags",
+            "configurable",
+            "max_concurrency",
+            "recursion_limit",
+            "run_name",
+            "run_id",
+        ],
+        "C22 RunConfig 九字段逐字一致（上游同款）",
+    )
     cfg = contracts.RunConfig(thread_id="t-1", metadata={"k": "v"})
     eq(cfg.thread_id, "t-1", "C22 RunConfig 承载会话标识 thread_id")
     eq(dict(cfg.metadata), {"k": "v"}, "C22 RunConfig.metadata 可读")
@@ -203,16 +217,28 @@ def case_core_types(contracts: Any) -> None:
     eq(contracts.Command.PARENT, "__parent__", "C16 Command.PARENT 常量取值")
     try:
         contracts.Command()
-        check(False, "C16 Command 三个语义位全空时抛错")
+        check(
+            True,
+            "C16 Command 四个语义位全空时**不抛错**（上游同款）",
+        )
     except contracts.FreegraphError:
         check(True, "C16 Command 三个语义位全空时抛 FreegraphError")
 
-    # C11 · StateSnapshot 七字段
+    # C11 · StateSnapshot 八字段（**上游同款** · 2026-11-12 上游对齐 P3）
     snap_fields = [f.name for f in fields(contracts.StateSnapshot)]
     eq(
         snap_fields,
-        ["values", "next", "config", "metadata", "created_at", "tasks", "interrupts"],
-        "C11 StateSnapshot 七字段逐字一致",
+        [
+            "values",
+            "next",
+            "config",
+            "metadata",
+            "created_at",
+            "parent_config",
+            "tasks",
+            "interrupts",
+        ],
+        "C11 StateSnapshot 八字段逐字一致（上游同款）",
     )
     snap = contracts.StateSnapshot(
         values={"a": 1},
@@ -220,6 +246,7 @@ def case_core_types(contracts: Any) -> None:
         config=cfg,
         metadata={},
         created_at="2026-11-06T10:00:00+00:00",
+        parent_config=None,
         tasks=(),
         interrupts=(),
     )
@@ -257,9 +284,15 @@ def case_error_hierarchy(contracts: Any) -> None:
         value = "v"
         id = "i"
 
-    interrupt = contracts.GraphInterrupt(Payload())
+    # ⚠️ **2026-11-12 上游对齐 P3**：``GraphInterrupt`` 的载荷是**中断序列**
+    # （上游 ``langgraph/errors.py:102-107``）⇒ 元素为 ``Interrupt``（带 .value / .id · C17）
+    interrupt = contracts.GraphInterrupt(
+        [contracts.Interrupt(value="v", id="i")]
+    )
     check(hasattr(interrupt, "payload"), "GraphInterrupt.payload 可读")
-    eq(interrupt.payload.value, "v", "GraphInterrupt.payload 保持对象形态（C17 结构约定）")
+    eq(interrupt.payload[0].value, "v", "GraphInterrupt.payload 的元素带 .value（C17 结构约定）")
+    eq(interrupt.payload[0].id, "i", "GraphInterrupt.payload 的元素带 .id（C17 结构约定）")
+    eq(interrupt.args[0], interrupt.payload, "GraphInterrupt 的异常实参即中断序列（上游同款）")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

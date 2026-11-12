@@ -424,3 +424,17 @@ With multiple developers:
 
 > **覆盖核对**：**FR 21/21**（FR-001…FR-021 全部命中）· **SC 18/18**（SC-001…SC-018 全部命中）·
 > **任务 57 条**（Setup 5 + Foundational 8 + US1 8 + US2 8 + US3 7 + US4 9 + Polish 12）。
+
+---
+
+> ⚠️ **2026-11-12 · 上游对齐 P3 回溯修订注记**（**只加注记 · 不改历史记录**）：
+> 本 feature 的 T006 / T038 / T041 等条目记录的「原因码 `not_a_typed_dict`」与
+> 「只接受 `TypedDict` / 拒绝 Pydantic 模型」两条口径，已在
+> **2026-11-12 · 上游对齐 P3**（见 `specs/b12f1-concurrency-errors/` 与
+> `harness/proposals/上游对齐审计.md`）**改为上游同款**：
+> ① 原因码**改名** `not_a_state_schema`（判定口径已从「是不是 `TypedDict`」放宽）；
+> ② **Pydantic 模型 / dataclass / 普通类**（是类 + 有 `__annotations__`）**一律接受**
+> （上游 `langgraph/graph/state.py:1818`）；
+> ③ `value_type` **保留 `Annotated` 原样**（上游 `:1862-1872`）；
+> ④ **空 schema** 仍合法（零条通道）。
+> ⇒ 上面的**执行记录**保持原样（历史事实），**判据面**见 `spec.md` / `contracts/` / `data-model.md`。

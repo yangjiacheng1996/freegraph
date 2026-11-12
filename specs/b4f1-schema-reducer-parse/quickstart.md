@@ -232,7 +232,8 @@ for bad in ({'a': 1}, {'a': int}):
 "
 ```
 
-**期望输出**：`InvalidSchemaError | key = None | reason = not_a_typed_dict`（两行相同）。
+**期望输出**：`InvalidSchemaError | key = None | reason = not_a_state_schema`
+> ⚠️ **2026-11-12 上游对齐 P3**：Pydantic 形态的**类**已被**接受**（上游同款）。（两行相同）。
 
 ---
 

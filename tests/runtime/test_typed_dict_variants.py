@@ -85,4 +85,4 @@ def test_typing_extensions_typed_dict_is_not_mistaken_for_a_plain_dict() -> None
     with pytest.raises(InvalidSchemaError) as excinfo:
         parse_state_schema({"messages": []})
 
-    assert excinfo.value.reason == "not_a_typed_dict"
+    assert excinfo.value.reason == "not_a_state_schema"

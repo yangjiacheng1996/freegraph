@@ -77,14 +77,27 @@ class TestSpanFields:
             assert getattr(span, name) is not None, name
 
     def test_run_config_field_list_is_unchanged(self) -> None:
-        """``RunConfig`` 的字段清单 MUST 恰为四字段，且**不含** ``run_id``。
+        """``RunConfig`` 的字段清单 MUST 恰为**九**字段（**上游同款**）。
 
-        （C22 · D11：``thread_id`` 由运行配置承载；``run_id`` 归运行时层，
-        **不进**运行配置——本 feature MUST NOT 增删该清单。）
+        ⚠️ **2026-11-12 上游对齐 P3**：由**四**字段增为**九**字段 —— 新增
+        ``configurable`` / ``max_concurrency`` / ``recursion_limit`` / ``run_name`` / ``run_id``
+        （**上游同款** · 上游 ``langchain_core/runnables/config.py:98,103,109,115,124``）
+        ⇒ 下游 langchain 的 ``RunnableConfig`` 可**原样**落进来。
+        （C22 · D11 的「``run_id`` 不进运行配置」**已被上游对齐取代** —— 上游的
+        ``RunnableConfig`` **确实**带 ``run_id``。）
         """
         names = [f.name for f in fields(RunConfig)]
-        assert names == ["thread_id", "context", "metadata", "tags"]
-        assert "run_id" not in names
+        assert names == [
+            "thread_id",
+            "context",
+            "metadata",
+            "tags",
+            "configurable",
+            "max_concurrency",
+            "recursion_limit",
+            "run_name",
+            "run_id",
+        ]
 
 
 class TestSpanImmutability:

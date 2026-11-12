@@ -47,8 +47,11 @@
 | **示例** | `class MessagesState(TypedDict): messages: Annotated[list[AnyMessage], operator.add]; llm_calls: int` |
 | **MUST NOT** | 继承任何 freegraph 基类（FR-001）· 引入第三方依赖（FR-001） |
 
-**不接受的输入**（⇒ `InvalidSchemaError(reason="not_a_typed_dict")`）：普通 `dict` ·
-`dict[str, int]` · 模型实例 · Pydantic 模型（v1.0 不支持 · 裁定 7）。
+**不接受的输入**（⇒ `InvalidSchemaError(reason="not_a_state_schema")`）：普通 `dict` ·
+`dict[str, int]` · 模型**实例**。
+⚠️ **2026-11-12 上游对齐 P3**：**Pydantic 模型 / dataclass / 普通类**（**是类 + 有 `__annotations__`**）
+⇒ **一律接受**（**上游同款** · 上游 `langgraph/graph/state.py:1818`）⇒ 原「Pydantic 模型不支持」
+的限制**已取消**；**空 schema**（零个 key）仍**合法**（产出零条通道）。
 
 ---
 
@@ -127,7 +130,7 @@
 
 | 原因码 | 触发条件 | `key` |
 |---|---|---|
-| `not_a_typed_dict` | schema 不是 `TypedDict`（含 Pydantic 模型 / 普通 dict / 实例） | **空** |
+| `not_a_state_schema` | schema **不是类**或**无** `__annotations__`（普通 dict / `dict[str, int]` / 实例）<br>（**原名** `not_a_typed_dict` · 2026-11-12 P3 随判定放宽而改名） | **空** |
 | `reducer_not_binary` | 末位元素是 callable 但位置参数数 ≠ 2（含类 / 实例 / 签名不可取） | 有 |
 | `annotation_unresolvable` | 注解解析失败（如不可解析的前向引用） | 有 |
 

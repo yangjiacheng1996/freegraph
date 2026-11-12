@@ -78,6 +78,49 @@
 - What happens when [boundary condition]?
 - How does system handle [error scenario]?
 
+## Upstream Parity *(mandatory — 宪法 v1.9.0 原则 XI「上游优先」)*
+
+<!--
+  ACTION REQUIRED: This section is MANDATORY and NOT optional.
+  Upstream `langgraph` is the SOLE authority for this project.
+
+  1. 上游版本 MUST 钉住（`langgraph` 的实际安装版本 · 换版本 MUST 重新核实全部锚点）；
+  2. 每条上游行为断言 MUST 带 **版本 + `路径:行号`**；
+  3. **行为**断言 MUST 有**实测**支撑（只读源码不足以支撑行为断言）；
+  4. 每条语义点 MUST 标关系：`SAME`（照抄）/ `STRICTER`（刻意更严 · 须写理由）/
+     `DIFF`（已知结构差异 · 须写理由）；
+  5. MUST 列出本 feature **MUST 交付的差分场景组**（落 `tests/differential/`）
+     ⇒ 这是「与上游同款」的**唯一可自动化判据**；
+  6. 偏离登记**只允许**三类：① 必须自研区（4 类）② 更严的失败信号 ③ 破已冻结的契约面。
+-->
+
+**Upstream version**: `langgraph` [X.Y.Z]（取证于 [DATE]）
+
+| # | 语义点 | 上游实现（版本 + `路径:行号`） | freegraph 口径 | 关系 | 理由 |
+|---|---|---|---|---|---|
+| P-01 | [语义点] | [`langgraph/…:行号`] | [口径] | SAME / STRICTER / DIFF | [STRICTER/DIFF 必填] |
+
+### 差分场景组 *(mandatory)*
+
+| # | 场景 | 断言（节点序列 / 最终状态 / 失败与否） | 判词 |
+|---|---|---|---|
+| D-01 | [场景] | [可判定的断言] | SAME / STRICTER / DIFF |
+
+⇒ **落点**：`tests/differential/parity_probe.py` ⇒ **CI 的 Linux 全量档真跑**
+（上游缺席即 skip · 沿用 B5F2 的「缺席即 skip」纪律）。
+
+### 偏离登记 *(仅限三类 · 其余一律照抄)*
+
+| # | 类别 | 被偏离的判据 | 理由 | 承接方 / 追认 |
+|---|---|---|---|---|
+| X-01 | 自研区 / 更严失败信号 / 破冻结面 | [判据] | [理由] | [feature ID + 里程碑 / 追认 ≤ 1 次] |
+
+### 破冻结面的回溯修订清单 *(若有)*
+
+| 冻结面 | 回溯修订位置 | 冻结断言处置 | 追认 |
+|---|---|---|---|
+| [契约 §x / 符号面 / 冻结断言] | [文件 + 小节] | **拆分而不删** | 追认文字落 `harness/verification/<feature>/manual-verification.md` |
+
 ## Requirements *(mandatory)*
 
 <!--

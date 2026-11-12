@@ -120,11 +120,22 @@ class TestExportSurfaceSubset:
     def test_constructor_accepts_exactly_one_positional_argument(
         self, facade: object
     ) -> None:
-        """``StateGraph(schema)`` **构造成功**；``StateGraph(schema, extra)`` ⇒ ``TypeError``。"""
+        """``StateGraph(schema)`` **构造成功**；**第三个**位置参数 ⇒ ``TypeError``。
+
+        ⚠️ **2026-11-12 上游对齐 P3**：构造签名**逐字对齐上游**
+        （``state_schema`` / ``context_schema`` / ``input_schema`` / ``output_schema`` ·
+        上游 ``langgraph/graph/state.py:216-224``）⇒ **必填**位置参数**仍恰一个**
+        （「只传 schema 一个位置参数」的口径**不受影响**）⇒ 但**可选**的第二个位置参数
+        （``context_schema``）**可传** ⇒ 越界点顺延到**第三个**位置参数。
+        """
         graph = facade.StateGraph({"count": 0})  # type: ignore[attr-defined]
         assert graph is not None
+        # 上游同款：第二个位置参数 = ``context_schema``（可选）⇒ **合法**
+        with_context = facade.StateGraph({"count": 0}, {"user": "x"})  # type: ignore[attr-defined]
+        assert with_context is not None
+        # 第三个位置参数不存在 ⇒ TypeError
         with pytest.raises(TypeError):
-            facade.StateGraph({"count": 0}, "extra")  # type: ignore[attr-defined]
+            facade.StateGraph({"count": 0}, {"user": "x"}, "extra")  # type: ignore[attr-defined]
 
     def test_constructor_has_no_side_effect(self, facade: object) -> None:
         """构造**零副作用**——只存下私有的 ``schema``，不暴露任何公开属性。"""

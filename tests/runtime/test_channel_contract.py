@@ -202,7 +202,12 @@ def test_contract_section_one_declares_the_default_clear_is_a_no_op() -> None:
 
 
 def test_contract_declares_the_exact_public_property_set() -> None:
-    """§1：公开属性集合 **恰好** {``key``, ``value_type``, ``value``, ``reducer``}。"""
+    """§1：公开属性集合 **恰好** {``key``, ``value_type``, ``value``, ``reducer``,
+    ``typ``, ``ValueType``, ``UpdateType``}（**上游同款** · 2026-11-12 P2-a）。
+
+    ⚠️ 由**四项**扩为**七项**（**只增**）—— 新增上游 ``BaseChannel`` 的同名成员
+    （``langgraph/channels/base.py:22,28-38``）⇒ 支撑「每次运行新建通道实例」。
+    """
     channel = LastValue("k", int)
     properties = {
         name
@@ -210,7 +215,15 @@ def test_contract_declares_the_exact_public_property_set() -> None:
         for name, value in klass.__dict__.items()
         if isinstance(value, property)
     }
-    assert properties == {"key", "value_type", "value", "reducer"}
+    assert properties == {
+        "key",
+        "value_type",
+        "value",
+        "reducer",
+        "typ",
+        "ValueType",
+        "UpdateType",
+    }
 
 
 # ── §2 · 四个操作的语义 ───────────────────────────────────────────────────
@@ -218,7 +231,11 @@ def test_contract_declares_the_exact_public_property_set() -> None:
 
 def test_contract_operation_names_are_exactly_four() -> None:
     """§2：操作面**恰为 4 个**。"""
-    assert len(Channel.__abstractmethods__) == 3
+    # ⚠️ **2026-11-12 · 上游对齐 P2-b**：新增抽象方法 ``from_checkpoint``
+    # （上游 ``BaseChannel.from_checkpoint`` 同款 · ``langgraph/channels/base.py:60-65``）
+    # ⇒ 抽象方法数 **3 → 4**（第三方自定义通道**必须**自己实现「按检查点重建」）。
+    assert len(Channel.__abstractmethods__) == 4
+    assert "from_checkpoint" in Channel.__abstractmethods__
     assert "clear" in Channel.__dict__
 
 
@@ -330,12 +347,12 @@ def test_contract_error_rules_e1_to_e5_hold() -> None:
     import freegraph.contracts as contracts
     import freegraph.graph as facade
 
-    # E-1：二者**定义在 L2** ⇒ 不进契约层 18 符号面 / 门面 7 符号面
+    # E-1：二者**定义在 L2** ⇒ 不进契约层 20 符号面 / 门面 7 符号面
     assert EmptyChannelError.__module__ == "freegraph.runtime.errors"
     assert InvalidChannelUpdateError.__module__ == "freegraph.runtime.errors"
     assert "EmptyChannelError" not in contracts.__all__
     assert "InvalidChannelUpdateError" not in contracts.__all__
-    assert len(contracts.__all__) == 18
+    assert len(contracts.__all__) == 20
     assert len(facade.__all__) == 7
     # E-2：用户侧 except FreegraphError 均能捕获
     channel = LastValue("k", int)
@@ -360,7 +377,20 @@ def test_contract_error_rules_e1_to_e5_hold() -> None:
 
 
 def test_i1_public_properties_and_slots_are_frozen() -> None:
-    """I-1：公开属性**恰为**四项 · 槽位 ⊆ 四项 · 实例**无** ``__dict__``。"""
+    """I-1：公开属性**恰为七项** · 槽位 ⊆ 四项 ∪ {``_guard``} · 实例**无** ``__dict__``。
+
+    ⚠️ **2026-11-12 · 上游对齐 P2-a**：属性集由四项扩为**七项**（**只增** · 上游
+    ``BaseChannel`` 同名成员）；``EphemeralValue`` 另增 ``_guard`` 槽（上游同款）。
+    """
+    expected_properties = {
+        "key",
+        "value_type",
+        "value",
+        "reducer",
+        "typ",
+        "ValueType",
+        "UpdateType",
+    }
     for channel in (
         LastValue("k", int),
         BinaryOperatorAggregate("k", list, operator.add),
@@ -372,12 +402,16 @@ def test_i1_public_properties_and_slots_are_frozen() -> None:
             for name, value in klass.__dict__.items()
             if isinstance(value, property)
         }
-        assert properties == {"key", "value_type", "value", "reducer"}
+        expected = set(expected_properties)
+        if isinstance(channel, EphemeralValue):
+            # 上游同款：``EphemeralValue.guard``（``ephemeral_value.py:26``）
+            expected = expected | {"guard"}
+        assert properties == expected
         slots: set[str] = set()
         for klass in type(channel).__mro__:
             declared = klass.__dict__.get("__slots__", ())
             slots.update({declared} if isinstance(declared, str) else declared)
-        assert slots <= {"_key", "_value_type", "_value", "_reducer"}
+        assert slots <= {"_key", "_value_type", "_value", "_reducer", "_guard"}
         assert not hasattr(channel, "__dict__")
 
 
@@ -579,7 +613,19 @@ def test_i20_channel_has_no_synchronization_primitive() -> None:
             and not isinstance(value, property)
             and callable(value)
         }
-        assert public == {"update", "get", "is_available", "clear"}
+        # ⚠️ **2026-11-12 · 上游对齐 P2-a**：公开可调用项随上游 ``BaseChannel`` 的同名方法
+        # 扩展（``langgraph/channels/base.py:40-120``）⇒ **写入**入口仍**只有** ``update()``。
+        assert public == {
+            "update",
+            "get",
+            "is_available",
+            "clear",
+            "copy",
+            "checkpoint",
+            "from_checkpoint",
+            "consume",
+            "finish",
+        }
 
 
 def test_i21_error_structured_fields_are_complete_and_value_free() -> None:

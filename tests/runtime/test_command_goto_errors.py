@@ -2,6 +2,9 @@
 
 """**非法跳转目标 / 非法形态**的用例 —— 属 **B9F1**（tasks T022 / T023）。
 
+⚠️ **触发模型**（上游对齐 · 2026-11-12）：触发源**恒为边** ⇒ 每张图 MUST 有
+**入口边** ``{"__start__": (首节点,)}``（上游 ``add_edge(START, "a")`` 的同款写法）。
+
 覆盖的判定：
 
 * **SC-009** —— ``goto`` 指向**不在节点表**中的名字 ⇒ 内置 ``ValueError``
@@ -39,21 +42,58 @@ from freegraph.runtime import (
 
 
 def _channels() -> dict[str, Channel]:
-    """构造通道状态：**归约型**（``messages``）+ **覆盖型**（``seed``）。"""
+    """构造通道状态：**归约型**（``messages``）+ **覆盖型**（``seed``）。
+
+    ⚠️ ``seed`` 的**初值**只作**入参**（``subscribes`` 只决定「读哪些通道」·
+    上游 ``langgraph/graph/state.py:1534``）⇒ **不再**是触发源。
+    """
     return {
         "messages": BinaryOperatorAggregate("messages", list, operator.add),
         "seed": LastValue("seed", int),
     }
 
 
+#: **入口哨兵**（上游 ``START`` 的值 · ``langgraph/constants.py:30``）——
+#: 触发源**恒为边**（上游 ``branch:to:<node>`` · ``langgraph/graph/state.py:1531``）
+#: ⇒ 每张图 MUST 有**入口边** ``{"__start__": (首节点,)}``（上游
+#: ``add_edge(START, "a")`` 的同款写法 · ``langgraph/graph/state.py:321``）。
+_START = "__start__"
+
+
+def _never(state: dict[str, Any]) -> dict[str, Any]:
+    """**入口哨兵**的节点函数 —— 恒**不被调用**（哨兵无入边 ⇒ 永不被触发）。"""
+    raise AssertionError("入口哨兵 __start__ 恒不被执行")
+
+
+#: **入口哨兵节点**（上游 ``START`` **伪节点**）—— 恒**不被执行**。
+_SENTINEL = NodeSpec(subscribes=(), run=_never)
+
+
+def _graph(
+    channels: dict[str, Channel],
+    nodes: dict[str, NodeSpec],
+    edges: dict[str, tuple[str, ...]],
+) -> GraphSpec:
+    """组装图规格 —— **注入**入口哨兵节点（``edges`` MUST 已含**入口边**）。
+
+    ⚠️ 边的**源** MUST 在节点表里（V-2）⇒ 入口边的**源**（``__start__``）由
+    **哨兵节点**承载（上游的 ``START`` 亦是图里的**伪节点**）。
+    """
+    return GraphSpec(
+        channels=channels,
+        nodes={_START: _SENTINEL, **nodes},
+        edges=edges,
+    )
+
+
 def _run_returning(result: Any) -> Any:
-    """跑一个**只返回** ``result`` 的单节点图。"""
+    """跑一个**只返回** ``result`` 的单节点图（靠**入口边**起跑）。"""
     channels = _channels()
     channels["seed"].update([1])
-    spec = GraphSpec(
+    spec = _graph(
         channels=channels,
         nodes={"writer": NodeSpec(subscribes=("seed",), run=lambda state: result)},
-        edges={},
+        edges={_START: ("writer",)},
     )
     return run_super_step(spec, SchedulerState())
 
@@ -76,7 +116,11 @@ def test_an_empty_goto_target_fails_explicitly() -> None:
 
 
 def test_goto_start_fails_explicitly() -> None:
-    """**SC-009**：``goto="__start__"`` ⇒ ``ValueError``（``START`` 不是合法目标）。"""
+    """**SC-009**：``goto="__start__"`` ⇒ ``ValueError``（``START`` 不是合法目标）。
+
+    ⚠️ **上游同款**：入口哨兵**只**作边的**源**（``"__start__" → 首节点``）⇒
+    它**不是**合法的跳转目标（与上游 ``START`` 的语义一致）。
+    """
     with pytest.raises(ValueError) as excinfo:
         _run_returning(Command(goto="__start__"))
 
@@ -105,8 +149,12 @@ def test_a_non_dict_command_update_fails_with_a_type_error() -> None:
 
 
 def test_an_illegal_node_return_type_fails_with_a_type_error() -> None:
-    """**FR-001 / V-9**：节点返回 ``None`` / 其它类型 ⇒ 内置 ``TypeError``。"""
-    for bad in (None, 42, "text"):
+    """**FR-001 / V-9**：节点返回**非法类型** ⇒ 内置 ``TypeError``。
+
+    ⚠️ **2026-11-12 上游对齐 P3**：``None`` **已合法**（**无写入** · 上游
+    ``langgraph/graph/state.py:1459-1460``）⇒ 非法样例里**去掉** ``None``。
+    """
+    for bad in (42, "text"):
         with pytest.raises(TypeError):
             _run_returning(bad)
 

@@ -49,6 +49,23 @@
 - **`StateSnapshot` 组装**：`get_state` / `get_state_history` 返回的是
   `StateSnapshot`（B1F1 冻结的字段集），不是裸 dict。
 
+- **承接条款（B12F1 → B15F1 · M3 · `StateSnapshot.interrupts` 的生产者口径 · 2026-11-13 补记）**：
+  B12F1（M1）已交付「同一 super-step 内**多个节点同时中断** ⇒ **完整收集** ⇒ **合并抛出**一个
+  `GraphInterrupt`（**载荷 = 元组** · 元素 = `Interrupt` 对象 · 顺序 = **节点名序**）」的**运行期语义**，
+  并**冻结**了「结构化中断信息的**同类项同类承载**」这一口径（**裁定 25** · 依宪法
+  **v1.10.0 原则 XII「层次对应优先于容器对应**」）⇒ **本 feature MUST** 照它写：
+  - **载体已定**：L1 的 **`StateSnapshot.interrupts: tuple[Interrupt, ...]`**（**已存在** ·
+    上游同款 · `src/freegraph/contracts/types.py:299` · 上游 `langgraph/types.py:700`）⇒
+    ⇒ **本 feature 的 `get_state()` MUST** 把本轮**待审批的中断**写入该字段（元素 = `Interrupt` ·
+    顺序 = **节点名序**）⇒ **MUST NOT** 另造形态（**附注** / 字典键 / 裸 `Any`）；
+  - **为什么归本 feature**：`StateSnapshot` 的**生产者**就是 `get_state()` ⇒ 由**本 feature** 交付 ⇒
+    B12F1 只负责「**抛**合并后的异常」，**MUST NOT** 越界生产 `StateSnapshot`；
+  - **本 feature 的义务**：MUST 让「`get_state()` 看到的待审批项」与「B12F1 抛出的那批中断元组」
+    **同形同序** ⇒ 用户 `get_state()` 读到的审批列表与 B10F1 的 `__interrupt__` 结果键**逐项一致**；
+  - **B12F1 MUST NOT** 越界实现本条。
+  该口径由 B12F1 的 `specs/b12f1-concurrency-errors/spec.md`（**FR-013** · **裁定 25 ④** ·
+  **SC-019** · 下游承接 **D-7**）落成。
+
 ### 3. 用户场景
 
 **P1 — 进程重启后状态还在**

@@ -86,7 +86,7 @@ INTERPRETER = sys.executable
 PROJECT_VENV_PYTHON = REPO_ROOT / ".venv" / "bin" / "python"
 
 #: 契约层 / 门面 / L2 内部 API 的公开符号面（**冻结面** · SC-015）。
-CONTRACT_PUBLIC_SYMBOL_COUNT = 18
+CONTRACT_PUBLIC_SYMBOL_COUNT = 20
 FACADE_PUBLIC_SYMBOL_COUNT = 7
 RUNTIME_PUBLIC_SYMBOL_COUNT = 20
 
@@ -398,7 +398,7 @@ def case_goto_and_update(runtime: Any) -> None:
             "writer": NodeSpec(subscribes=("seed",), run=writer),
             "target": NodeSpec(subscribes=(), run=target),
         },
-        edges={},
+        edges={"__start__": ("writer",)},
     )
     result = run_super_steps(spec)
 
@@ -433,7 +433,7 @@ def case_merge_parity(runtime: Any) -> None:
         spec = GraphSpec(
             channels=channels,
             nodes={"writer": NodeSpec(subscribes=("seed",), run=lambda s: result)},
-            edges={},
+            edges={"__start__": ("writer",)},
         )
         return run_super_step(spec, SchedulerState())
 
@@ -470,7 +470,7 @@ def case_merge_parity(runtime: Any) -> None:
             "a": NodeSpec(subscribes=("seed",), run=lambda s: Command(update={"count": 1})),
             "b": NodeSpec(subscribes=("seed",), run=lambda s: Command(update={"count": 2})),
         },
-        edges={},
+        edges={"__start__": ("a", "b")},
     )
     try:
         run_super_step(conflict, SchedulerState())
@@ -500,7 +500,7 @@ def case_parent(runtime: Any) -> None:
                 subscribes=("seed",), run=lambda state: Command(goto=Command.PARENT)
             )
         },
-        edges={},
+        edges={"__start__": ("writer",)},
     )
     try:
         run_super_step(spec, SchedulerState())
@@ -514,7 +514,7 @@ def case_parent(runtime: Any) -> None:
         GraphSpec(
             channels=_channels(),
             nodes={"__parent__": NodeSpec(subscribes=(), run=lambda state: {})},
-            edges={},
+            edges={"__start__": ("__parent__",)},
         )
         check(False, "图规格含名为 ``__parent__`` 的节点 ⇒ **构造期**失败", "未抛错")
     except ValueError as error:
@@ -544,7 +544,7 @@ def case_goto_errors(runtime: Any) -> None:
         spec = GraphSpec(
             channels=channels,
             nodes={"writer": NodeSpec(subscribes=("seed",), run=lambda s: result)},
-            edges={},
+            edges={"__start__": ("writer",)},
         )
         return run_super_step(spec, SchedulerState())
 
@@ -610,7 +610,7 @@ def case_goto_semantics(runtime: Any) -> None:
             "y": NodeSpec(subscribes=(), run=y),
             "z": NodeSpec(subscribes=("count",), run=z),
         },
-        edges={"x": ("y",)},
+        edges={"__start__": ("x",), "x": ("y",)},
     )
     result = run_super_steps(spec)
 
@@ -639,7 +639,7 @@ def case_goto_semantics(runtime: Any) -> None:
             "x": NodeSpec(subscribes=("seed",), run=end_writer),
             "y": NodeSpec(subscribes=(), run=end_y),
         },
-        edges={"x": ("y",)},
+        edges={"__start__": ("x",), "x": ("y",)},
     )
     end_result = run_super_steps(end_spec)
     eq(end_executed, ["x", "y"], "``END`` **不终止整张图**（静态边照走）")
@@ -668,7 +668,7 @@ def case_list_and_noop(runtime: Any) -> None:
         spec = GraphSpec(
             channels=channels,
             nodes={"writer": NodeSpec(subscribes=("seed",), run=lambda s: result)},
-            edges={},
+            edges={"__start__": ("writer",)},
         )
         return run_super_step(spec, SchedulerState())
 
@@ -681,10 +681,28 @@ def case_list_and_noop(runtime: Any) -> None:
     )
     eq(listed.state["messages"], ["a", "b", "c"], "列表写入按**列表顺序**合并（含混入的 ``dict``）")
 
-    empty_list = run_returning([])
-    eq(empty_list.executed, ("writer",), "**空列表** ⇒ 节点仍计入执行记录")
-    eq(empty_list.state["messages"], [], "**空列表** ⇒ 零写入")
-    eq(empty_list.node_writes, {"writer": {}}, "**空列表** ⇒ 零待写入")
+    # ⚠️ **2026-11-12 上游对齐 P3**：**空列表由「无操作」改为「失败」**（上游同款）
+    # —— 上游 ``langgraph/graph/state.py:1488-1492``：**空列表落 ``else``** ⇒
+    # ``InvalidUpdateError("Expected dict, got []")`` ⇒ freegraph 抛内置 ``TypeError``。
+    try:
+        run_returning([])
+        check(False, "**空列表** ⇒ 抛错（上游同款）", "未抛错")
+    except TypeError:
+        check(True, "**空列表** ⇒ 抛错（上游同款 · 内置 TypeError）")
+
+    # ⚠️ **2026-11-12 上游对齐 P3**：**节点返回 ``None``** ⇒ **无写入**（上游同款
+    # —— 上游 ``langgraph/graph/state.py:1459-1460``）。
+    none_result = run_returning(None)
+    eq(none_result.executed, ("writer",), "**节点返回 ``None``** ⇒ 节点仍计入执行记录")
+    eq(none_result.state["messages"], [], "**节点返回 ``None``** ⇒ 零写入")
+    eq(none_result.node_writes, {"writer": {}}, "**节点返回 ``None``** ⇒ 零待写入")
+
+    # ⚠️ **2026-11-12 上游对齐 P3**：``update`` 支持 **list/tuple of 2-tuples**
+    # （上游同款 —— 上游 ``langgraph/types.py:836-840``；元素**必须是 tuple**）。
+    pairs = run_returning(Command(update=[("messages", ["x"])]))
+    eq(pairs.state["messages"], ["x"], "``update`` 的 list of 2-tuples ⇒ 逐条写入（上游同款）")
+    tuple_pairs = run_returning(Command(update=(("messages", ["y"]),)))
+    eq(tuple_pairs.state["messages"], ["y"], "``update`` 的 tuple of 2-tuples ⇒ 逐条写入（上游同款）")
 
     for empty, label in (
         (Command(update={}), "``update={}``"),
@@ -699,6 +717,15 @@ def case_list_and_noop(runtime: Any) -> None:
     eq(resume.executed, ("writer",), "``Command(resume=...)`` ⇒ **被接受**（不抛错）")
     eq(resume.state["messages"], [], "``resume`` ⇒ 产生写入 **0** 次")
     eq(resume.node_writes, {"writer": {}}, "``resume`` ⇒ 产生跳转 **0** 次")
+
+    # ⚠️ **2026-11-12 上游对齐 P3**：``Command(graph=Command.PARENT)`` ⇒ **显式失败**
+    # （上游同款：上游抛 ``ParentCommand`` · 上游 ``langgraph/graph/state.py:1761-1762``）
+    # ⇒ freegraph 抛内置 ``NotImplementedError``（**类型不同 · 语义等价**）。
+    try:
+        run_returning(Command(graph=Command.PARENT))
+        check(False, "``Command(graph=PARENT)`` ⇒ 抛错（上游同款）", "未抛错")
+    except NotImplementedError:
+        check(True, "``Command(graph=PARENT)`` ⇒ 抛 ``NotImplementedError``（上游同款 · 语义等价）")
 
 
 def case_atomicity(runtime: Any) -> None:
@@ -722,7 +749,7 @@ def case_atomicity(runtime: Any) -> None:
                 run=lambda state: Command(update={"messages": ["x"], "ghost": 1}),
             )
         },
-        edges={},
+        edges={"__start__": ("writer",)},
     )
     state = SchedulerState()
     try:
@@ -761,7 +788,7 @@ def case_determinism(runtime: Any) -> None:
                 "y": NodeSpec(subscribes=(), run=lambda state: {"count": 1}),
                 "z": NodeSpec(subscribes=("count",), run=lambda state: {}),
             },
-            edges={"x": ("y",)},
+            edges={"__start__": ("x",), "x": ("y",)},
         )
 
     results = [run_super_steps(spec()) for _ in range(3)]
@@ -824,7 +851,7 @@ def case_purity_and_structure(runtime: Any) -> None:
     eq(
         len(_public_symbols(contracts_path)),
         CONTRACT_PUBLIC_SYMBOL_COUNT,
-        "契约层的公开符号面 == **18**（**一字未动**）",
+        "契约层的公开符号面 == **20**（上游对齐 P3 · **只增**）",
     )
     eq(
         len(_public_symbols(facade_path)),

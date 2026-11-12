@@ -53,6 +53,25 @@
   裁定 27 / 裁定 32）落成 · 契约见
   `specs/b7f1-superstep-loop/contracts/superstep-contract.md` §1 / §2.1 / §2.1.1。
 
+- **承接条款（B12F1 → B7F2 · M2 · 多会话隔离的「编译产物持规格」口径）**：B12F1 已交付**并发执行
+  内核**（同一 super-step 内多节点并发 · 错误传播 · `GraphInterrupt` 收集）并**冻结**了跨 feature
+  的接口口径 ⇒ **本 feature MUST** 照它写：
+  - **⚠️ 2026-11-12 修订（承 B12F1 · D-4 / V-7）**：多会话隔离**已由 2026-11-12 P2-b 在 L2 落地**
+    （**每次运行从规格新建通道实例** · `src/freegraph/runtime/superstep.py:330-345`）⇒
+    **实测**：同一份规格**连续两次** ⇒ **不累积**；**并发两次** ⇒ **不串扰** ⇒
+    ⇒ **B12F1 已 NOT 把这条列为限制**（初版的「X-6 已知限制」**作废**）⇒
+    **本 feature 的义务因此收窄为「对外暴露」**：**编译产物 MUST 持通道「规格」**
+    （而非把活实例直接交给运行）⇒ 与 **B7F3** 的「每次 `invoke` 新建实例」**共同**落成
+    「一次编译、多会话隔离」的**门面级**验收；
+  - **上游同款**：上游的编译产物只持通道**规格**，**每次运行新建实例**
+    （`langgraph/channels/last_value.py:50-54` · `from_checkpoint` → `self.__class__(...)`；
+    `langgraph/channels/base.py:61-64` 的 docstring 逐字「Return a **new identical channel**」）
+    ⇒ **一次编译、多会话并行**天然成立（实测：并发两次 A/B 完全相同）；
+  - **B12F1 MUST NOT** 在其内核里改 `Channel` 的冻结面或 `GraphSpec.channels` 的语义来「修」这条
+    ⇒ **MUST NOT** 越界到本 feature。
+  该口径由 B12F1 的 `specs/b12f1-concurrency-errors/spec.md`（**FR-024** · **裁定 23（已作废）** ·
+  下游承接 **D-4** · 回溯修订 **T-7**）落成。
+
 ### 3. 用户场景
 
 **P1 — 一行拿到可执行图**

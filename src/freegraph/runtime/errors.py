@@ -57,14 +57,14 @@ __all__ = [
     "InvalidChannelUpdateError",
     "InvalidSchemaError",
     "REASON_ANNOTATION_UNRESOLVABLE",
-    "REASON_NOT_A_TYPED_DICT",
+    "REASON_NOT_A_STATE_SCHEMA",
     "REASON_REDUCER_NOT_BINARY",
     "SCHEMA_ERROR_REASONS",
 ]
 
 #: 原因码 —— schema **不是** `TypedDict`（含 Pydantic 形态 / 普通 dict / 实例）。
 #: 触发时 ``key`` 为**空**（schema 级错误）。
-REASON_NOT_A_TYPED_DICT = "not_a_typed_dict"
+REASON_NOT_A_STATE_SCHEMA = "not_a_state_schema"
 
 #: 原因码 —— 元数据末位是 callable 但位置参数数 **≠ 2**（含类 / 实例 /
 #: 签名不可取）。触发时 ``key`` **指名**出错的 key。
@@ -77,7 +77,7 @@ REASON_ANNOTATION_UNRESOLVABLE = "annotation_unresolvable"
 #: 原因码的**封闭取值域**（FR-007 ⑥ · data-model §7）。
 SCHEMA_ERROR_REASONS = frozenset(
     {
-        REASON_NOT_A_TYPED_DICT,
+        REASON_NOT_A_STATE_SCHEMA,
         REASON_REDUCER_NOT_BINARY,
         REASON_ANNOTATION_UNRESOLVABLE,
     }
@@ -90,7 +90,7 @@ def _summarize(key: str | None, reason: str) -> str:
     **点名 key**（FR-007：消息 MUST 指名出错的 key）——``key`` 为空
     （schema 级错误）时不点名。
     """
-    if reason == REASON_NOT_A_TYPED_DICT:
+    if reason == REASON_NOT_A_STATE_SCHEMA:
         return "Invalid state schema: expected a TypedDict, got a non-TypedDict object"
     if reason == REASON_REDUCER_NOT_BINARY:
         return (
@@ -122,7 +122,7 @@ class InvalidSchemaError(FreegraphError, ValueError):
     def __init__(
         self,
         key: str | None = None,
-        reason: str = REASON_NOT_A_TYPED_DICT,
+        reason: str = REASON_NOT_A_STATE_SCHEMA,
         *,
         message: str | None = None,
     ) -> None:

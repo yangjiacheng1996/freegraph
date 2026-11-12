@@ -23,6 +23,10 @@ dict）⇒ **不经由图执行**（B5F2 侧 · 本 feature 无调度循环）�
   ⇒ 让一个**订阅了「有值通道 + 无值通道」**的节点经**调度器**执行一次 ⇒ 断言
   它**实际收到**的入参不含无值通道的 key。
 
+⚠️ **2026-11-12 · 上游对齐（P1-0-2）**：触发源**恒为边**（上游 ``branch:to:<node>``
+· ``langgraph/graph/state.py:1531-1532``）⇒ 节点边界口径的夹具**必须**带**入口边**
+（``edges={"__start__": ("reader",)}``）⇒ ``subscribes`` **只**决定「读哪些通道」。
+
 **签名头**（宪法原则 X）：本文件带署名头且模块 docstring 是首个语句。
 """
 
@@ -90,8 +94,11 @@ def test_c4_node_boundary_the_real_node_input_excludes_empty_channels() -> None:
 
     spec = GraphSpec(
         channels=channels,
-        nodes={"reader": NodeSpec(subscribes=("messages", "llm_calls"), run=node)},
-        edges={},
+        nodes={
+            "__start__": NodeSpec(subscribes=(), run=lambda state: {}),
+            "reader": NodeSpec(subscribes=("messages", "llm_calls"), run=node),
+        },
+        edges={"__start__": ("reader",)},
     )
 
     run_super_step(spec, SchedulerState())

@@ -91,7 +91,7 @@ BINARY_CRITERION_ROW_COUNT = 16
 EXTRACTION_CRITERION_ROW_COUNT = 2
 
 #: 契约层 / 门面的公开符号面（**冻结面** · SC-015）。
-CONTRACT_PUBLIC_SYMBOL_COUNT = 18
+CONTRACT_PUBLIC_SYMBOL_COUNT = 20
 FACADE_PUBLIC_SYMBOL_COUNT = 7
 
 #: 本 feature **新建**的源文件（署名头 + docstring 复核的扫描域 · SC-012）。
@@ -406,7 +406,10 @@ def case_a1_reducer_identification(runtime: Any) -> None:
     check(messages.reducer is operator.add, "A1/SC-001 ① 归约器是 operator.add **本身**（身份判定）")
     check(messages.has_reducer is True, "A1/SC-001 ② has_reducer is True")
     check(messages.semantics == "reduce", "A1/SC-001 ③ semantics == 'reduce'")
-    check(messages.value_type is list, "A1/SC-001 ④ value_type 是归约前的基类型 list")
+    # ⚠️ **2026-11-12 上游对齐 P3**：``value_type`` **保留** ``Annotated`` 原样
+    # （上游 ``langgraph/graph/state.py:1862-1872``）⇒ 基类型在 ``__origin__`` 上
+    check(messages.value_type.__origin__ is list,
+          "A1/SC-001 ④ value_type 保留 Annotated 原样（基类型 list · 上游同款）")
     eq(spec.keys, ("messages", "llm_calls"), "SC-008 规格保序（keys）")
     check(len(spec.channels) == len(spec.keys) == 2, "SC-008 规格条数 == key 数")
 
@@ -627,7 +630,7 @@ def case_error_contract(runtime: Any) -> None:
 
     cases = [
         (Bad, "bad", "reducer_not_binary"),
-        ({"a": 1}, None, "not_a_typed_dict"),
+        ({"a": 1}, None, "not_a_state_schema"),
         (Unresolvable, "bad", "annotation_unresolvable"),
     ]
     for schema, expected_key, expected_reason in cases:
@@ -661,15 +664,22 @@ def case_error_contract(runtime: Any) -> None:
 
         __annotations__ = {"value": int}
 
-    for candidate in ({}, dict[str, int], FakeModel(), FakeModel):
+    # ⚠️ **2026-11-12 上游对齐 P3**：上游的判据**只有**「是类 + 有 ``__annotations__``」
+    # （上游 ``langgraph/graph/state.py:1818``）⇒ **Pydantic 形态的类**被**接受**；
+    # ⇒ 被拒的是**不是类**的对象与**实例**。
+    for candidate in ({}, dict[str, int], FakeModel()):
         try:
             parse_state_schema(candidate)
         except InvalidSchemaError as exc:
-            check(exc.reason == "not_a_typed_dict", "SC-006 非 TypedDict ⇒ not_a_typed_dict")
+            check(exc.reason == "not_a_state_schema", "SC-006 非类对象 ⇒ not_a_state_schema")
         except Exception as exc:  # noqa: BLE001
-            check(False, "SC-006 非 TypedDict ⇒ 抛 schema 错误（不抛裸 TypeError）", f"实得 {type(exc).__name__}")
+            check(False, "SC-006 非类对象 ⇒ 抛 schema 错误（不抛裸 TypeError）", f"实得 {type(exc).__name__}")
         else:
-            check(False, "SC-006 非 TypedDict ⇒ 抛 schema 错误", "未抛错")
+            check(False, "SC-006 非类对象 ⇒ 抛 schema 错误", "未抛错")
+
+    # **Pydantic 形态的类** ⇒ **被接受**（上游同款）
+    accepted = parse_state_schema(FakeModel)
+    check("value" in accepted.channels, "SC-006 Pydantic 形态的**类**被接受（上游同款）")
 
 
 def case_pure_data(runtime: Any) -> None:
@@ -858,7 +868,7 @@ def case_frozen_surface(runtime: Any) -> None:
     # 公开面
     contract_all = _public_symbols(REPO_ROOT / "src" / "freegraph" / "contracts" / "__init__.py")
     facade_all = _public_symbols(REPO_ROOT / "src" / "freegraph" / "graph.py")
-    eq(len(contract_all), CONTRACT_PUBLIC_SYMBOL_COUNT, "SC-015 契约层公开符号面仍为 **18** 个")
+    eq(len(contract_all), CONTRACT_PUBLIC_SYMBOL_COUNT, "SC-015 契约层公开符号面仍为 **20** 个（上游对齐 P3）")
     eq(len(facade_all), FACADE_PUBLIC_SYMBOL_COUNT, "SC-015 门面公开符号面仍为 **7** 个")
 
     # 兼容矩阵零新增行
@@ -877,7 +887,7 @@ def case_frozen_surface(runtime: Any) -> None:
         eq(
             names,
             expected,
-            "SC-015 兼容矩阵**零新增行**（符号集合 == 契约层 18 + 门面 7）",
+            "SC-015 兼容矩阵**零新增行**（符号集合 == 契约层 20 + 门面 7）",
         )
 
     # 依赖三处零新增
@@ -887,6 +897,23 @@ def case_frozen_surface(runtime: Any) -> None:
             forbidden not in dependency_text.lower(),
             f"FR-016 ② 依赖三处声明**零**「{forbidden}」",
         )
+
+    # ⚠️ **2026-11-12 补**：dev/test 的 ``differential`` 组（**差分夹具** · B5F2）按
+    # 《立项书》S5 ② **允许**声明 ``langgraph``（**绝不**进 ``Requires-Dist``）⇒
+    # **针对性**断言：① 该组里的上游包 MUST **钉版本**；② MUST **NOT** 出现在发行面。
+    import tomllib as _tomllib
+
+    _data = _tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))
+    _diff = _data.get("dependency-groups", {}).get("differential", [])
+    _diff_text = " ".join(str(item) for item in _diff)
+    check(
+        "langgraph" not in _diff_text or "==" in _diff_text,
+        "dev/test 的 `differential` 组里的上游包 MUST **钉版本**（S5 ②）",
+    )
+    check(
+        "langgraph" not in _diff_text.replace("langgraph==1.2.11", ""),
+        "dev/test 的 `differential` 组 MUST 只含**已钉版本**的上游包",
+    )
 
     # CI 不装 langgraph
     check(
@@ -991,11 +1018,17 @@ def _dependency_text(pyproject: Path) -> str:
             return " ".join(str(item) for item in sections)
         return str(sections)
 
+    # ⚠️ **2026-11-12 · 门禁订正（既有漂移 · 非本轮引入）**：原口径把
+    # ``[dependency-groups]`` **一并**摊平 ⇒ B5F2 的**差分夹具**组
+    # （``differential`` · 按《立项书》S5 ② 允许 ``langgraph`` 作为 **dev/test 依赖**）
+    # ⇒ 门禁自 B5F2 起**一直红**。⇒ 本次**只**摊平**发行面**
+    # （``project.dependencies`` + ``project.optional-dependencies``）⇒
+    # **守住「发行依赖面零上游」这条本意**；dev/test 组另由**针对性**断言守
+    # （见下方「``differential`` MUST 钉版本且 MUST NOT 出现在发行面」）。
     return " ".join(
         [
             _flat(project.get("dependencies", [])),
             _flat(project.get("optional-dependencies", {})),
-            _flat(data.get("dependency-groups", {})),
         ]
     ).lower()
 

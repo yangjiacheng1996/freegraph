@@ -55,6 +55,11 @@ __all__ = [
 #: 用户无法把它误当合法值写入。
 _MISSING = object()
 
+#: **公开别名**（上游同款 · ``langgraph._internal._typing.MISSING``）—— 第三方自定义通道实现
+#: ``from_checkpoint`` 时需要它来区分「**无值**」⇒ **不**进 ``freegraph.runtime.__all__``
+#: ⇒ 导出面**仍为 20**（B5F1 的冻结面**不动**）。
+MISSING = _MISSING
+
 #: **抽象容器** → **可实例化**容器的映射表（6 项 · FR-006 ② ·
 #: research **D-06**）—— 与上游 ``langgraph/channels/binop.py:83-88``
 #: **逐字同构**（契约 ``upstream-parity`` **P-06**）。
@@ -102,8 +107,64 @@ class Channel(abc.ABC):
     不分配外部资源 · 不发起 I/O。
     """
 
-    #: 4 个私有槽（**名字逐字冻结** · FR-013 ① · 澄清轮 Q15）。
+    #: 5 个私有槽（**名字逐字冻结** · FR-013 ① · 澄清轮 Q15）。
     __slots__ = ("_key", "_value", "_reducer", "_value_type")
+
+    # ── 上游对齐（2026-11-12 · P2-a）：以下成员对齐上游 ``BaseChannel``
+    #    （``langgraph/channels/base.py:19-120``）⇒ 支撑「每轮新建实例」的多会话隔离。
+
+    @property
+    def typ(self) -> Any:
+        """通道的**值类型**（上游 ``BaseChannel.typ`` · ``base.py:22,24-26``）。"""
+        return self._value_type
+
+    @property
+    def ValueType(self) -> Any:  # noqa: N802 - 上游同款命名
+        """通道里**存放的值**的类型（上游 ``BaseChannel.ValueType`` · ``base.py:28-33``）。"""
+        return self._value_type
+
+    @property
+    def UpdateType(self) -> Any:  # noqa: N802 - 上游同款命名
+        """通道收到的**更新值**的类型（上游 ``BaseChannel.UpdateType`` · ``base.py:35-38``）。"""
+        return self._value_type
+
+    def copy(self) -> "Channel":
+        """返回通道的**副本**（上游 ``BaseChannel.copy`` · ``base.py:40-47``）。
+
+        上游默认实现 = ``from_checkpoint(checkpoint())`` ⇒ **浅共享**同一个值对象
+        （上游 ``checkpoint()`` 返回 ``get()`` 的同一对象 · ``base.py:49-58``）。
+        """
+        return self.from_checkpoint(self.checkpoint())
+
+    def checkpoint(self) -> Any:
+        """返回通道当前状态的**可序列化表示**（上游 ``base.py:49-58``）。
+
+        无值 ⇒ 返回**缺失哨兵**（上游用 ``MISSING``）⇒ **不抛** ``EmptyChannelError``。
+        """
+        try:
+            return self.get()
+        except EmptyChannelError:
+            return _MISSING
+
+    @abc.abstractmethod
+    def from_checkpoint(self, checkpoint: Any) -> "Channel":
+        """按检查点**新建**一个同种通道（上游 ``base.py:60-65`` · 抽象方法）。
+
+        ⇒ **每次运行新建实例** ⇒ 同一份图规格**可并发跑多次**且**互不干扰**
+        （多会话隔离 · 上游同款 · ``pregel/_checkpoint.py:229-277``）。
+
+        ⚠️ **子类 MUST 覆写**（上游同款：第三方自定义通道**必须**自己实现「按检查点重建」）
+        ⇒ 子类的**构造签名** MUST 与其 ``from_checkpoint`` 的实现**自洽**。
+        """
+        raise NotImplementedError
+
+    def consume(self) -> bool:
+        """通知通道「订阅它的任务已执行」（上游 ``base.py:101-110``）—— 默认**无操作**。"""
+        return False
+
+    def finish(self) -> bool:
+        """通知通道「本轮运行即将结束」（上游 ``base.py:112-120``）—— 默认**无操作**。"""
+        return False
 
     def __init__(self, key: str, value_type: Any) -> None:
         """记录 key 与值类型（**无副作用** · FR-002 ①）。"""
@@ -209,6 +270,13 @@ class LastValue(Channel):
     #: **不引入新槽** ⇒ 实例**无** ``__dict__``（裁定 17 ①）。
     __slots__ = ()
 
+    def from_checkpoint(self, checkpoint: Any) -> "Channel":
+        """按检查点**新建**同种通道（上游 ``LastValue.from_checkpoint`` · ``last_value.py:44-54``）。"""
+        empty = type(self)(self._key, self._value_type)
+        if checkpoint is not _MISSING:
+            empty._value = checkpoint
+        return empty
+
     def update(self, values: Sequence[Any]) -> bool:
         """把「本步的写入序列」并入通道 —— **覆盖**语义。
 
@@ -266,15 +334,17 @@ def _strip_type_wrappers(value_type: Any) -> Any:
     """
     current = value_type
     while True:
-        if getattr(current, "__metadata__", None) is not None:
-            # ``Annotated[T, ...]`` ⇒ 取其基类型 ``T``。
-            current = current.__origin__
-            continue
         origin = getattr(current, "__origin__", None)
+        if origin is None:
+            return current
         if origin is Required or origin is NotRequired:
             current = current.__args__[0]
             continue
-        return current
+        # ⚠️ **上游同款**（``langgraph/channels/binop.py:22-30`` 的 ``_strip_extras``）：
+        # **无差别**剥 ``__origin__``（含泛型别名）⇒ ``list[int]`` → ``list`` ⇒
+        # 空值推导得到 ``[]``（**有值**）⇒ 与上游**逐字同款**
+        # （上游对齐前的**窄口径**会让 ``typing.List[int]`` 两侧**异果**）。
+        current = origin
 
 
 def _derive_empty_value(value_type: Any) -> Any:
@@ -366,6 +436,13 @@ class BinaryOperatorAggregate(Channel):
         self._reducer = reducer
         self._value = _derive_empty_value(value_type)
 
+    def from_checkpoint(self, checkpoint: Any) -> "Channel":
+        """按检查点**新建**同种通道（上游 ``binop.py:116-121`` ⇒ 归约器**一并**带上）。"""
+        empty = type(self)(self._key, self._value_type, self._reducer)
+        if checkpoint is not _MISSING:
+            empty._value = checkpoint
+        return empty
+
     def update(self, values: Sequence[Any]) -> bool:
         """把「本步的写入序列」并入通道 —— **归约**语义。
 
@@ -434,23 +511,51 @@ class EphemeralValue(Channel):
     **可观察语义等价**（**P-10** / **P-12**）。
     """
 
-    #: **不引入新槽** ⇒ 实例**无** ``__dict__``（裁定 17 ①）。
-    __slots__ = ()
+    #: **只增**一个槽（``_guard``）⇒ 实例**仍无** ``__dict__``（裁定 17 ①）。
+    __slots__ = ("_guard",)
+
+    def __init__(self, key: str, value_type: Any, guard: bool = True) -> None:
+        """记录 key / 值类型 / **guard**（上游 ``EphemeralValue(typ, guard=True)`` ·
+        ``langgraph/channels/ephemeral_value.py:23-26``）。
+
+        ⚠️ ``guard=False`` ⇒ **一步内多值不报错**、取**末值**（上游的路由用途即如此 ·
+        ``ephemeral_value.py:62-67``）；``guard=True`` ⇒ 多值**显式失败**。
+        """
+        super().__init__(key, value_type)
+        self._guard: bool = guard
+
+    @property
+    def guard(self) -> bool:
+        """是否**禁止**一步内多值（上游 ``ephemeral_value.py:26``）。"""
+        return self._guard
+
+    def from_checkpoint(self, checkpoint: Any) -> "Channel":
+        """按检查点**新建**同种通道（上游 ``ephemeral_value.py:48-54``）。"""
+        empty = type(self)(self._key, self._value_type, self._guard)
+        if checkpoint is not _MISSING:
+            empty._value = checkpoint
+        return empty
 
     def update(self, values: Sequence[Any]) -> bool:
         """把「本步的写入序列」并入通道 —— **覆盖**为最新写入值。
 
-        返回「**本次调用是否写入了值**」；空序列 ⇒ **无操作**、返回**假**；
-        多于一个值 ⇒ **先检测后写入** ⇒ 抛 ``InvalidChannelUpdateError``
-        且**值不变**。
+        返回「**本次调用是否写入了值**」。
+
+        ⚠️ **上游同款**（``langgraph/channels/ephemeral_value.py:56-67``）：
+        * **空序列** ⇒ **清空**（值 → 缺失）并返回**真**（**仅当**原先有值）⇒
+          调度层用它做**步末清空**（上游 ``pregel/_algo.py:326-333``）；
+        * 多于一个值 ⇒ ``guard=True`` 时**显式失败**（值不变）；``guard=False`` ⇒ 取**末值**。
         """
         if len(values) == 0:
-            return False
-        if len(values) > 1:
+            if self._value is _MISSING:
+                return False
+            self._value = _MISSING
+            return True
+        if len(values) > 1 and self._guard:
             raise InvalidChannelUpdateError(
                 self._key, received_count=len(values), expected_count=1
             )
-        self._value = values[0]
+        self._value = values[-1]
         return True
 
     def get(self) -> Any:

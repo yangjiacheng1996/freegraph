@@ -14,8 +14,11 @@
 后续可新增子类但基类名不得改。
 """
 
-from collections.abc import Iterable
-from typing import Any
+from collections.abc import Iterable, Sequence
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:  # pragma: no cover - 仅注解期 ⇒ 运行期零内部 import
+    from freegraph.contracts.types import Interrupt
 
 
 class FreegraphError(Exception):
@@ -97,25 +100,30 @@ class GraphRecursionError(FreegraphError):
 
 
 class GraphInterrupt(FreegraphError):
-    """节点**主动中断**。
+    """节点**主动中断**（**上游同款** · 2026-11-12 上游对齐 P3）。
 
     结构化属性：
 
-    * ``payload`` —— 中断载荷**对象**（保持对象形态：将来载荷加字段
-      MUST NOT 要求改动本异常的 API）。
+    * ``payload`` —— 中断**序列**（``tuple[Interrupt, ...]``）· 一次异常可携带
+      **多个**中断（上游同款 · 上游 ``langgraph/errors.py:102-107``
+      的 ``GraphInterrupt(interrupts: Sequence[Interrupt] = ())``）
+      ⇒ **C17** 的「元素须带 ``.value`` 与 ``.id``」由 ``Interrupt`` 承载
+      （L1 的 ``Interrupt`` · 上游 ``langgraph/types.py:575-620`` 同款）。
 
-    **结构约定**（契约 C17）：载荷对象须带 ``.value`` 与 ``.id``。
-
-    .. note::
-       ``payload`` 的**具体类型**归 **B2F1**（``Send`` / ``interrupt`` 归 B2F1），
-       故本 feature 的类型标注为 ``Any``——此刻不存在可标注的具体载荷类型，
-       自造载荷类会违反「公开符号面恰 8 个」的约束。
+    ⚠️ **异常实参**（``args[0]``）= 同一个中断序列（上游同款 · 上游把序列放进
+    ``args[0]``）⇒ 两侧的取法都work。
     """
 
-    def __init__(self, payload: Any, *, message: str | None = None) -> None:
-        self.payload = payload
-        super().__init__(
-            message
-            if message is not None
-            else f"Graph execution interrupted with payload {self.payload!r}"
-        )
+    def __init__(
+        self,
+        interrupts: "Sequence[Interrupt]" = (),
+        *,
+        message: str | None = None,
+    ) -> None:
+        self.payload: "tuple[Interrupt, ...]" = tuple(interrupts)
+        # ⚠️ **上游同款**（上游 ``langgraph/errors.py:102-107``）：异常的**实参** = 中断序列
+        # ⇒ ``exc.args[0]`` 就是**序列**（上游的取法）⇒ 附带 message 时作为**第二个**实参。
+        if message is None:
+            super().__init__(self.payload)
+        else:
+            super().__init__(self.payload, message)

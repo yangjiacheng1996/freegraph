@@ -467,3 +467,17 @@ Task: "T017 [US2] 在 tests/runtime/test_command_merge_parity.py 写用例：三
 | T041 | FR-001 · FR-016 | SC-015 | **破 L1 冻结面的返工**（`NodeFunc.__call__` 增补「命令列表」· **符号集合与数量不变** ⇒ G7 恒绿 · 回溯修订 B2F1 / B7F1 文档） |
 | T039 | FR-001 · FR-002 · FR-005 · FR-007 · FR-008 · FR-011 · FR-013 · FR-016 · FR-019 · FR-022 | SC-005 · SC-015 · SC-018 · SC-025 | **发起者追认**（**R-1…R-5 / R-7** · **阻断合入**） |
 | T040 | FR-017 | SC-020 | research §4 的**遗留取证动作**登记（换版本重核 · 3.11 复核） |
+
+---
+
+> ⚠️ **2026-11-12 · 上游对齐 P3 回溯修订注记**（**只加注记 · 不改历史记录**）：
+> 本 feature 的执行记录里「**节点返回 `None` ⇒ 显式失败**」「**空命令列表 ⇒ 无操作**」
+> 「**`update` 非 `dict` ⇒ 一律失败**」三条口径，已在 **2026-11-12 · 上游对齐 P3**
+> （见 `harness/proposals/上游对齐审计.md`）**按上游（langgraph 1.2.11）实测**修订：
+> ① 节点返回 **`None` ⇒ 无写入**（上游 `langgraph/graph/state.py:1459-1460`）；
+> ② **空命令列表 ⇒ 失败**（上游同款 · 上游 `graph/state.py:1488-1492`）；
+> ③ **`update` 接受 list/tuple of 2-tuples**（上游同款 · 上游 `langgraph/types.py:836-840`）；
+> ④ **`Command(graph=Command.PARENT)` ⇒ 显式失败**（上游同款 · 上游抛 `ParentCommand`）；
+> ⑤ **`Command.__repr__`** 改为上游口径（跳过假值字段）。
+> ⇒ 上面的**执行记录**保持原样（历史事实），**判据面**见 `spec.md` / `data-model.md` /
+> `contracts/command-contract.md` / `contracts/upstream-parity.md`。

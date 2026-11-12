@@ -61,7 +61,9 @@ MATRIX_NEW_ROWS = {"StateGraph", "START", "END", "Send", "interrupt"}
 
 #: 5 个新增行的「等价程度」逐符号取值（research D-17 · quickstart §8）。
 MATRIX_NEW_EQUIVALENCE = {
-    "StateGraph": "部分等价",
+    # ⚠️ **2026-11-12 上游对齐 P3**：由「部分等价」升为「**行为等价**」——
+    # 门面的参数名与关键字**逐字对齐上游**（上游 `langgraph/graph/state.py`）。
+    "StateGraph": "行为等价",
     "START": "行为等价",
     "END": "行为等价",
     "Send": "部分等价",
@@ -463,6 +465,28 @@ class TestCompatMatrixCoversTheFacade:
     #: —— 本白名单**只放行「差异说明」列的措辞更新**。
     MATRIX_ROWS_UPDATABLE_BY_B9F1 = frozenset({"Command", "NodeFunc"})
 
+    #: **契约层矩阵行**中**经特批可更新**的行（**B12F1 · 上游对齐 P3 · 需追认**）。
+    #:
+    #: ⚠️ **破 G8「既有行逐字未改」判据的第二处白名单** —— 2026-11-12 · 上游对齐：
+    #: B12F1 把 L1 的四个类型**对齐上游**（`Command` 补 `graph` 槽位并删除构造期校验 ·
+    #: `StateSnapshot` 补 `parent_config` 且两个字段放宽为可空 · `RunConfig` 补 5 个上游同款键 ·
+    #: `GraphInterrupt` 的载荷改为**中断序列**）⇒ 这四行的「差异说明」与「等价程度」
+    #: **必须**随之更新，否则矩阵**过期**（与原则 X 的「MUST 更新清单」相悖）。
+    #: ⇒ **只放行这四行**；其余 **14** 行仍**逐字未改**（判据**只放宽四处**）。
+    #: ⚠️ **等价程度（第三列）只允许**「部分等价 → 行为等价」这一**向好**的方向
+    #: （本次四处**全部**向好）⇒ **MUST NOT** 变差。
+    MATRIX_ROWS_UPDATABLE_BY_B12F1 = frozenset(
+        {
+            "Command",
+            "StateSnapshot",
+            "RunConfig",
+            "GraphInterrupt",
+            "Checkpointer",
+            "Store",
+            "StateGraph",
+        }
+    )
+
     def test_existing_contract_rows_are_unchanged(self, repo_root: Path) -> None:
         """**既有 18 行逐字未改** —— 与 git 中���**上一版**逐字节比对。
 
@@ -501,17 +525,36 @@ class TestCompatMatrixCoversTheFacade:
             name
             for name in previous
             if name not in self.MATRIX_ROWS_UPDATABLE_BY_B9F1
+            and name not in self.MATRIX_ROWS_UPDATABLE_BY_B12F1
             and previous[name] != current.get(name)
         )
         assert not changed, f"既有契约层矩阵行被改动：{changed}"
 
-        # ⚠️ **白名单行**（B9F1 · 裁定 21）：**只**放行「差异说明」列的措辞更新
-        # ⇒ **等价程度（第三列）MUST NOT 变**。
-        for name in self.MATRIX_ROWS_UPDATABLE_BY_B9F1:
+        # ⚠️ **白名单行**（B9F1 · 裁定 21 / B12F1 · 上游对齐 P3）：
+        # **只**放行「差异说明」列的措辞更新 ⇒ **等价程度（第三列）MUST NOT 变差**
+        # （「不支持」→「部分等价」→「行为等价」为**向好**，允许；**降级**一律拒绝）。
+        # ⚠️ 2026-11-12（B12F1）：B9F1 白名单原为「等价程度 MUST NOT **变**」⇒ B12F1 把
+        # `Command` 对齐上游（**部分等价 → 行为等价**）⇒ 收敛为「MUST NOT **变差**」
+        # （**登记项 · 需追认**；门禁仍能抓住「静默漂移」与「降级」）。
+        _DEGREE_RANK = {"不支持": 0, "部分等价": 1, "行为等价": 2}
+
+        def _degree(cell: str) -> int:
+            """「等价程度」单元 → 等级（**去** markdown 强调与括号后缀）。"""
+            plain = cell.replace("*", "").strip()
+            for label, rank in _DEGREE_RANK.items():
+                if plain.startswith(label):
+                    return rank
+            raise AssertionError(f"未知的「等价程度」取值：{cell!r}")
+        for name in (
+            self.MATRIX_ROWS_UPDATABLE_BY_B9F1 | self.MATRIX_ROWS_UPDATABLE_BY_B12F1
+        ):
+            if name not in previous:
+                # 该行属**门面**面（不在「契约层」集合内）⇒ 不由本判据守
+                continue
             prev_cells = [c.strip() for c in previous[name].split(" | ")]
             curr_cells = [c.strip() for c in current.get(name, "").split(" | ")]
-            assert curr_cells[2] == prev_cells[2], (
-                f"白名单行 {name} 的「等价程度」被改动："
+            assert _degree(curr_cells[2]) >= _degree(prev_cells[2]), (
+                f"白名单行 {name} 的「等价程度」变差了："
                 f"{prev_cells[2]!r} → {curr_cells[2]!r}"
             )
 
