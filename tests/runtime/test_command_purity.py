@@ -245,14 +245,23 @@ def test_the_result_object_still_has_exactly_four_fields() -> None:
     ]
 
 
-def test_the_runtime_export_surface_holds_twenty_symbols() -> None:
-    """**SC-015**：``freegraph.runtime.__all__`` 的符号数 == **20**（零新增）。
+def test_the_runtime_export_surface_holds_the_expected_symbols() -> None:
+    """**SC-015**：``freegraph.runtime.__all__`` 的符号面 == **清单**（集合相等）。
 
     ⇒ 本 feature 是**行为**的交付、**不是名字**的交付（裁定 13）。
+
+    ⚠️ **回溯修订 T-1 ①**（**B10F1** · 宪法 v1.8.0「破冻结面的三条」第 ① 条
+    · **拆分而不删**）：原判据是「符号数 == **20**」⇒ ⇒ **硬编码数字**
+    ⇒ ⇒ B10F1 **增**了 3 个符号 ⇒ ⇒ **必红** ⇒ ⇒ 改为「**与清单集合相等**」
+    ⇒ ⇒ **判据零放宽**（仍是「== 某份清单」⇒ **不是**「≥ 20」）
+    ⇒ ⇒ 清单 = ``tests/runtime/_runtime_export_manifest.py``
+    （**单一事实源** · 契约 §1 的可执行镜像）。
     """
     import freegraph.runtime as runtime
 
-    assert len(runtime.__all__) == 20
+    from ._runtime_export_manifest import RUNTIME_EXPORT_SYMBOLS
+
+    assert set(runtime.__all__) == RUNTIME_EXPORT_SYMBOLS
 
 
 def test_the_contract_layer_and_the_facade_symbol_counts_are_unchanged(

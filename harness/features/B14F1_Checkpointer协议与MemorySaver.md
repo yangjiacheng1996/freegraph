@@ -83,6 +83,36 @@
   该口径由 B12F1 的 `specs/b12f1-concurrency-errors/spec.md`（**FR-014** · **裁定 10** ·
   **SC-013** · 偏离登记 **X-4** 的**消解条件** · 下游承接 **D-6**）落成。
 
+- **承接条款（B10F1 → B14F1 · M3 · 检查点读侧 / 写侧的最小契约 + V-1 的承接）**：
+  B10F1（M1）已交付**中断 / 恢复**闭环并**冻结**了「**本 feature 与 saver 的接缝**」⇒
+  **本 feature MUST** 照它写：
+  - **① 读侧最小契约**（`get_tuple(config)` 的返回值 MUST 暴露**三个**具名属性）：
+    `.snapshot`（**L1 的 `StateSnapshot`** · 8 字段）· `.pending_writes`
+    （`(task_id, channel, value)` **三元组**序列）· `.scheduler`（**调度账本** ·
+    **纯数据** · 可 JSON 序列化）；
+  - **② 写侧最小契约**：`put(config, values=..., metadata=...)` 写**快照** ·
+    `put_writes(config, writes=..., task_id=..., task_path=...)` 写**待写入**
+    ⇒ ⇒ **关键字名逐字**：`values` / `metadata` / `writes` / `task_id` / `task_path`；
+  - **③ 保留通道名**：**`__interrupt__`**（中断留痕）· **`__resume__`**（恢复值）
+    ⇒ ⇒ **与上游逐字同款**（`langgraph/_internal/_constants.py:9` / `:11`）；
+  - **④ `task_id` = 节点名**（freegraph 取舍：更可读 · 一轮一个节点一个任务）；
+  - **⑤ 挂起时 `put` 的 `metadata` 载荷**（B10F1 **写侧**给出 ⇒ 本 feature
+    **原样存取** ⇒ **零**耦合）：`next`（下一步要执行的节点名）· `interrupts`
+    （本步的中断）· `tasks`（本步任务列表 · v1 **恒空**）· `scheduler`（调度账本）
+    ⇒ ⇒ **本 feature MUST NOT** 让 `MemorySaver` 写出「freegraph 读不回来」的私有形状；
+  - **⑥ 人工验证的承接**（**偏离登记 V-1**）：B10F1 在 **M1** **物理不可达成**
+    「恢复侧真跑一轮」（**真实** saver ⇒ 中断 → `Command(resume=…)` → 跑完）
+    ⇒ ⇒ **本 feature 的 `manual-verification.md` MUST** 补上那一轮的**实测输出**；
+  - **⑦ 「X-5 的消解条件」**（**B10F1 的 X-5** · **B12F1 记作 X-4** ⇒ ⇒ **引用时
+    MUST 写明是哪一个 feature 的哪一个编号**）：B10F1 交付时内核**无处**写 checkpoint
+    ⇒ 「**真异常 + 中断同现**」时那批中断元组**丢弃** ⇒ ⇒ **本 feature 落地后**
+    中断元组 MUST **随 pending writes 留痕** ⇒ ⇒ **X-5 自动消解 · 回归上游同款**
+    ⇒ ⇒ 本条**不是**「新功能」，只是**上游本来就这样**（**MUST NOT** 当成新能力宣传）；
+  - **B10F1 MUST NOT** 越界实现 saver（**FR-019**）。
+  该口径由 B10F1 的 `specs/b10f1-interrupt-resume/spec.md`（**FR-018** · **FR-019** ·
+  **裁定 9** · **SC-005 / SC-020** · 偏离登记 **X-5** · 下游承接 **D-1 / D-2**）与
+  `specs/b10f1-interrupt-resume/contracts/checkpoint-contract.md` §2…§6 落成。
+
 ### 3. 用户场景
 
 **P1 — 每一步的状态都被记下来了**

@@ -57,7 +57,20 @@
 freegraph **不承诺**其稳定性。由 **B5F2**（读取层）· **B6F1**
 （``StateGraph`` 构建器）· **B7F1**（调度层）消费。
 
-**零新增公开 API**：契约层仍 **18** 个符号、门面仍 **7** 个
+**B10F1（中断 / 恢复）**
+
+* :func:`freegraph.runtime.run_graph` —— **图级入口**（首次运行 / 恢复 ·
+  返回 ``SuperStepResult | InterruptResult``）；
+* :class:`freegraph.runtime.InterruptResult` —— **挂起态**的结果对象
+  （**4 字段** · ``state`` / ``interrupts`` / ``executed`` / ``steps``）；
+* :class:`freegraph.runtime.InterruptError` —— 中断 / 恢复路径的**失败信号**
+  （**封闭 5 码**的 ``reason`` 原因码）。
+
+⚠️ **``interrupt()`` 的实现体**在 **私有**模块 ``freegraph.runtime._interrupt``
+⇒ ⇒ **不进**本包的 ``__all__`` ⇒ ⇒ 不进 API 兼容矩阵（同 B12F1 的
+``_concurrency.py`` **同款**）。
+
+**零新增公开 API**：契约层仍 **20** 个符号、门面仍 **7** 个
 （SC-012 · FR-018）⇒ 本包的导出**不进** API 兼容矩阵
 （沿用 B4F1 裁定 6 ③：「``freegraph.runtime`` 的导出属 L2 内部 API」）。
 
@@ -75,15 +88,22 @@ freegraph **不承诺**其稳定性。由 **B5F2**（读取层）· **B6F1**
 from __future__ import annotations
 
 from .channel import BinaryOperatorAggregate, Channel, EphemeralValue, LastValue
-from .errors import EmptyChannelError, InvalidChannelUpdateError, InvalidSchemaError
+from .errors import (
+    EmptyChannelError,
+    InterruptError,
+    InvalidChannelUpdateError,
+    InvalidSchemaError,
+)
 from .mapping import build_channel, build_channels
 from .read import local_read, read_channels
 from .schema import ChannelSpec, SchemaSpec, parse_state_schema
 from .superstep import (
     GraphSpec,
+    InterruptResult,
     NodeSpec,
     SchedulerState,
     SuperStepResult,
+    run_graph,
     run_super_step,
     run_super_steps,
 )
@@ -95,6 +115,8 @@ __all__ = [
     "EmptyChannelError",
     "EphemeralValue",
     "GraphSpec",
+    "InterruptError",
+    "InterruptResult",
     "InvalidChannelUpdateError",
     "InvalidSchemaError",
     "LastValue",
@@ -107,6 +129,7 @@ __all__ = [
     "local_read",
     "parse_state_schema",
     "read_channels",
+    "run_graph",
     "run_super_step",
     "run_super_steps",
 ]

@@ -123,18 +123,23 @@ def test_importing_the_kernel_has_no_side_effects(
     run_in_subprocess: Callable[..., Any],
 ) -> None:
     """**SC-018**：导入调度内核**无副作用**（零环境变量读取 · 零出站）。"""
+    # ⚠️ **回溯修订 T-1 ⑦**（**B10F1** · 宪法 v1.8.0「破冻结面的三条」第 ① 条
+    # · **拆分而不删**）：原判据是「``superstep.__all__`` == **一份内联的精确
+    # 列表**」⇒ ⇒ **硬编码清单** ⇒ ⇒ B10F1 **增**了 3 个符号 ⇒ ⇒ **必红**
+    # ⇒ ⇒ 改为「**与清单集合相等**」⇒ ⇒ **判据零放宽**（仍是「== 某份清单」
+    # ⇒ **不是**「⊇」）⇒ ⇒ 清单 = ``tests/runtime/_runtime_export_manifest.py``
+    # （**单一事实源**）⇒ ⇒ 清单**在父进程**取 ⇒ **序列化**进子进程源码
+    # ⇒ ⇒ 子进程**零**额外依赖（⇒ **零**路径假设）。
+    import json as _json
+
+    from ._runtime_export_manifest import SUPERSTEP_EXPORT_SYMBOLS
+
+    expected = _json.dumps(sorted(SUPERSTEP_EXPORT_SYMBOLS))
     payload = run_in_subprocess(
-        """
+        f"""
 import json
 import freegraph.runtime.superstep as superstep
-print(json.dumps({"ok": superstep.__all__ == [
-    "GraphSpec",
-    "NodeSpec",
-    "SchedulerState",
-    "SuperStepResult",
-    "run_super_step",
-    "run_super_steps",
-]}))
+print(json.dumps({{"ok": sorted(superstep.__all__) == {expected}}}))
 """
     )
 

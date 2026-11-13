@@ -89,6 +89,35 @@
   该口径由 B12F1 的 `specs/b12f1-concurrency-errors/spec.md`（**FR-017** · **裁定 2 / 18** ·
   **V-18** · 回溯修订 **T-2**）落成。
 
+- **承接条款（B10F1 → B7F3 · M2 · `invoke()` 的接线 + L1 入参放宽 + MVP 验收承接）**：
+  B10F1（M1）已交付**中断 / 恢复**闭环并**冻结**了跨 feature 的接口口径 ⇒
+  **本 feature MUST** 照它写：
+  - **① L1 `CompiledGraph.invoke` 的 `input` 注解 MUST 放宽**为
+    「`StateDict | Command | None`」（**上游同款** ·
+    `langgraph/pregel/main.py:3836-3838`）⇒ ⇒ **B10F1 刻意不破该 L1 冻结面**
+    ⇒ ⇒ **本 feature MUST** 走「登记 + 回溯修订 + 发起者追认」流程
+    （**不**消耗 B10F1 的追认名额）；
+  - **② `invoke` MUST 接受 `Command` 作为输入**（**上游同款**）⇒ ⇒ 恢复路径的
+    **判定表**以 B10F1 的 `specs/b10f1-interrupt-resume/spec.md` **FR-013 的表**为
+    **唯一事实源**（**逐字照抄**）· **判定顺序**以**裁定 4** 为准 ⇒ ⇒
+    **MUST NOT** 在本 feature 的文档 / 实现里另抄一份；
+  - **③ 挂起时 MUST 返回 `{**state, "__interrupt__": interrupts}`**
+    （**无**挂起时**不**含该键）⇒ ⇒ **转成路径 MUST 只此一条**
+    （B10F1 的 `InterruptResult.as_result_dict()`）⇒ ⇒ **MUST NOT** 另写一条转成路径；
+  - **④ MUST NOT** 把「未挂 checkpointer 时提交 `Command(resume=...)`」**静默降级**
+    ⇒ ⇒ MUST 抛**明确异常**；
+  - **⑤ 两条补漏口径**（「按 id 的映射恢复」与「未提供恢复值」）MUST 按 **FR-013** 落成
+    （**上游同款** · 实测 E-12 / E-13 / E-19 / E-20）；
+  - **⑥ MVP 验收基线的人工验证承接**（**偏离登记 V-2 / V-3** · 登记档位 **A**）：
+    B10F1 在 **M1** **物理不可达成**「固定脚本那一轮」（`harness/demo/target.py` 需
+    `compile()` + `invoke()` = **B7F2 / B7F3 · M2**）⇒ ⇒ **本 feature 的
+    `manual-verification.md` MUST** 补上这两轮的**实测输出**（**fake 模型轮** +
+    **真实模型轮**）⇒ ⇒ **B10F1 MUST NOT** 把「本 feature 未跑固定脚本」写成
+    「本 feature 未验证」（**已达成部分** = B10F1 自身的**挂起侧**人工验证）；
+  - **B10F1 MUST NOT** 越界实现门面的 `invoke()`（**FR-024**）。
+  该口径由 B10F1 的 `specs/b10f1-interrupt-resume/spec.md`（**FR-002** · **FR-013** ·
+  **裁定 1 / 4 / 10** · **SC-002 / SC-011 / SC-012** · 下游承接 **D-3 / D-8**）落成。
+
 ### 3. 用户场景
 
 **P1 — 一次调用跑完整张图并拿到完整状态**

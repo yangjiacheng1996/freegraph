@@ -47,13 +47,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Container, Sequence
+from collections.abc import Callable, Container, Mapping, Sequence
 from dataclasses import dataclass, field
 from functools import partial
 from typing import Any
 
 from freegraph.contracts.errors import GraphInterrupt, GraphRecursionError, InvalidUpdateError
-from freegraph.contracts.types import Command, Interrupt
+from freegraph.contracts.types import Command, Interrupt, RunConfig, StateDict
 
 from ._concurrency import (
     _TaskOutcome,
@@ -61,15 +61,25 @@ from ._concurrency import (
     attach_failure_notes,
     run_tasks_concurrently,
 )
+from ._interrupt import (
+    bind_run,
+    bind_task,
+    current_run_table,
+    new_run_table,
+    prepare_task,
+)
 from .channel import Channel, EphemeralValue
-from .errors import InvalidChannelUpdateError
+from .errors import InterruptError, InvalidChannelUpdateError
 from .read import read_channels
 
 __all__ = [
     "GraphSpec",
+    "InterruptError",
+    "InterruptResult",
     "NodeSpec",
     "SchedulerState",
     "SuperStepResult",
+    "run_graph",
     "run_super_step",
     "run_super_steps",
 ]
@@ -235,6 +245,75 @@ class SchedulerState:
     dynamic_edges: dict[str, tuple[str, ...]] = field(default_factory=dict)
     channels: dict[str, Channel] = field(default_factory=dict)
 
+    def to_checkpoint(self) -> dict[str, Any]:
+        """把**调度账本**编码成**纯数据**（**可 JSON 序列化** · C19 ③）。
+
+        **编码**（契约 §3 · **逐字**）：
+
+        * ``versions_seen`` ⇒ ``{节点名: [[kind, ident, 版本], ...]}``
+          （⚠️ 它的 key 是**二元组** ⇒ **JSON 不可直接序列化** ⇒ ⇒ 必须用
+          **列表**编码 ⇒ ⇒ 还原时还原成 ``{(kind, ident): 版本}``）；
+        * ``channel_versions`` / ``node_versions`` ⇒ **原样**（key 全是字符串）；
+        * ``dynamic_edges`` ⇒ ``{节点名: [目标, ...]}``（还原时还原成 **tuple**）。
+
+        ⚠️ ``step`` **不落盘** ⇒ 恢复时**重新计数**（``steps`` 是**本 feature
+        产出的结果**的口径 · **不是**持久化状态）⇒ ⇒ **零**「跨运行的步数」
+        语义 ⇒ ⇒ 零歧义（契约 §3）。
+        ⚠️ ``channels`` **不落盘** ⇒ 通道实例由 ``Channel.from_checkpoint``
+        **重建**（现成机制）。
+
+        ⚠️ **只增方法 · 不改字段** ⇒ ⇒ ``SchedulerState()`` 的**构造签名
+        逐字不变** ⇒ ⇒ B7F1 冻结面**零破坏**（B12F1 的 ``dynamic_edges`` 就是
+        这么加的 · 裁定 12 / R-3 ①）⇒ ⇒ 零 L1 改动。
+        """
+        return {
+            "versions_seen": {
+                node_name: [
+                    [kind, ident, version]
+                    for (kind, ident), version in sorted(seen.items())
+                ]
+                for node_name, seen in self.versions_seen.items()
+            },
+            "channel_versions": dict(self.channel_versions),
+            "node_versions": dict(self.node_versions),
+            "dynamic_edges": {
+                node_name: list(targets)
+                for node_name, targets in self.dynamic_edges.items()
+            },
+        }
+
+    @classmethod
+    def from_checkpoint(cls, data: Mapping[str, Any]) -> "SchedulerState":
+        """按**纯数据**重建**调度账本**（契约 §3 · **逐字**）。
+
+        ⚠️ **还原**与 :meth:`to_checkpoint` **严格互逆**：
+
+        * ``versions_seen`` ⇒ ``{节点名: {(kind, ident): 版本}}``；
+        * ``dynamic_edges`` ⇒ ``{节点名: (目标, ...)}``（**tuple**）；
+        * ``step`` ⇒ **0**（**不落盘** ⇒ 重新计数）。
+
+        ⚠️ **缺项**（``data`` 里没有某个键）⇒ ⇒ 该项取**空** ⇒ ⇒
+        **不**抛异常（**纯数据**载荷的宽容解码 ⇒ ⇒ B14F1 的实现面最小）。
+        """
+        versions_seen: dict[str, dict[tuple[str, str], int]] = {}
+        for node_name, entries in (data.get("versions_seen") or {}).items():
+            seen: dict[tuple[str, str], int] = {}
+            for entry in entries:
+                kind, ident, version = entry
+                seen[(kind, ident)] = version
+            versions_seen[node_name] = seen
+        dynamic_edges: dict[str, tuple[str, ...]] = {
+            node_name: tuple(targets)
+            for node_name, targets in (data.get("dynamic_edges") or {}).items()
+        }
+        return cls(
+            versions_seen=versions_seen,
+            step=0,
+            channel_versions=dict(data.get("channel_versions") or {}),
+            node_versions=dict(data.get("node_versions") or {}),
+            dynamic_edges=dynamic_edges,
+        )
+
 
 @dataclass(frozen=True)
 class SuperStepResult:
@@ -265,6 +344,56 @@ class SuperStepResult:
     executed: tuple[str, ...]
     node_writes: dict[str, dict[str, tuple[Any, ...]]]
     steps: int
+
+
+@dataclass(frozen=True, slots=True)
+class InterruptResult:
+    """**挂起态**的结果对象 —— **B10F1** · 裁定 2（**四个**字段 · **逐字冻结**）。
+
+    **构造签名**（**逐字冻结** · 契约 §5.1）::
+
+        InterruptResult(
+            state: dict[str, Any],
+            interrupts: tuple[Interrupt, ...],
+            executed: tuple[str, ...],
+            steps: int,
+        )
+
+    * ``state`` —— **合并后**的稀疏状态（**含**中断前已产生的写入）；
+    * ``interrupts`` —— 中断集合（= ``exc.args[0]`` · **元组** · 元素 =
+      ``Interrupt``）⇒ ⇒ 元素带 ``.value`` 与 ``.id``（C17 · 裁定 1）；
+    * ``executed`` —— **已启动过**的节点名（**含**被中断的 · **节点名序** =
+      **升序** · 与 :attr:`SuperStepResult.executed` **同排序口径**）；
+    * ``steps`` —— **实际跑过的轮数**（**如实计** · **含**被中断的那轮 ·
+      **不含**那个「发现没任务了」的**空轮**）⇒ ⚠️ **与**
+      :attr:`SuperStepResult.steps`（**含**空轮 · B7F1 冻结面）**计数口径
+      「刻意不同」** ⇒ ⇒ 两者**数值不可直接比较**。
+
+    ⚠️ **MUST NOT** 带「待写入」字段（挂起时那些写入**已合并进** ``state``
+    ⇒ 语义不明 · 澄清轮 **Q1**）⇒ ⇒ **四字段**（契约 §5.1）。
+    ⚠️ ``__interrupt__`` **不进** ``state``（形态污染 · B12F1 裁定 25 ③）。
+    ⚠️ **MUST NOT** 改 :attr:`SuperStepResult` 的**字段数**（**四字段** ·
+    B12F1 裁定 25 ②）⇒ ⇒ 挂起态**另立**载体（原则 XII ③ · 既有载体已穷举）。
+    """
+
+    state: dict[str, Any]
+    interrupts: tuple[Interrupt, ...]
+    executed: tuple[str, ...]
+    steps: int
+
+    def as_result_dict(self) -> dict[str, Any]:
+        """把**挂起态**转成**结果字典**（= ``{**state, "__interrupt__": interrupts}``）。
+
+        ⚠️ **键名逐字** = ``"__interrupt__"``（**上游同款** ·
+        ``langgraph/_internal/_constants.py:9``）⇒ ⇒ **同一个常量**既是
+        **通道名**又是**结果键名**（原则 XI ②）。
+        ⚠️ **值 = 元组**（裁定 1 · 偏离登记 **X-1** · 上游 ``invoke()`` 返回
+        **list**）⇒ ⇒ freegraph **统一**为**元组**（与 B12F1 的**中断载荷
+        形态**一致 ⇒ **同类项同类承载** · 原则 XII ③）。
+        ⚠️ **本 feature 独占**「异常 → ``__interrupt__`` 键」的**转成路径**
+        （裁定 10）⇒ ⇒ B7F3 **MUST NOT** 另写（承接 **D-3**）。
+        """
+        return {**self.state, "__interrupt__": self.interrupts}
 
 
 def _validate_graph_spec(spec: GraphSpec) -> None:
@@ -1069,12 +1198,21 @@ def _run_round(
     # ── ③ 并发执行（线程池 · 每轮新建 + 关闭 ⇒ 零悬挂线程 · FR-018） ──
     started: list[str] = []
 
+    # ⚠️ **运行级**现场表 MUST 在**主线程**读出（**工作线程不继承**
+    # ``contextvars`` · **实测**）⇒ ⇒ 在**闭包外**取一次 ⇒ ⇒ 工作线程
+    # 显式拿到它（**B10F1** · 契约 §3 · 运行级行）。
+    run_table = current_run_table()
+
     def _bind(
         node_name: str, fn: Callable[[], dict[str, Any]]
     ) -> Callable[[], dict[str, Any]]:
         def _inner() -> dict[str, Any]:
             started.append(node_name)  # ⚠️ list.append 在 CPython 下是原子的
-            return fn()
+            # ⚠️ **B10F1**：**任务级**现场（``interrupt()`` 的运行期上下文）
+            # MUST 在**节点执行**期间挂上 ⇒ ⇒ 复原用 ``reset(token)``
+            # ⇒ ⇒ 线程池**复用线程**时**零脏状态**（契约 §3 · 任务级行）。
+            with bind_task(node_name, run_table):
+                return fn()
 
         return _inner
 
@@ -1319,4 +1457,584 @@ def run_super_steps(
         executed=tuple(executed),
         node_writes=pending,
         steps=steps,
+    )
+
+
+# ── B10F1 · 图级入口（``run_graph``）与检查点接缝 ─────────────────────────
+
+
+#: **保留通道名**（**上游同款 · 逐字**）—— ``__interrupt__``（中断留痕）/
+#: ``__resume__``（恢复值）⇒ ⇒ 同一批常量也用作**结果字典的键名**
+#: （上游用**同一个**常量 · 原则 XI ②）。
+_INTERRUPT_CHANNEL = "__interrupt__"
+_RESUME_CHANNEL = "__resume__"
+
+
+def _pending_interrupts(
+    pending_writes: Sequence[Any],
+) -> dict[str, Interrupt]:
+    """从 **pending writes** 里取该会话的**挂起中断集合**（契约 §6.2 第 2 步）。
+
+    * ``pending_writes`` 的元素 = ``(task_id, channel, value)`` **三元组**
+      （**上游同款** · DR-09）⇒ ⇒ 只取 ``channel == "__interrupt__"`` 的那些；
+    * ``value`` = 该节点的中断载荷**元组** ⇒ ⇒ 取**首个**元素
+      （一个节点**至多**贡献一个中断 · **上游同款**）；
+    * ``task_id`` = **节点名**（freegraph 取舍 · DR-09）⇒ ⇒ 返回
+      ``{节点名: Interrupt}``。
+    """
+    found: dict[str, Interrupt] = {}
+    for entry in pending_writes or ():
+        task_id, channel, value = entry
+        if channel != _INTERRUPT_CHANNEL:
+            continue
+        items = tuple(value) if isinstance(value, (tuple, list)) else (value,)
+        if items:
+            found[task_id] = items[0]
+    return found
+
+
+def _pending_resume_values(
+    pending_writes: Sequence[Any], node_name: str
+) -> list[Any]:
+    """取该节点**已累积**的恢复值序列（``__resume__`` 通道 · **上游同款**）。
+
+    * ⚠️ **上游同款**（实测 E-17 / E-18）：任务自己的 ``__resume__`` 待写入
+      装的是**累积列表** ⇒ ⇒ 第 ``index`` 次 ``interrupt()`` 取
+      ``resume[index]`` ⇒ ⇒ **更早的**恢复值会被**复用**（E-18）；
+    * ⚠️ **同一节点的多个** ``__resume__`` 待写入 ⇒ ⇒ **最后一个**胜
+      （上游的 saver 对**同一任务 + 同一通道**是**覆盖**语义 ⇒ 只有一条）。
+    """
+    values: list[Any] = []
+    for entry in pending_writes or ():
+        task_id, channel, value = entry
+        if channel != _RESUME_CHANNEL or task_id != node_name:
+            continue
+        values = list(value) if isinstance(value, (tuple, list)) else [value]
+    return values
+
+
+def _restore_scheduler(state: SchedulerState, data: Mapping[str, Any]) -> None:
+    """按**调度账本****就地**重建调度状态（契约 §6.2 第 4 步 · H-5 ⑤）。
+
+    * ⚠️ **就地**重建 ⇒ ⇒ 调用方持有的那一份 :class:`SchedulerState`
+      **就是**本轮真正在用的那一份 ⇒ ⇒ 「调度状态由调用方持有」的既有口径
+      **不破**（裁定 27）；
+    * ⚠️ ``step`` **重新计数**（**不落盘** · 契约 §3）。
+    """
+    restored = SchedulerState.from_checkpoint(data or {})
+    state.versions_seen.clear()
+    state.versions_seen.update(restored.versions_seen)
+    state.step = restored.step
+    state.channel_versions.clear()
+    state.channel_versions.update(restored.channel_versions)
+    state.node_versions.clear()
+    state.node_versions.update(restored.node_versions)
+    state.dynamic_edges.clear()
+    state.dynamic_edges.update(restored.dynamic_edges)
+
+
+def _restore_channels(
+    spec: GraphSpec, state: SchedulerState, values: Mapping[str, Any]
+) -> None:
+    """按**快照的稀疏状态**重建**通道实例**（契约 §6.2 第 4 步）。
+
+    * **有值**的通道 ⇒ ``template.from_checkpoint(值)``（**现成** · 零新增）；
+    * **无值**的通道 ⇒ ``template.from_checkpoint(template.checkpoint())``
+      ⇒ ⇒ 保留模板的**初始值**（**不**凭空造值 · 与 B7F1 的
+      ``_run_channels`` **同款**）。
+    """
+    instances: dict[str, Channel] = {}
+    for key, template in spec.channels.items():
+        if key in values:
+            instances[key] = template.from_checkpoint(values[key])
+        else:
+            instances[key] = template.from_checkpoint(template.checkpoint())
+    state.channels = instances
+
+
+def _apply_input_writes(
+    spec: GraphSpec, state: SchedulerState, values: Mapping[str, Any]
+) -> set[str]:
+    """把**图输入**按**通道写入**叠加上去（spec FR-013 末两行）。
+
+    * **覆盖型通道 ⇒ 覆盖** · **归约型通道 ⇒ 追加** ⇒ ⇒ **复用** B5F1 的
+      ``Channel.update``（每通道**一次** · 值序列 = **单元素**）
+      ⇒ ⇒ **MUST NOT** 另写一条叠加路径（spec FR-013 末行）；
+    * ⚠️ **未知 key** ⇒ 抛 ``InvalidUpdateError``（**L1 契约层已冻结** ·
+      C6）⇒ ⇒ 与节点写入的失败信号**同款**；
+    * ⚠️ **通道版本推进**（写入成功者 +1）⇒ ⇒ **下游**的**边触发**据此推进
+      ⇒ ⇒ 触发判定与首次运行**同款**。
+    """
+    channels = _run_channels(spec, state)
+    grouped = {key: [value] for key, value in values.items()}
+    _reject_unknown_keys(grouped, channels)
+    written: set[str] = set()
+    for key, channel in channels.items():
+        if key not in grouped:
+            continue
+        if channel.update(grouped[key]):
+            written.add(key)
+    for key in written:
+        state.channel_versions[key] = state.channel_versions.get(key, 0) + 1
+    return written
+
+
+def _reset_entry_triggers(spec: GraphSpec, state: SchedulerState) -> None:
+    """让**入口节点**在「会话连续 + 状态字典输入」时**重新触发**（上游同款）。
+
+    ⚠️ **上游的机制**（**实测 E-26 ②**）：输入写入 ⇒ 上游的 ``__input__``
+    通道版本推进 ⇒ ``__start__`` 节点**重跑** ⇒ 它**重写**各入口节点的
+    ``branch:to:<节点>`` 通道 ⇒ ⇒ 入口节点的「已消费版本」**落后** ⇒ ⇒
+    **重新触发** ⇒ ⇒ 其后继**级联**重跑。
+
+    ⇒ freegraph 的等价落点（**纯边触发**模型 · **上游同款**）：把入口边
+    （``__start__``）的**已消费版本**归零 ⇒ ⇒ 入口节点**重新触发**
+    （``version > seen``）⇒ ⇒ 入口节点的**执行版本**推进 ⇒ ⇒ 其后继
+    （**边**触发）**级联**重跑。
+
+    ⇒ ⚠️ **只**归零**入口边**的已消费版本 ⇒ ⇒ **其它**触发源**不受影响**
+    ⇒ ⇒ **与上游同款**（上游也只重写入口节点的 branch 通道）。
+    """
+    for source, targets in spec.edges.items():
+        if source != _START_MARKER:
+            continue
+        for target in targets:
+            seen = state.versions_seen.get(target)
+            if seen is None:
+                continue
+            seen.pop((_EDGE_SOURCE, _START_MARKER), None)
+
+
+def _suspend_metadata(
+    next_nodes: Sequence[str],
+    interrupts: Sequence[Interrupt],
+    scheduler: Mapping[str, Any],
+) -> dict[str, Any]:
+    """产出**挂起时**写给 checkpointer 的 **metadata**（契约 §4 的写侧载荷）。
+
+    * ``next`` —— **下一步要执行的节点名**（= 被中断的节点）⇒ ⇒ B14F1 据此
+      复原 ``StateSnapshot.next``；
+    * ``interrupts`` —— **本步**的中断集合 ⇒ ⇒ B14F1 据此复原
+      ``StateSnapshot.interrupts``；
+    * ``tasks`` —— **本步**的任务列表（v1 **恒空** · B15F1 之前无任务对象）；
+    * ``scheduler`` —— **调度账本**（纯数据）⇒ ⇒ B14F1 据此复原
+      ``get_tuple`` 返回值的 ``.scheduler``（契约 §2 / §3）。
+
+    ⚠️ **纯数据**（可 JSON 序列化 · C19 ③）⇒ ⇒ B14F1 **只**需原样存取
+    ⇒ ⇒ **零**耦合（契约 §3 末尾）。
+    """
+    return {
+        "next": tuple(next_nodes),
+        "interrupts": tuple(interrupts),
+        "tasks": (),
+        "scheduler": dict(scheduler),
+    }
+
+
+def _resume_target_nodes(
+    snapshot: Any, interrupts: Mapping[str, Interrupt]
+) -> tuple[str, ...]:
+    """取**恢复轮**要**显式**跑的节点名（契约 §6.2 第 4 步 ④a）。
+
+    * 优先取 ``StateSnapshot.next``（**上游同款** · 按 checkpoint 的 ``next``
+      重建 · **不走**触发判定）⇒ ⇒ **不**重复触发；
+    * **兜底**：快照没有 ``next`` ⇒ ⇒ 取**挂起中断**的节点名（**升序**）。
+    """
+    declared = tuple(getattr(snapshot, "next", ()) or ())
+    if declared:
+        return declared
+    return tuple(sorted(interrupts))
+
+
+def _run_graph_loop(
+    spec: GraphSpec,
+    state: SchedulerState,
+    table: Mapping[str, Any],
+    run_config: RunConfig,
+    *,
+    checkpointer: Any | None,
+    first_round: Sequence[str] | None,
+    max_steps: int,
+    max_concurrency: int | None,
+) -> SuperStepResult | InterruptResult:
+    """跑**多轮** ⇒ **完成**（``SuperStepResult``）或**挂起**（``InterruptResult``）。
+
+    * ``first_round`` —— **显式**指定的首轮节点（**不走**触发判定）⇒ ⇒
+      恢复轮（``.snapshot.next``）与会话连续轮（``input=None``）**同款**；
+    * ⚠️ **轮数口径**：``SuperStepResult.steps`` **含**那个「发现没任务了」的
+      **空轮**（B7F1 冻结面）⇒ ⇒ 挂起时**没有**空轮 ⇒ ⇒ 两者的 ``steps``
+      **计数口径刻意不同**（裁定 2 ③ · 不可直接比较）。
+    """
+    executed: list[str] = []
+    pending: dict[str, dict[str, tuple[Any, ...]]] = {}
+    steps = 0
+    triggered: list[str] | None = list(first_round) if first_round is not None else None
+    while True:
+        if triggered is None:
+            triggered = _determine_triggers(spec, state)
+        steps += 1
+        if not triggered:
+            break
+        if state.step >= max_steps:
+            raise GraphRecursionError(
+                recursion_limit=max_steps, current_step=state.step
+            )
+        try:
+            round_executed, round_pending = _run_round(
+                spec, state, triggered, max_concurrency=max_concurrency
+            )
+        except GraphInterrupt as exc:
+            result = _suspend(spec, state, table, exc, steps=steps)
+            if checkpointer is not None:
+                # ⚠️ **挂起时** MUST **写**快照 + **待写入**（FR-012）⇒ ⇒
+                # 挂起态**可被再次恢复**（闭环**可重复** · SC-013）。
+                _write_suspend(
+                    run_config,
+                    checkpointer,
+                    state,
+                    result.state,
+                    _produced_interrupts(table, result.interrupts),
+                    result.interrupts,
+                )
+            return result
+        executed.extend(round_executed)
+        for node_name, writes in round_pending.items():
+            bucket = pending.setdefault(node_name, {})
+            for key, values in writes.items():
+                bucket[key] = bucket.get(key, ()) + tuple(values)
+        state.step += 1
+        triggered = None
+    return SuperStepResult(
+        state=_sparse_state(spec, state),
+        executed=tuple(executed),
+        node_writes=pending,
+        steps=steps,
+    )
+
+
+def _suspend(
+    spec: GraphSpec,
+    state: SchedulerState,
+    table: Mapping[str, Any],
+    exc: GraphInterrupt,
+    *,
+    steps: int,
+) -> InterruptResult:
+    """把**接住的** ``GraphInterrupt`` 转成**挂起态**结果（裁定 1 / 裁定 2）。
+
+    * ``exc.args[0]`` = **元组**（上游同款）⇒ ⇒ 元素 = ``Interrupt``；
+    * ⚠️ **真异常优先**（裁定 11）—— 真异常**在** ``_run_round`` 的阶段 ⑥
+      **先于**中断抛出 ⇒ ⇒ 中断元组**被丢弃** ⇒ ⇒ 本函数**只**在
+      **没有**真异常时被调用；
+    * ⚠️ **MUST NOT** 另写一条中断收集路径（FR-004）⇒ ⇒ 直接复用 B12F1 的
+      **合并抛出**语义。
+    """
+    interrupts = tuple(exc.args[0]) if exc.args else ()
+    return InterruptResult(
+        state=_sparse_state(spec, state),
+        interrupts=interrupts,
+        executed=tuple(sorted(table)),
+        steps=steps,
+    )
+
+
+def _produced_interrupts(
+    table: Mapping[str, Any], interrupts: Sequence[Interrupt]
+) -> dict[str, Interrupt]:
+    """取「**本轮**产生的」中断（按节点 · 契约 §6.2 写侧的粒度）。
+
+    * ⚠️ **身份判定**（``is``）—— 运行级现场表里每个节点的 ``existing``
+      **要么**是「**先前**挂起时的中断载荷」（**恢复路径**预置）**要么**是
+      「**本轮**产生的载荷」（``interrupt()`` 挂起时写回）⇒ ⇒ 只有后者在
+      **本轮**的合并元组里 ⇒ ⇒ 用**身份**判定**零歧义**；
+    * ⇒ ⇒ **被恢复但**未**再次挂起**的节点**不**出现在写侧 ⇒ ⇒ 它的
+      「先前载荷」**不**被当成新留痕 ✓。
+    """
+    produced: dict[str, Interrupt] = {}
+    for node_name, scratchpad in table.items():
+        payload = getattr(scratchpad, "existing", None)
+        if payload is None:
+            continue
+        for item in interrupts:
+            if item is payload:
+                produced[node_name] = payload
+                break
+    return produced
+
+
+def _write_suspend(
+    run_config: RunConfig,
+    checkpointer: Any,
+    state: SchedulerState,
+    values: Mapping[str, Any],
+    produced: Mapping[str, Interrupt],
+    all_interrupts: Sequence[Interrupt],
+) -> None:
+    """**挂起时**的**写侧**（契约 §4 · FR-012 · T041）。
+
+    * ``put`` 写**快照**（``values`` = 该步合并后的**稀疏状态**）⇒
+      ``metadata`` 携带「下一步要执行的节点名 / 本步的中断 / 调度账本」
+      ⇒ ⇒ B14F1 据此复原 ``StateSnapshot`` 与 ``.scheduler``（契约 §2 / §3）；
+    * ``put_writes`` 逐节点写**中断留痕**（通道名 ``__interrupt__`` ·
+      载荷 = 该节点的**中断载荷元组**）⇒ ⇒ 挂起态**可被再次恢复**
+      （闭环**可重复** · FR-012 / SC-013）；
+    * ⚠️ **关键字名逐字**：``values`` / ``metadata`` / ``writes`` /
+      ``task_id`` / ``task_path``（契约 §4 冻结）。
+    """
+    checkpointer.put(
+        run_config,
+        values=dict(values),
+        metadata=_suspend_metadata(
+            tuple(sorted(produced)),
+            all_interrupts,
+            state.to_checkpoint(),
+        ),
+    )
+    for node_name, payload in produced.items():
+        checkpointer.put_writes(
+            run_config,
+            writes=[(_INTERRUPT_CHANNEL, (payload,))],
+            task_id=node_name,
+            task_path=node_name,
+        )
+
+
+def run_graph(
+    spec: GraphSpec,
+    input: StateDict | Command | None = None,
+    *,
+    state: SchedulerState | None = None,
+    checkpointer: Any | None = None,
+    config: RunConfig | None = None,
+    max_steps: int = 10007,
+    max_concurrency: int | None = None,
+) -> SuperStepResult | InterruptResult:
+    """**图级入口** —— 首次运行 / 恢复（B10F1 · 裁定 10 · 契约 §2）。
+
+    **签名**（**逐字冻结** · 契约 §2）::
+
+        run_graph(
+            spec: GraphSpec,
+            input: StateDict | Command | None = None,
+            *,
+            state: SchedulerState | None = None,
+            checkpointer: Checkpointer | None = None,
+            config: RunConfig | None = None,
+            max_steps: int = 10007,
+            max_concurrency: int | None = None,
+        ) -> SuperStepResult | InterruptResult
+
+    * ⚠️ **既有入口一字不动**（B7F1 冻结面）⇒ ⇒ ``run_super_step`` /
+      ``run_super_steps`` 的**签名与返回类型零改动**⇒ ⇒ 本入口是**图级**的
+      **另立**入口（**不是**替代关系）；
+    * ⚠️ **返回联合类型** ⇒ 「挂起」与「跑完」**两种结束方式可区分**
+      （B12F1 裁定 24 ②）⇒ ⇒ 门面层再归一成 dict（B7F3 · 承接 **D-3**）。
+
+    **两条路径**（spec FR-013 · 裁定 4）：
+
+    ① **输入是 ``Command``** ⇒ **恢复**路径 ⇒ 判定顺序逐字见 **裁定 4**：
+    ② ``resume`` 未提供 ⇒ ``resume_value_required`` · ③ 未挂 checkpointer ⇒
+    ``checkpointer_required`` · ④ 该会话没有挂起中断 ⇒
+    ``no_pending_interrupt`` · ⑤ 单值 + 多挂起 ⇒ ``ambiguous_resume`` ·
+    ⑥ 「按 id 的映射」⇒ 逐个恢复 · ⑦ 「非 map 的 dict」⇒ 普通恢复值（**多挂起**
+    ⇒ 回到 ⑤）· ⑧ ``resume`` 与 ``update`` **并存** ⇒ 两者各走各的通道；
+    ② **输入不是 ``Command``** ⇒ **首次运行**路径（**不**要求 checkpointer、
+    **不**触发恢复）⇒ ⚠️ 该 ``thread_id`` **已有历史快照** ⇒ ⇒ **会话连续**
+    （**续跑** · **上游同款** · 实测 E-26）⇒ ⇒ ``input=None`` ⇒ **不**写任何
+    通道 ⇒ **只有被中断的节点**重跑 ⇒ ``.id`` **逐字不变**；``input=StateDict``
+    ⇒ 先读 ``.snapshot.values``、再把 ``input`` **按通道写入**叠加上去 ⇒ ⇒
+    **``.id`` 可变**。
+    """
+    _validate_max_concurrency(max_concurrency)
+    scheduler_state = state if state is not None else SchedulerState()
+    run_config = config if config is not None else RunConfig()
+    table = new_run_table()
+    with bind_run(table):
+        if isinstance(input, Command):
+            return _resume_graph(
+                spec,
+                input,
+                scheduler_state,
+                run_config,
+                table,
+                checkpointer=checkpointer,
+                max_steps=max_steps,
+                max_concurrency=max_concurrency,
+            )
+        return _first_graph(
+            spec,
+            input,
+            scheduler_state,
+            run_config,
+            table,
+            checkpointer=checkpointer,
+            max_steps=max_steps,
+            max_concurrency=max_concurrency,
+        )
+
+
+def _first_graph(
+    spec: GraphSpec,
+    input: StateDict | None,
+    state: SchedulerState,
+    run_config: RunConfig,
+    table: Mapping[str, Any],
+    *,
+    checkpointer: Any | None,
+    max_steps: int,
+    max_concurrency: int | None,
+) -> SuperStepResult | InterruptResult:
+    """**首次运行路径**（输入**不是** ``Command`` · spec FR-013 末两行）。"""
+    history = None
+    if checkpointer is not None:
+        history = checkpointer.get_tuple(run_config)
+    if history is None:
+        # ⚠️ **全新会话** ⇒ 直接按输入写入通道 ⇒ ⇒ 入口节点由 ``__start__``
+        # 边触发（**纯边触发**模型 · 上游同款）。
+        if isinstance(input, dict):
+            _apply_input_writes(spec, state, input)
+        return _run_graph_loop(
+            spec,
+            state,
+            table,
+            run_config,
+            checkpointer=checkpointer,
+            first_round=None,
+            max_steps=max_steps,
+            max_concurrency=max_concurrency,
+        )
+
+    # ⚠️ **会话连续**（**续跑** · **上游同款** · 实测 E-26）
+    snapshot = history.snapshot
+    pending_writes = history.pending_writes
+    _restore_scheduler(state, history.scheduler)
+    _restore_channels(spec, state, snapshot.values)
+    interrupts = _pending_interrupts(pending_writes)
+    if input is None:
+        # ⚠️ **不**写任何通道 ⇒ ⇒ **只有被中断的节点**重跑（其它节点**不**重跑）
+        # ⇒ ⇒ 结果与挂起时**完全相同** ⇒ ⇒ `.id` **逐字不变**（**上游同款** ·
+        # 实测 E-15 / E-26 ① · 补记 **F-1**）⇒ ⇒ **不**消费 `__resume__`。
+        for node_name, payload in interrupts.items():
+            prepare_task(table, node_name, resume=[], existing=payload)
+        return _run_graph_loop(
+            spec,
+            state,
+            table,
+            run_config,
+            checkpointer=checkpointer,
+            first_round=_resume_target_nodes(snapshot, interrupts),
+            max_steps=max_steps,
+            max_concurrency=max_concurrency,
+        )
+    # ⚠️ **状态字典**输入 ⇒ 先读 `.snapshot.values`（已恢复）⇒ 再把 `input`
+    # **按通道写入**叠加上去 ⇒ ⇒ 写通道 ⇒ 通道版本推进 ⇒ **订阅节点重新触发**
+    # ⇒ ⇒ 被触及的节点**重跑**（**上游同款** · 实测 E-26 ②）⇒ ⇒ `.id` **可变**。
+    _apply_input_writes(spec, state, input)
+    _reset_entry_triggers(spec, state)
+    return _run_graph_loop(
+        spec,
+        state,
+        table,
+        run_config,
+        checkpointer=checkpointer,
+        first_round=None,
+        max_steps=max_steps,
+        max_concurrency=max_concurrency,
+    )
+
+
+def _resume_graph(
+    spec: GraphSpec,
+    input: Command,
+    state: SchedulerState,
+    run_config: RunConfig,
+    table: Mapping[str, Any],
+    *,
+    checkpointer: Any | None,
+    max_steps: int,
+    max_concurrency: int | None,
+) -> SuperStepResult | InterruptResult:
+    """**恢复路径**（输入**是** ``Command`` · spec FR-013 / 裁定 4）。"""
+    resume_value = input.resume
+    # ⚠️ **② 先于 ③**（**上游同款** · 实测 E-25a / E-25b）—— 上游的
+    # checkpointer 检查**在** `if resume is not None` **之内** ⇒ ⇒
+    # `resume=None` 时**根本不触达** ⇒ ⇒ 先判「未提供恢复值」。
+    if resume_value is None:
+        raise InterruptError(reason=InterruptError.REASON_RESUME_VALUE_REQUIRED)
+    if checkpointer is None:
+        raise InterruptError(reason=InterruptError.REASON_CHECKPOINTER_REQUIRED)
+    history = checkpointer.get_tuple(run_config)
+    if history is None:
+        raise InterruptError(reason=InterruptError.REASON_NO_PENDING_INTERRUPT)
+    snapshot = history.snapshot
+    pending_writes = history.pending_writes
+    interrupts = _pending_interrupts(pending_writes)
+    if not interrupts:
+        raise InterruptError(reason=InterruptError.REASON_NO_PENDING_INTERRUPT)
+
+    interrupt_ids = {payload.id for payload in interrupts.values()}
+    per_node: dict[str, Any] = {}
+    if isinstance(resume_value, dict) and all(
+        key in interrupt_ids for key in resume_value
+    ):
+        # ⚠️ **⑥「按 id 的映射」**（**上游同款** · 偏离登记 **X-3**）——
+        # 「全部 key 都是**当前挂起中断的 id**」⇒ ⇒ 命中即按 id 逐个恢复
+        # （**未被指定的仍挂起**）⇒ ⇒ **map 的「值」原样投递**（**标量即可** ·
+        # 上游 `_algo.py:1313-1314`）⇒ ⇒ 该值 = 该节点**下一个**
+        # `interrupt()` 的恢复值（**不是**「节点内全部中断值的列表」）。
+        # ⚠️ **空 dict** ⇒ 「全部 key 都是 id」**真空为真** ⇒ 归本分支 ⇒
+        # 恢复**零个** ⇒ 全部**仍挂起**（**不**报错 · spec FR-013 的空 dict 行）。
+        for key, value in resume_value.items():
+            for node_name, payload in interrupts.items():
+                if payload.id == key:
+                    per_node[node_name] = value
+    elif len(interrupts) > 1:
+        # ⚠️ **⑤ / ⑦** —— 单值（或「非 map 的 dict」）+ **多个**挂起中断 ⇒
+        # **无法确定恢复哪一个** ⇒ ⇒ `ambiguous_resume`（**上游同款** ·
+        # 实测 E-12 / E-19 / E-20）。
+        raise InterruptError(reason=InterruptError.REASON_AMBIGUOUS_RESUME)
+    else:
+        # ⚠️ **普通恢复值**（**仅当**挂起中断数 == 1 时有效）⇒ ⇒ 用它恢复
+        # 那**一个**挂起中断。
+        per_node[next(iter(interrupts))] = resume_value
+
+    # ⚠️ **⑧「resume 与 update 并存」** ⇒ ⇒ 两者**各走各的通道**
+    # （**上游同款** · 补记 **F-2**）⇒ ⇒ `update` 走**通道写入**、
+    # `resume` 走**恢复通道**⇒ ⇒ 两者**互不排斥**。
+    # ⚠️ **顺序**：**先**恢复调度状态 + 通道实例 ⇒ ⇒ **再**写 `update`
+    # ⇒ ⇒ 否则写入会被「按快照重建通道」**覆盖掉**。
+    _restore_scheduler(state, history.scheduler)
+    _restore_channels(spec, state, snapshot.values)
+    if input.update:
+        _apply_input_writes(spec, state, input.update)
+
+    targets = _resume_target_nodes(snapshot, interrupts)
+    for node_name in targets:
+        previous = _pending_resume_values(pending_writes, node_name)
+        accumulated = list(previous)
+        if node_name in per_node:
+            accumulated.append(per_node[node_name])
+            # ⚠️ **恢复值先落 pending writes 再执行**（**上游同款** · DR-10 ②）
+            # ⇒ ⇒ 「恢复」与「首次运行」**共用同一条执行路径** ⇒ ⇒ 零分支。
+            checkpointer.put_writes(
+                run_config,
+                writes=[(_RESUME_CHANNEL, accumulated)],
+                task_id=node_name,
+                task_path=node_name,
+            )
+        prepare_task(
+            table,
+            node_name,
+            resume=accumulated,
+            existing=interrupts.get(node_name),
+        )
+    return _run_graph_loop(
+        spec,
+        state,
+        table,
+        run_config,
+        checkpointer=checkpointer,
+        first_round=targets,
+        max_steps=max_steps,
+        max_concurrency=max_concurrency,
     )

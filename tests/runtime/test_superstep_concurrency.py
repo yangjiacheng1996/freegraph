@@ -594,7 +594,14 @@ def test_the_public_symbol_faces_are_unchanged() -> None:
     assert manifest, "L1 公开符号面清单解析为空"
     assert set(l1.__all__) == manifest, "L1 的 `__all__` 与清单**集合不等**"
     assert len(facade.__all__) == 7, f"门面符号面应为 7，实得 {len(facade.__all__)}"
-    assert len(runtime.__all__) == 20, f"runtime.__all__ 应为 20，实得 {len(runtime.__all__)}"
+    # ⚠️ **回溯修订 T-1 ②**（**B10F1** · **拆分而不删**）：原判据是「符号数 == 20」
+    # ⇒ ⇒ **硬编码数字** ⇒ ⇒ B10F1 **增**了 3 个符号 ⇒ ⇒ **必红** ⇒ ⇒
+    # 改为「**与清单集合相等**」⇒ ⇒ **判据零放宽**（仍是「== 某份清单」）。
+    from ._runtime_export_manifest import RUNTIME_EXPORT_SYMBOLS
+
+    assert set(runtime.__all__) == RUNTIME_EXPORT_SYMBOLS, (
+        f"runtime.__all__ 与清单不等：{set(runtime.__all__) ^ RUNTIME_EXPORT_SYMBOLS}"
+    )
 
 
 def test_the_super_step_result_keeps_its_four_fields() -> None:
@@ -787,12 +794,20 @@ def test_the_concurrency_module_is_pure() -> None:
     # ⚠️ `os.cpu_count()` 是**系统调用**（**非**环境变量）⇒ 允许
     assert _re.search(r"os\.cpu_count\(\)", concurrency), "并发度缺省 MUST 用 os.cpu_count()"
 
-    # ⇒ 中断**不**接线 `interrupt()` ⇒ `src/freegraph/_primitives.py` **零改动**
-    # （`interrupt()` 归 **B10F1**）
+    # ⚠️ **回溯修订 T-1 ⑥**（**B10F1** · **拆分而不删**）：原判据是「源码文本里**含**
+    # `NotImplementedError`」⇒ ⇒ 它守的是「`interrupt()` **未接线**」这个
+    # **中间态** ⇒ ⇒ B10F1 把 `interrupt()` **接线**后 ⇒ ⇒ **必红**
+    # ⇒ ⇒ 改为「`_primitives.py` **只留 `Send`**（**不含** `interrupt` 的
+    # **实现体**）」的**源码文本**断言 ⇒ ⇒ **判据零放宽**（**更强**：从
+    # 「含某个字符串」定位到「**不含实现体**」本身）⇒ ⇒ 同步本测试的
+    # **docstring / 命名**（不再说「归 B10F1」）。
     primitives = (_REPO_ROOT / "src" / "freegraph" / "_primitives.py").read_text(
         encoding="utf-8"
     )
-    assert "NotImplementedError" in primitives, "interrupt() 仍是**未接线**状态（归 B10F1）"
+    assert "def interrupt" not in primitives, (
+        "_primitives.py 仍带 interrupt 的实现体（**必须**只留 `Send` —— "
+        "**跨注册表条目的同层 import** ⇒ 门禁 G25 判红）"
+    )
 
 
 def test_the_new_source_files_carry_signature_header_and_leading_docstring() -> None:

@@ -66,6 +66,32 @@
   该口径由 B12F1 的 `specs/b12f1-concurrency-errors/spec.md`（**FR-013** · **裁定 25 ④** ·
   **SC-019** · 下游承接 **D-7**）落成。
 
+- **承接条款（B10F1 → B15F1 · M3 · 检查点读侧 / 写侧的最小契约 · 与 B14F1 **同款**）**：
+  B10F1（M1）已交付**中断 / 恢复**闭环，并**冻结**了「**内核与 saver 的接缝**」
+  （`specs/b10f1-interrupt-resume/contracts/checkpoint-contract.md`）⇒ **本 feature MUST**
+  照它写（B14F1 的 `MemorySaver` 已先行落地同一份契约 ⇒ 本 feature **MUST NOT** 另立一套）：
+  - **① 读侧**：`get_tuple(config)` 的返回值 MUST 暴露**三个**具名属性 ——
+    `.snapshot`（**L1 的 `StateSnapshot`**）· `.pending_writes`（`(task_id, channel, value)`
+    **三元组**序列）· `.scheduler`（**调度账本** · **纯数据** · 可 JSON 序列化）；
+  - **② 写侧**：`put(config, values=..., metadata=...)` 写**快照** ·
+    `put_writes(config, writes=..., task_id=..., task_path=...)` 写**待写入**
+    ⇒ ⇒ **关键字名逐字**：`values` / `metadata` / `writes` / `task_id` / `task_path`；
+  - **③ 保留通道名**：**`__interrupt__`**（中断留痕）· **`__resume__`**（恢复值）
+    ⇒ ⇒ **与上游逐字同款**（`langgraph/_internal/_constants.py:9` / `:11`）；
+  - **④ `task_id` = 节点名**（freegraph 取舍：更可读 · 一轮一个节点一个任务）；
+  - **⑤ 挂起时 `put` 的 `metadata` 载荷**（**B10F1 的写侧**给出 ⇒ 本 feature **原样存取**
+    ⇒ **零**耦合）：`next` · `interrupts` · `tasks`（v1 **恒空**）· `scheduler`
+    ⇒ ⇒ **MUST NOT** 写出「freegraph 读不回来」的私有形状（**D-1** 已为 B14F1 落成同一份
+    契约 ⇒ 本 feature **只接线 · 逐条最小改动**）；
+  - **⑥ 「真异常 + 中断同现」时的中断留痕**（**B10F1 的 X-5** · **B12F1 记作 X-4** ⇒ ⇒
+    **引用时 MUST 写明是哪一个 feature 的哪一个编号**）：中断元组 MUST **随 pending writes
+    留痕** ⇒ ⇒ 该**阶段性**差异**自动消解** ⇒ ⇒ **不是**「新功能」，只是**上游本来就这样**；
+  - **⑦ 本 feature 的 `StateSnapshot.interrupts` 生产者口径**（**B12F1 的 D-7**）**不变**
+    ⇒ ⇒ 与 ① 的 `.snapshot` **同款**（元素 = `Interrupt` · 顺序 = **节点名序**）；
+  - **B10F1 MUST NOT** 越界实现 saver（**FR-019**）。
+  该口径由 B10F1 的 `specs/b10f1-interrupt-resume/spec.md`（**FR-018** · **裁定 9** ·
+  下游承接 **D-1 / D-9**）与 `contracts/checkpoint-contract.md` §2…§6 落成。
+
 ### 3. 用户场景
 
 **P1 — 进程重启后状态还在**

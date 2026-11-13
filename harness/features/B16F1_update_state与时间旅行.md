@@ -41,6 +41,16 @@
 - **形态待锁定**：`harness/demo/README.md` 列出「`update_state(...)` 的**签名**」是
   **未锁定的形态**，随 M3 各 feature 一同锁定。本 feature 正是锁定它的时点。
 
+- **承接条款（B10F1 → B16F1 · M3 · 「恢复」与「时间旅行」的边界）**：
+  B10F1 已交付**中断 / 恢复**闭环 ⇒ **本 feature MUST** 照它写：
+  - B10F1 的**恢复路径**读的是 checkpointer 的**最新快照 + pending writes**
+    ⇒ ⇒ **MUST NOT** 改写历史 ⇒ ⇒ 「恢复」与「时间旅行」是**两套并存但独立**的语义
+    ⇒ ⇒ `update_state()` / 分叉 **MUST NOT** 与 B10F1 的恢复路径**共用**同一套
+    「改写历史」的语义；
+  - **B10F1 MUST NOT** 越界实现 `update_state()`（**FR-024** · Out of Scope 第 11 条）。
+  该口径由 B10F1 的 `specs/b10f1-interrupt-resume/spec.md`（**FR-010** · **FR-018** ·
+  **裁定 9** · 下游承接 **D-7**）落成。
+
 ### 3. 用户场景
 
 **P1 — 从历史某一步重放**

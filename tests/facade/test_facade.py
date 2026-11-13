@@ -313,7 +313,7 @@ class TestSend:
 
 
 class TestInterrupt:
-    """``interrupt`` —— 未接线（由 B10F1 交付）。"""
+    """``interrupt`` —— **已接线**（**B10F1** · 图运行之外 ⇒ ``InterruptError``）。"""
 
     @pytest.mark.parametrize(
         "call",
@@ -323,11 +323,27 @@ class TestInterrupt:
         ],
         ids=["positional", "keyword"],
     )
-    def test_raises_not_implemented(self, facade: object, call: object) -> None:
-        """位置与关键字两种调用形态 MUST 走**同一分支**（均抛未接线）。"""
-        with pytest.raises(NotImplementedError) as excinfo:
+    def test_outside_a_run_raises_the_structured_failure(
+        self, facade: object, call: object
+    ) -> None:
+        """位置与关键字两种调用形态 MUST 走**同一分支**（均抛 ``InterruptError``）。
+
+        ⚠️ **回溯修订 T-1 ⑤**（**B10F1** · 宪法 v1.8.0「破冻结面的三条」第 ① 条
+        · **拆分而不删**）：原判据是「恒抛 ``NotImplementedError``（消息点名
+        B10F1）⇒ ⇒ 它守的是「``interrupt`` **未接线**」这个**中间态**
+        ⇒ ⇒ B10F1 把它**接线**后 ⇒ ⇒ **必红** ⇒ ⇒ 改为「**接线后**抛
+        ``InterruptError(reason="not_in_run")``」⇒ ⇒ **判据零放宽**（断言
+        **更具体**：结构化原因码 **取代** 未接线哨兵）⇒ ⇒ 同步本类的
+        **docstring / 类名**（不再说「未接线（由 B10F1 交付）」）。
+
+        ⇒ 判据形态保留：「**位置 / 关键字两种形态走同一分支**」。
+        """
+        from freegraph.runtime.errors import InterruptError
+
+        with pytest.raises(InterruptError) as excinfo:
             call(facade.interrupt)  # type: ignore[attr-defined]
-        assert "interrupt 尚未接线（由 B10F1 交付）" in str(excinfo.value)
+        assert excinfo.value.reason == "not_in_run"
+        assert "outside of a graph run" in str(excinfo.value)
 
 
 class TestAcceptanceScriptsCanImportTheFacade:

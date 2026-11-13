@@ -83,7 +83,7 @@ uv run --no-project --python .venv python harness/scripts/gates/gate_G21_depende
 > 本表逐符号标注 freegraph 与上游的等价程度，是**活文档**（随每个 feature 新增的公开面更新，
 > 由 B24F1 补全与定稿）。
 >
-> **「公开面」的判定口径**（2026-11-08 · B4F1 分析轮澄清）：**公开面 = 契约层 18 个符号
+> **「公开面」的判定口径**（2026-11-08 · B4F1 分析轮澄清 · **2026-11-13 订正**）：**公开面 = 契约层 **20** 个符号
 > + 门面 `freegraph/graph.py` 的 7 个符号** ⇒ **内核子包**（如 `freegraph.runtime` 的
 > `parse_state_schema` / `ChannelSpec` / `SchemaSpec` / `InvalidSchemaError`）属 **L2 内部 API**
 > （用户可 import，但**不承诺稳定**）⇒ **不进本表**（相关 feature 的兼容矩阵**零新增行**）。
@@ -114,7 +114,7 @@ uv run --no-project --python .venv python harness/scripts/gates/gate_G21_depende
 | `START` | `langgraph.constants.START` | 行为等价 | 值与语义均一致（`'__start__'`）；上游来源 `langgraph/constants.py:30`（核实环境 `langgraph 1.2.11`） |
 | `END` | `langgraph.constants.END` | 行为等价 | 值与语义均一致（`'__end__'`）；上游来源 `langgraph/constants.py:28`（核实环境 `langgraph 1.2.11`） |
 | `Send` | `langgraph.types.Send` | 部分等价 | 形状等价（`node` / `arg`）；**freegraph 侧不可变**（上游可变）；**fan-out 行为待 B11F1 交付**；上游来源 `langgraph/types.py:704`（核实环境 `langgraph 1.2.11`） |
-| `interrupt` | `langgraph.types.interrupt` | 部分等价 | 形状等价（`value`）；**中断 / 恢复行为待 B10F1 交付**；上游来源 `langgraph/types.py:851`（核实环境 `langgraph 1.2.11`） |
+| `interrupt` | `langgraph.types.interrupt` | 部分等价 | 形状等价（`value`，**位置或关键字**皆可）；**中断 / 恢复行为已落地**（B10F1）—— 节点内首次调用抛 `GraphInterrupt`（载荷 = **1-元组**）· 恢复时**返回** resume 值（**从节点起点重跑** · **不**保存局部变量）· **恢复 MUST 挂 checkpointer**（未挂 ⇒ `InterruptError`，**不**静默降级）；⚠️ **失败信号**的**类型**与上游不同（上游内置 `RuntimeError` ⇒ freegraph `InterruptError` · 属内核异常族 · **消息要点**逐字同款）⇒ **`.id` 的摘要算法**不同（上游 `xxh3_128` ⇒ freegraph 标准库 `blake2b-128` · **同长 32 位十六进制** ⇒ **零第三方依赖**）；上游来源 `langgraph/types.py:851`（核实环境 `langgraph 1.2.11`） |
 
 **证据来源**（截至 2026-11-05，按 LangGraph 1.2.19 / langchain-core 1.7.6 源码核实）：
 `langgraph/types.py:711`（`StateSnapshot`）· `:738`（`Send`）· `:833`（`Command`）·

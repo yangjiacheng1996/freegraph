@@ -59,25 +59,11 @@ READ_CONTRACT_PATH = (
 #: 契约 §4 冻结的**不变量编号集合**（**逐条** · I-1…I-11）。
 EXPECTED_INVARIANTS = tuple(f"I-{index}" for index in range(1, 12))
 
-#: 契约 §4 之前冻结的**错误类型符号集合**（**零新增错误类型** · I-9）。
-EXPECTED_ERROR_SYMBOLS = (
-    "EmptyChannelError",
-    "InvalidChannelUpdateError",
-    "InvalidSchemaError",
-    "REASON_ANNOTATION_UNRESOLVABLE",
-    "REASON_NOT_A_STATE_SCHEMA",
-    "REASON_REDUCER_NOT_BINARY",
-    "SCHEMA_ERROR_REASONS",
-)
-
 #: 契约层（``freegraph.contracts``）的**冻结符号数**。
 CONTRACT_SYMBOL_COUNT = 20
 
 #: 门面（``freegraph.graph``）的**冻结符号数**。
 FACADE_SYMBOL_COUNT = 7
-
-#: L2 内部 API（``freegraph.runtime``）的**导出面**（12 → **14** → **20**）。
-RUNTIME_SYMBOL_COUNT = 20
 
 
 class SampleSchema(TypedDict):
@@ -311,17 +297,29 @@ print(json.dumps(payload))
 
 
 def test_i9_the_reading_layer_adds_no_new_error_type() -> None:
-    """**I-9**：读取层**不新增**错误类型（``freegraph.runtime.errors`` 的符号集合不变）。"""
+    """**I-9**：读取层**不新增**错误类型（``freegraph.runtime.errors`` 的符号集合）。
+
+    ⚠️ **回溯修订 T-1 ④**（**B10F1** · 宪法 v1.8.0「破冻结面的三条」第 ① 条
+    · **拆分而不删**）：原判据是「``errors.__all__`` == **精确 7 元组**」+
+    「``FreegraphError`` 子类 == **精确清单**（3 个）」⇒ ⇒ **硬编码清单**
+    ⇒ ⇒ B10F1 **增**了 ``InterruptError`` ⇒ ⇒ **必红**（**无论**它是否写进
+    ``errors.__all__`` —— 第二段断言扫 **AST 类清单**）⇒ ⇒ 改为
+    「**与清单集合相等**」⇒ ⇒ **判据零放宽**（仍是「== 某份清单」⇒
+    **不是**「⊇」⇒ ⇒ **意外新增**仍判红）⇒ ⇒ 清单 =
+    ``tests/runtime/_runtime_export_manifest.py``（**单一事实源**）。
+    """
     from freegraph.runtime import errors
 
-    assert tuple(errors.__all__) == EXPECTED_ERROR_SYMBOLS
+    from ._runtime_export_manifest import ERROR_CLASS_NAMES, ERROR_EXPORT_SYMBOLS
+
+    assert set(errors.__all__) == ERROR_EXPORT_SYMBOLS
 
     tree = ast.parse(
         (REPO_ROOT / "src" / "freegraph" / "runtime" / "errors.py").read_text(
             encoding="utf-8"
         )
     )
-    error_classes = sorted(
+    error_classes = {
         node.name
         for node in tree.body
         if isinstance(node, ast.ClassDef)
@@ -333,12 +331,8 @@ def test_i9_the_reading_layer_adds_no_new_error_type() -> None:
             )
             for base in node.bases
         )
-    )
-    assert error_classes == [
-        "EmptyChannelError",
-        "InvalidChannelUpdateError",
-        "InvalidSchemaError",
-    ]
+    }
+    assert error_classes == ERROR_CLASS_NAMES
 
 
 def test_i10_a_channel_holding_none_is_present_in_the_result() -> None:
@@ -540,35 +534,23 @@ def test_the_project_declares_no_optional_dependency_extra() -> None:
 # ── T030 · 冻结面断言 ─────────────────────────────────────────────────
 
 
-def test_the_runtime_export_surface_holds_twenty_symbols() -> None:
-    """FR-023 · SC-016：``freegraph.runtime.__all__`` == **20** 且含两个读取入口。"""
+def test_the_runtime_export_surface_holds_the_expected_symbols() -> None:
+    """FR-023 · SC-016：``freegraph.runtime.__all__`` == **清单**（集合相等）。
+
+    ⚠️ **回溯修订 T-1 ③**（**B10F1** · **拆分而不删**）：原判据是「符号数 ==
+    **20**」+「一份**内联**的 20 项清单」⇒ ⇒ **硬编码数字** ⇒ ⇒ B10F1 **增**了
+    3 个符号 ⇒ ⇒ **必红** ⇒ ⇒ 改为「**与清单集合相等**」⇒ ⇒ **判据零放宽**
+    （仍是「== 某份清单」）⇒ ⇒ 清单 =
+    ``tests/runtime/_runtime_export_manifest.py``（**单一事实源** ⇒ 不在三处
+    各抄一份 ⇒ 不会漂移）。
+    """
     import freegraph.runtime as runtime
 
-    assert len(runtime.__all__) == RUNTIME_SYMBOL_COUNT
+    from ._runtime_export_manifest import RUNTIME_EXPORT_SYMBOLS
+
+    assert set(runtime.__all__) == RUNTIME_EXPORT_SYMBOLS
     assert "read_channels" in runtime.__all__
     assert "local_read" in runtime.__all__
-    assert set(runtime.__all__) == {
-        "BinaryOperatorAggregate",
-        "Channel",
-        "ChannelSpec",
-        "EmptyChannelError",
-        "EphemeralValue",
-        "GraphSpec",
-        "InvalidChannelUpdateError",
-        "InvalidSchemaError",
-        "LastValue",
-        "NodeSpec",
-        "SchedulerState",
-        "SchemaSpec",
-        "SuperStepResult",
-        "build_channel",
-        "build_channels",
-        "local_read",
-        "parse_state_schema",
-        "read_channels",
-        "run_super_step",
-        "run_super_steps",
-    }
 
 
 def test_the_contract_layer_and_the_facade_symbol_counts_are_unchanged() -> None:

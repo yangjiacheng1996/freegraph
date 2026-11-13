@@ -39,6 +39,7 @@ from __future__ import annotations
 import operator
 import os
 import pathlib
+import re
 import sys
 import threading
 import time
@@ -119,6 +120,25 @@ class Scenario:
     #: 缺省 ⇒ **不比对**异常类型（既有口径：只比「成功 / 失败」）。
     expect_exception_type: str = ""
 
+    # ── B10F1 扩展（**全部可选** · 缺省 ⇒ 既有 43 个场景的行为与判词**逐字不变**）──
+
+    #: **第二次输入**（⇒ **两段式**跑法：第一次 ⇒ 挂起；第二次 ⇒ 以该输入恢复）
+    #: —— 缺省 ``_UNSET`` ⇒ **单段式**（既有口径**逐字不变**）。
+    resume_input: Any = _UNSET
+    #: **期望 freegraph 侧「挂起」**（⇒ 返回 ``InterruptResult`` ⇒ 中断载荷从
+    #: **结果**取，而**不是**从**异常**取）⇒ ⇒ 判据形态与 ``expect_interrupt``
+    #: **不同**（freegraph **不**抛 · 上游**根图抑制** ⇒ 落进结果键）。
+    fg_suspends: bool = False
+    #: **上游侧挂 checkpointer**（⇒ ``compile(checkpointer=InMemorySaver())``）
+    #: —— 恢复路径**必须**挂 checkpointer（**上游同款** · **实测 E-3**）。
+    upstream_checkpointer: bool = False
+    #: **freegraph 侧不挂 checkpointer**（⇒ 恢复时**必须**显式失败 · DI-04）
+    #: —— 缺省 ⇒ 挂**桩**（本 feature **不**实现 saver · FR-019）。
+    fg_no_checkpointer: bool = False
+    #: 比对两侧「**节点被执行的次数**」（⇒ ``len(calls)``）⇒ 供「**从节点起点
+    #: 重跑**」这类**次数**判据使用（DI-03 · **上游同款** · 实测 E-8）。
+    compare_call_counts: bool = False
+
     def clear(self) -> None:
         self.calls.clear()
         self.windows.clear()
@@ -181,18 +201,132 @@ def _interrupt_keys(payload: tuple[Any, ...]) -> list[tuple[Any, Any]]:
     return [(getattr(item, "value", None), getattr(item, "id", None)) for item in payload]
 
 
+#: **``.id`` 的形态**（**上游同款** · 实测 **E-9**）—— 32 位十六进制。
+#:
+#: ⚠️ 两侧的 ``.id`` **逐字不同**（上游 ``xxh3_128`` vs freegraph ``blake2b-128``
+#: ⇒ 偏离登记 **X-4**）⇒ ⇒ **比形态**，**不**比具体值（research **DR-12**）。
+_ID_SHAPE = re.compile(r"^[0-9a-f]{32}$")
+
+
 def _compare_interrupts(
     fg_payload: tuple[Any, ...],
     up_payload: tuple[Any, ...],
     compare: str,
 ) -> bool:
-    """比对两侧的**中断载荷**（口径由 ``scenario.compare`` 决定）。"""
+    """比对两侧的**中断载荷**（口径由 ``scenario.compare`` 决定）。
+
+    ⚠️ **``"interrupt-shape"``**（**B10F1** · research **DR-12**）⇒ ⇒
+    ① ``.value`` **逐字相等**（**集合**口径 ⇒ **不**比顺序 —— 上游的合并顺序
+    **是竞态**）⇒ ② 两侧的 ``.id`` **都**匹配 **32 位十六进制**的**形态**
+    ⇒ ⇒ **不**比具体值（算法不同 · 偏离登记 **X-4**）。
+    """
     fg_keys = _interrupt_keys(fg_payload)
     up_keys = _interrupt_keys(up_payload)
+    if compare == "interrupt-shape":
+        fg_values = sorted(repr(value) for value, _ in fg_keys)
+        up_values = sorted(repr(value) for value, _ in up_keys)
+        if fg_values != up_values:
+            return False
+        return all(
+            _ID_SHAPE.match(str(identifier or ""))
+            for _, identifier in (*fg_keys, *up_keys)
+        )
     if compare == "set":
         # ⚠️ **按集合比**（上游的元组内元素顺序**竞态** ⇒ 逐字比会偶发红）
         return sorted(map(repr, fg_keys)) == sorted(map(repr, up_keys))
     return fg_keys == up_keys
+
+
+# ── B10F1 · 探针内的**桩** checkpointer（self-contained）───────────────────
+
+
+class _ProbeCheckpointer:
+    """**桩** checkpointer —— 只存**最小**载荷（探针自足 · 不依赖其它模块）。
+
+    ⚠️ **探针自足** ⇒ ⇒ **不** import ``tests.runtime``（探针可作脚本独立运行
+    ⇒ ``python harness/scripts/diff_parity.py``）。
+    """
+
+    def __init__(self) -> None:
+        self.snapshot: dict[str, Any] | None = None
+        self.pending: list[tuple[str, str, Any]] = []
+
+    def get_tuple(self, config: Any) -> Any:
+        """取回**最新**快照（**查不到** ⇒ ``None``）。"""
+        if self.snapshot is None:
+            return None
+        values, metadata = self.snapshot
+        return _ProbeTuple(
+            values=values,
+            metadata=metadata,
+            pending=tuple(self.pending),
+        )
+
+    def put(
+        self,
+        config: Any,
+        values: Any = None,
+        metadata: Any = None,
+        **kwargs: Any,
+    ) -> None:
+        """写入**快照**。"""
+        self.snapshot = (dict(values or {}), dict(metadata or {}))
+
+    def put_writes(
+        self,
+        config: Any,
+        writes: Any = None,
+        task_id: Any = None,
+        task_path: Any = None,
+        **kwargs: Any,
+    ) -> None:
+        """写入**待写入数据**（同一任务 + 同一通道 ⇒ **覆盖**）。"""
+        for channel, value in writes or ():
+            for index, entry in enumerate(self.pending):
+                if entry[0] == task_id and entry[1] == channel:
+                    self.pending[index] = (task_id, channel, value)
+                    break
+            else:
+                self.pending.append((task_id, channel, value))
+
+
+class _ProbeTuple:
+    """``get_tuple`` 的返回值 —— **三个具名属性**（契约 §2）。"""
+
+    def __init__(
+        self,
+        values: dict[str, Any],
+        metadata: dict[str, Any],
+        pending: tuple[tuple[str, str, Any], ...],
+    ) -> None:
+        self.values = values
+        self.metadata = metadata
+        self.pending = pending
+
+    @property
+    def snapshot(self) -> Any:
+        """**快照**（L1 的 ``StateSnapshot`` 形态 · 探针只取用到的字段）。"""
+        return _ProbeSnapshot(self.values, self.metadata)
+
+    @property
+    def pending_writes(self) -> tuple[tuple[str, str, Any], ...]:
+        """**待写入**。"""
+        return self.pending
+
+    @property
+    def scheduler(self) -> dict[str, Any]:
+        """**调度账本**。"""
+        return dict(self.metadata.get("scheduler", {}))
+
+
+class _ProbeSnapshot:
+    """``StateSnapshot`` 的**探针替身**（只带探针用到的字段）。"""
+
+    def __init__(self, values: dict[str, Any], metadata: dict[str, Any]) -> None:
+        self.values = values
+        self.next = tuple(metadata.get("next", ()))
+        self.interrupts = tuple(metadata.get("interrupts", ()))
+        self.tasks = tuple(metadata.get("tasks", ()))
 
 
 # ── freegraph 侧 ────────────────────────────────────────────────────────────
@@ -282,6 +416,11 @@ def run_freegraph(
             },
         )
     scheduler_state = SchedulerState()
+    if scenario.resume_input is not _UNSET or scenario.fg_suspends:
+        # ⚠️ **B10F1**：**图级入口**（``run_graph``）—— 恢复路径**必须**经由
+        # checkpointer（**上游同款**）⇒ ⇒ **两段式**跑法（第一次 ⇒ 挂起；
+        # 第二次 ⇒ 以 ``resume_input`` 恢复）⇒ ⇒ 比**恢复后**的结果。
+        return _run_freegraph_graph(scenario, spec, channels)
     try:
         result = run_super_steps(spec, scheduler_state, max_concurrency=cap)
     except Exception as exc:  # noqa: BLE001
@@ -311,6 +450,90 @@ def run_freegraph(
     )
 
 
+def _run_freegraph_graph(
+    scenario: Scenario, spec: Any, channels: dict[str, Any]
+) -> tuple[str, Any, str, dict[str, Any]]:
+    """**图级入口**的两段式跑法（**B10F1** · DI-01…DI-08）。
+
+    * 第一次 ⇒ 以 ``scenario.initial`` 起跑 ⇒ ⇒ **挂起**时返回
+      ``InterruptResult``（**不**抛）⇒ ⇒ 中断载荷从**结果**取；
+    * 第二次 ⇒ 以 ``scenario.resume_input`` 恢复 ⇒ ⇒ 比**恢复后**的结果。
+    """
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.contracts.types import RunConfig
+    from freegraph.runtime import run_graph
+
+    stub = _ProbeCheckpointer()
+    config = RunConfig(thread_id="diff")
+    # ⚠️ **DI-04**：**不挂** checkpointer ⇒ ⇒ 恢复**必须**显式失败
+    # （**上游同款** · **实测 E-3**）⇒ ⇒ 两侧**都**失败 ⇒ ⇒ 判词 **STRICTER**。
+    saver = None if scenario.fg_no_checkpointer else stub
+    initial = dict(scenario.initial) if scenario.initial else None
+    try:
+        first = run_graph(spec, initial, checkpointer=saver, config=config)
+    except Exception as exc:  # noqa: BLE001
+        return (
+            "ERROR",
+            f"{type(exc).__name__}",
+            _exc_detail(exc),
+            {
+                "exception": exc,
+                "interrupt": (),
+                "calls": list(scenario.calls),
+                "state": {},
+                "stage": "run",
+            },
+        )
+    if scenario.resume_input is not _UNSET:
+        try:
+            result = run_graph(
+                spec,
+                _as_command(scenario.resume_input),
+                checkpointer=saver,
+                config=config,
+            )
+        except Exception as exc:  # noqa: BLE001
+            return (
+                "ERROR",
+                f"{type(exc).__name__}",
+                _exc_detail(exc),
+                {
+                    "exception": exc,
+                    "interrupt": (),
+                    "calls": list(scenario.calls),
+                    "state": {},
+                    "stage": "run",
+                },
+            )
+        payload = tuple(getattr(result, "interrupts", ()) or ())
+        state = dict(getattr(result, "state", {}) or {})
+    else:
+        payload = tuple(getattr(first, "interrupts", ()) or ())
+        state = dict(getattr(first, "state", {}) or {})
+    return (
+        "OK",
+        state,
+        f"executed={list(getattr(first, 'executed', ()))}",
+        {
+            "exception": None,
+            "interrupt": payload,
+            "calls": list(scenario.calls),
+            "state": state,
+            "stage": "ok",
+        },
+    )
+
+
+def _as_command(value: Any) -> Any:
+    """把「第二次输入」归一成 ``Command``（**两侧同款**）。"""
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.contracts.types import Command
+
+    if isinstance(value, Command):
+        return value
+    return Command(resume=value)
+
+
 def _sparse(scheduler_state: Any) -> dict[str, Any]:
     """取调度状态里的**稀疏通道值**（中断轮也取得到 —— 合并**已经**发生）。"""
     sys.path.insert(0, f"{ROOT}/src")
@@ -323,6 +546,15 @@ def _exc_detail(exc: BaseException) -> str:
     """异常的**可观察要点**（类名 + 首行消息）。"""
     msg = str(exc).strip().splitlines()
     return f"{type(exc).__name__}: {msg[0] if msg else ''}"
+
+
+def _as_upstream_command(value: Any) -> Any:
+    """把「第二次输入」归一成上游的 ``Command``（**两侧同款**）。"""
+    from langgraph.types import Command
+
+    if isinstance(value, Command):
+        return value
+    return Command(resume=value)
 
 
 # ── 上游侧 ──────────────────────────────────────────────────────────────────
@@ -384,7 +616,14 @@ def run_upstream(scenario: Scenario) -> tuple[str, Any, str, dict[str, Any]]:
                     graph.add_edge(src, END if target == "__end__" else target)
         if scenario.upstream_extra is not None:
             scenario.upstream_extra(graph)
-        compiled = graph.compile()
+        # ⚠️ **B10F1**：恢复路径**必须**挂 checkpointer（**上游同款** · 实测 E-3）
+        # ⇒ ⇒ 上游侧**挂** ``InMemorySaver``（**上游的形状**）⇒ ⇒ 两段式可比。
+        if scenario.upstream_checkpointer:
+            from langgraph.checkpoint.memory import InMemorySaver
+
+            compiled = graph.compile(checkpointer=InMemorySaver())
+        else:
+            compiled = graph.compile()
     except Exception as exc:  # noqa: BLE001
         # ⚠️ **构造期失败**（**B7F4**）⇒ 与「运行期失败」**区分**记录
         return (
@@ -400,7 +639,20 @@ def run_upstream(scenario: Scenario) -> tuple[str, Any, str, dict[str, Any]]:
             },
         )
     try:
-        result = compiled.invoke(dict(scenario.initial))
+        # ⚠️ **B10F1**：挂了 checkpointer ⇒ 上游**必须**带 ``thread_id``
+        # （上游 ``Checkpointer requires one or more of the following
+        # 'configurable' keys`` · ``thread_id``）⇒ ⇒ 两侧**同一会话**。
+        up_config = (
+            {"configurable": {"thread_id": "diff"}}
+            if scenario.upstream_checkpointer
+            else None
+        )
+        result = compiled.invoke(dict(scenario.initial), up_config)
+        if scenario.resume_input is not _UNSET:
+            # ⚠️ **两段式**（**B10F1**）：第二次 ⇒ 以 ``resume_input`` 恢复
+            result = compiled.invoke(
+                _as_upstream_command(scenario.resume_input), up_config
+            )
     except Exception as exc:  # noqa: BLE001
         return (
             "ERROR",
@@ -1694,6 +1946,282 @@ def _scenarios() -> list[Scenario]:
         )
     )
 
+    # ── B10F1 · DI-01…DI-08（中断 / 恢复 · **DI-** 前缀 · 与既有 D-xx **不重号**）──
+    #
+    # ⚠️ **DI-** 前缀的由来（spec §下游承接条款的「编号消歧」）：探针内**已有**
+    # B12F1 的 ``D-01…D-15`` 与 B7F4 的 ``D-16…D-28`` ⇒ ⇒ 本 feature 的
+    # **差分场景**改用 ``DI-``（interrupt-diff）⇒ ⇒ **同一文件内三套编号互不
+    # 重号** ⇒ ⇒ **既有场景名逐字不动**。
+
+    def _fg_interrupt(value: str) -> Any:
+        """freegraph 侧的 ``interrupt()``（**开发期** · 不进发行面）。"""
+        sys.path.insert(0, f"{ROOT}/src")
+        from freegraph.graph import interrupt as fg_interrupt
+
+        return fg_interrupt(value)
+
+    def _up_interrupt(value: str) -> Any:
+        """上游侧的 ``interrupt()``（**开发期** · 不进发行面）。"""
+        from langgraph.types import interrupt as up_interrupt
+
+        return up_interrupt(value)
+
+    # ── DI-01 · 单节点中断 ⇒ 结果含 ``__interrupt__``（元素带 .value / .id）──
+    def _di01_fg(state: dict[str, Any]) -> Any:
+        _fg_interrupt("approve?")
+        return {"count": 1}
+
+    def _di01_up(state: dict[str, Any]) -> Any:
+        _up_interrupt("approve?")
+        return {"count": 1}
+
+    out.append(
+        Scenario(
+            name="DI-01 · 单节点中断 ⇒ 结果含 __interrupt__（元素带 .value / .id）",
+            channels={"count": "last"},
+            initial={},
+            nodes={"ask": (("count",), _di01_fg)},
+            nodes_upstream={"ask": (("count",), _di01_up)},
+            edges={"__start__": ("ask",)},
+            fg_suspends=True,
+            upstream_checkpointer=True,
+            compare="interrupt-shape",
+            verdict="SAME",
+            note="中断载荷：``.value`` **逐字相等** · ``.id`` **只比形态**"
+            "（32 位十六进制）⇒ **摘要算法**不同（上游 ``xxh3_128`` vs freegraph "
+            "``blake2b-128`` ⇒ 偏离登记 **X-4**）⇒ ⇒ 判据形态同款",
+        )
+    )
+
+    # ── DI-02 · Command(resume=…) 恢复 ⇒ 跑完且状态含恢复值 ──
+    def _di02_fg(state: dict[str, Any]) -> Any:
+        answer = _fg_interrupt("approve?")
+        return {"count": answer}
+
+    def _di02_up(state: dict[str, Any]) -> Any:
+        answer = _up_interrupt("approve?")
+        return {"count": answer}
+
+    out.append(
+        Scenario(
+            name="DI-02 · Command(resume=…) 恢复 ⇒ 跑完且状态含恢复值",
+            channels={"count": "last"},
+            initial={},
+            nodes={"ask": (("count",), _di02_fg)},
+            nodes_upstream={"ask": (("count",), _di02_up)},
+            edges={"__start__": ("ask",)},
+            resume_input="yes",
+            fg_suspends=True,
+            upstream_checkpointer=True,
+            compare="interrupt-shape",
+            verdict="SAME",
+            note="**两段式**（第一次 ⇒ 挂起；第二次 ⇒ 恢复）⇒ ⇒ 比**恢复后**的结果"
+            "⇒ ⇒ 恢复值落在同一个 key 上 · 两侧**均无** ``__interrupt__``",
+        )
+    )
+
+    # ── DI-03 · 恢复时节点从头重跑（执行次数两侧都 == 2）──
+    di03_calls: list[str] = []
+
+    def _di03_fg(state: dict[str, Any]) -> Any:
+        di03_calls.append("ask")
+        answer = _fg_interrupt("approve?")
+        return {"count": answer}
+
+    def _di03_up(state: dict[str, Any]) -> Any:
+        di03_calls.append("ask")
+        answer = _up_interrupt("approve?")
+        return {"count": answer}
+
+    out.append(
+        Scenario(
+            name="DI-03 · 恢复时节点从头重跑（执行次数两侧都 == 2）",
+            channels={"count": "last"},
+            initial={},
+            nodes={"ask": (("count",), _di03_fg)},
+            nodes_upstream={"ask": (("count",), _di03_up)},
+            edges={"__start__": ("ask",)},
+            calls=di03_calls,
+            resume_input="yes",
+            fg_suspends=True,
+            upstream_checkpointer=True,
+            compare="interrupt-shape",
+            compare_call_counts=True,
+            verdict="SAME",
+            note="**从节点起点重跑**（**上游同款** · 实测 **E-8**）⇒ ⇒ 两侧的"
+            "**执行次数**相等（都 == 2）⇒ ⇒ **不**比较中间态",
+        )
+    )
+
+    # ── DI-04 · 未挂 checkpointer 时恢复 ⇒ 两侧都失败 ──
+    def _di04_fg(state: dict[str, Any]) -> Any:
+        _fg_interrupt("approve?")
+        return {"count": 1}
+
+    def _di04_up(state: dict[str, Any]) -> Any:
+        _up_interrupt("approve?")
+        return {"count": 1}
+
+    out.append(
+        Scenario(
+            name="DI-04 · 未挂 checkpointer 时恢复 ⇒ 失败（STRICTER）",
+            channels={"count": "last"},
+            initial={},
+            nodes={"ask": (("count",), _di04_fg)},
+            nodes_upstream={"ask": (("count",), _di04_up)},
+            edges={"__start__": ("ask",)},
+            resume_input="yes",
+            fg_no_checkpointer=True,
+            compare="interrupt-shape",
+            verdict="STRICTER",
+            note="**失败信号**更结构化：freegraph 抛 ``InterruptError``"
+            "（``.reason == 'checkpointer_required'`` · **L1** 的 ``FreegraphError``"
+            "**子类**）⇒ 上游抛内置 ``RuntimeError`` ⇒ ⇒ **类型**不同 · "
+            "**消息要点**逐字同款 ⇒ ⇒ 偏离登记 **X-2**（**STRICTER**）"
+            "⇒ ⇒ 差分探针**只比「成功 / 失败」**（比对器既有纪律）",
+        )
+    )
+
+    # ── DI-05 · 中断前的写入不丢失 ──
+    def _di05_pre(state: dict[str, Any]) -> Any:
+        return {"count": 1}
+
+    def _di05_fg(state: dict[str, Any]) -> Any:
+        _fg_interrupt("approve?")
+        return {"count": 2}
+
+    def _di05_up(state: dict[str, Any]) -> Any:
+        _up_interrupt("approve?")
+        return {"count": 2}
+
+    out.append(
+        Scenario(
+            name="DI-05 · 中断前的写入不丢失（挂起不是回滚）",
+            channels={"count": "last"},
+            initial={},
+            nodes={
+                "ask": (("count",), _di05_fg),
+                "pre": (("count",), _di05_pre),
+            },
+            nodes_upstream={
+                "ask": (("count",), _di05_up),
+                "pre": (("count",), _di05_pre),
+            },
+            edges={"__start__": ("pre",), "pre": ("ask",)},
+            fg_suspends=True,
+            upstream_checkpointer=True,
+            compare="interrupt-shape",
+            verdict="SAME",
+            note="中断**前**已产生的写入**保留**（**上游同款** · 实测 **E-16**）"
+            "⇒ ⇒ 两侧的**最终状态**逐 key 相等",
+        )
+    )
+
+    # ── DI-06 · 同一节点内两个 interrupt() ⇒ 恢复值按顺序匹配 ──
+    def _di06_fg(state: dict[str, Any]) -> Any:
+        first = _fg_interrupt("first?")
+        second = _fg_interrupt("second?")
+        return {"count": f"{first}/{second}"}
+
+    def _di06_up(state: dict[str, Any]) -> Any:
+        first = _up_interrupt("first?")
+        second = _up_interrupt("second?")
+        return {"count": f"{first}/{second}"}
+
+    out.append(
+        Scenario(
+            name="DI-06 · 同一节点内两个 interrupt() ⇒ 恢复值按顺序匹配",
+            channels={"count": "last"},
+            initial={},
+            nodes={"ask": (("count",), _di06_fg)},
+            nodes_upstream={"ask": (("count",), _di06_up)},
+            edges={"__start__": ("ask",)},
+            resume_input="X",
+            fg_suspends=True,
+            upstream_checkpointer=True,
+            compare="interrupt-shape",
+            verdict="SAME",
+            note="**按节点内顺序**匹配（**上游同款** · 实测 **E-17**）⇒ ⇒ 恢复值"
+            "**不足** ⇒ **再次挂起**（载荷变成 ``second?``）⇒ ⇒ 两侧的**载荷**与"
+            "**最终状态**逐项相等",
+        )
+    )
+
+    # ── DI-07 · 跨节点两个挂起中断 ⇒ __interrupt__ 两个元素 ──
+    def _di07_fg_a(state: dict[str, Any]) -> Any:
+        _fg_interrupt("approve-A")
+        return {"count": 1}
+
+    def _di07_fg_b(state: dict[str, Any]) -> Any:
+        _fg_interrupt("approve-B")
+        return {"count": 1}
+
+    def _di07_up_a(state: dict[str, Any]) -> Any:
+        _up_interrupt("approve-A")
+        return {"count": 1}
+
+    def _di07_up_b(state: dict[str, Any]) -> Any:
+        _up_interrupt("approve-B")
+        return {"count": 1}
+
+    out.append(
+        Scenario(
+            name="DI-07 · 跨节点两个挂起中断 ⇒ __interrupt__ 两个元素",
+            channels={"count": "last"},
+            initial={},
+            nodes={"a": (("count",), _di07_fg_a), "b": (("count",), _di07_fg_b)},
+            nodes_upstream={
+                "a": (("count",), _di07_up_a),
+                "b": (("count",), _di07_up_b),
+            },
+            edges={"__start__": ("a", "b")},
+            fg_suspends=True,
+            upstream_checkpointer=True,
+            compare="interrupt-shape",
+            verdict="SAME",
+            note="**集合比较**（元素 ``.value`` 逐个相等）⇒ ⇒ **不**比顺序"
+            "（上游的合并顺序**是竞态** · ``pregel/_runner.py:672``）",
+        )
+    )
+
+    # ── DI-08 · 跨节点多挂起中断 + 单值恢复 ⇒ 失败（STRICTER）──
+    def _di08_fg_a(state: dict[str, Any]) -> Any:
+        _fg_interrupt("approve-A")
+        return {"count": 1}
+
+    def _di08_fg_b(state: dict[str, Any]) -> Any:
+        _fg_interrupt("approve-B")
+        return {"count": 1}
+
+    def _di08_up_a(state: dict[str, Any]) -> Any:
+        _up_interrupt("approve-A")
+        return {"count": 1}
+
+    def _di08_up_b(state: dict[str, Any]) -> Any:
+        _up_interrupt("approve-B")
+        return {"count": 1}
+
+    out.append(
+        Scenario(
+            name="DI-08 · 跨节点多挂起中断 + 单值恢复 ⇒ 失败（STRICTER）",
+            channels={"count": "last"},
+            initial={},
+            nodes={"a": (("count",), _di08_fg_a), "b": (("count",), _di08_fg_b)},
+            nodes_upstream={
+                "a": (("count",), _di08_up_a),
+                "b": (("count",), _di08_up_b),
+            },
+            edges={"__start__": ("a", "b")},
+            resume_input="A",
+            compare="interrupt-shape",
+            verdict="STRICTER",
+            note="**多个**挂起中断 + **单值**恢复 ⇒ ⇒ 两侧**都失败** ⇒ ⇒ "
+            "freegraph 抛 ``InterruptError``（``.reason == 'ambiguous_resume'``）"
+            "⇒ 上游抛内置 ``RuntimeError`` ⇒ ⇒ **类型**不同 · **消息要点**同款 ⇒ ⇒ "
+            "偏离登记 **X-2**（**STRICTER**）",
+        )
+    )
+
     return out
 
 
@@ -1747,15 +2275,21 @@ def run_all(keyword: str = "") -> list[ProbeResult]:
         scenario.clear()
         up_kind, up_state, up_detail, up_extra = run_upstream(scenario)
 
-        if scenario.expect_interrupt:
+        if scenario.expect_interrupt or scenario.fg_suspends:
             # ② 中断载荷对跑 ⇒ ⚠️ 两侧的「失败与否」**本就不同**
             # （freegraph **抛** · 上游**根图抑制** ⇒ 落进结果键）
+            # ⚠️ **B10F1**：``fg_suspends`` ⇒ freegraph 侧**返回**
+            # ``InterruptResult``（**不**抛）⇒ ⇒ 中断载荷从**结果**取 ⇒ ⇒
+            # 两侧**都**是「成功 + 带中断载荷」。
             payload_ok = _compare_interrupts(
                 fg_extra["interrupt"], up_extra["interrupt"], scenario.compare
             )
             # ⚠️ **状态**也要比（上游结果里去掉 ``__interrupt__`` 键）
             state_ok = fg_extra["state"] == up_extra["state"]
-            ok = payload_ok and state_ok and fg_kind == "ERROR" and up_kind == "OK"
+            if scenario.fg_suspends:
+                ok = payload_ok and state_ok and fg_kind == "OK" and up_kind == "OK"
+            else:
+                ok = payload_ok and state_ok and fg_kind == "ERROR" and up_kind == "OK"
             detail = (
                 f"freegraph={fg_kind} {fg_detail} | upstream={up_kind} {up_detail} "
                 f"| fg_interrupt={_interrupt_keys(fg_extra['interrupt'])} "
@@ -1787,6 +2321,11 @@ def run_all(keyword: str = "") -> list[ProbeResult]:
             # ⚠️ 端到端的取消语义 ⇒ 比「**实际被启动了哪些节点**」的**集合**
             started_ok = set(fg_extra["calls"]) == set(up_extra["calls"])
             ok = ok and started_ok
+        if scenario.compare_call_counts:
+            # ⚠️ **B10F1**：「**从节点起点重跑**」⇒ 两侧的**执行次数**必须
+            # **相等**（**上游同款** · 实测 **E-8** ⇒ 两侧都 == 2）
+            count_ok = len(fg_extra["calls"]) == len(up_extra["calls"])
+            ok = ok and count_ok
         if scenario.expect_exception_identity:
             # ⚠️ 对象 identity ⇒ 两侧捕获到的 MUST 是节点内抛出的**同一个对象**
             identity_ok = (

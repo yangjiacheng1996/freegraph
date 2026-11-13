@@ -10,7 +10,7 @@
 > | 架构层 | L2 执行内核层 |
 > | 里程碑 | M1 运行时内核（第 11 个） |
 > | 前置依赖 | **B9F1** |
-> | 规模 | 1,160 行（实现 520 / 测试 640）· 3 人日 |
+> | 规模 | **2,945 行**（实现 1,091 / 测试 1,854 · **PR-10** 的实施期实测口径 · 发起者 2026-11-14 已追认）· 3 人日（⚠️ **2026-11-13 分析轮范围变更**：PR-6 的 **+40** 行 + PR-7 的 **+60** 行 ⇒ ⇒ **立项书 §5.2 的 B10F1 行已同步** · 发起者已确认）|
 > | 建议 short-name | `b10f1-interrupt-resume` |
 > | MVP 必需（★） | 否（**HITL 是 freechain 的强依赖能力**） |
 
@@ -66,7 +66,10 @@
   `GraphInterrupt`」的**运行期语义**，并**冻结**了跨 feature 的接口口径 ⇒ 本 feature MUST 照它写：
   - **载荷形态**：抛出物的**载荷 = 元组**（`tuple[Interrupt, ...]` · **上游同款** ·
     `langgraph/pregel/_runner.py:689-690`）⇒ ⇒ 本 feature 的 `__interrupt__` 键的
-    **元素类型 = 该元组**（**不是**「一组载荷对象」）⇒ MUST NOT 另写一条收集路径；
+    **值 = 该元组**（**不是**「一组载荷对象」）⇒ MUST NOT 另写一条收集路径；
+    （⚠️ **2026-11-13 分析轮回修 · 消歧**：原写「**元素类型** = 该元组」被 B10F1 的 `spec.md`
+    **裁定 1** 消解 ⇒ ⇒ **键的值 = 元组**（`tuple[Interrupt, ...]`）· **元组的元素 = `Interrupt`**
+    ⇒ ⇒ 硬断言依据 = `harness/demo/graph_core.py` 的 `hasattr(first, "value")` / `hasattr(first, "id")`）；
   - **落点（关键）**：⚠️ B12F1 **中断轮 MUST NOT 产出 `SuperStepResult`**
     （四字段一个都不给）⇒ ⇒ **本 feature MUST 负责把接住的这个异常转成结果键**
     （接住 → 读 `exc.args[0]`（那个元组）→ 放进 `__interrupt__`）⇒
@@ -134,7 +137,8 @@
 - **FR-007**：多个节点同时中断时，MUST 全部返回（与 B12F1 的收集语义一致）。
   ⚠️ **2026-11-12 修订（承 B12F1 · D-1）**：具体口径 MUST 照 B12F1 写 ——
   ① B12F1 **合并抛出**一个 `GraphInterrupt`，其**载荷 = 元组** ⇒ 本 feature 的 `__interrupt__`
-  键的**元素类型 = 该元组**；② B12F1 **中断轮不产出结果对象** ⇒ **本 feature MUST 负责**
+  键的**值 = 该元组**（⚠️ **2026-11-13 分析轮回修 · 消歧**：**键的值** = 元组 · **元组的元素** =
+  `Interrupt` —— 见 `specs/b10f1-interrupt-resume/spec.md` **裁定 1**）；② B12F1 **中断轮不产出结果对象** ⇒ **本 feature MUST 负责**
   把接住的异常**转成**结果键（读 `exc.args[0]`）；③ 挂起时的 `steps` MUST **如实计**
   「实际跑过的轮数」（不补那个空轮）。
 - **FR-008**：系统 MUST NOT import `langchain` / `langchain-core`；MUST NOT 读环境变量。
