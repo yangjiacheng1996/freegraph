@@ -160,7 +160,7 @@ class GraphSpec:
         GraphSpec(
             channels: dict[str, Channel],
             nodes: dict[str, NodeSpec],
-            edges: dict[str, tuple[str, ...]],
+            edges: dict[str | tuple[str, ...], tuple[str, ...]],
             *,
             conditional_edges: dict[str, Any] = <空映射>,
         )
@@ -173,6 +173,9 @@ class GraphSpec:
       FR-013）· MUST **非空**；
     * ``edges`` —— 边表（源节点名 → 目标节点名序列）· 源 / 目标 MUST **都在**
       ``nodes`` 里；
+    * ⚠️ **边表的键类型**（**B7F4** · 兼容扩展 · 契约 §2.1）⇒ ``str``
+      （**单源边** · 写法**逐字不变**）**或** ``tuple[str, ...]``
+      （**多源边** · AND / 屏障）⇒ ⇒ **单源边的既有调用方零改动**；
     * ``conditional_edges`` —— **预留**的「条件边」字段（裁定 25）·
       本轮**恒为空**；**非空 ⇒ 显式失败**（FR-033）· 缺省值 MUST 用
       **工厂语义**实现（``default_factory``）⇒ MUST NOT 用字面可变默认值。
@@ -185,7 +188,7 @@ class GraphSpec:
 
     channels: dict[str, Channel]
     nodes: dict[str, NodeSpec]
-    edges: dict[str, tuple[str, ...]]
+    edges: dict[str | tuple[str, ...], tuple[str, ...]]
     conditional_edges: dict[str, Any] = field(default_factory=dict, kw_only=True)
 
     def __post_init__(self) -> None:
@@ -304,20 +307,83 @@ def _validate_graph_spec(spec: GraphSpec) -> None:
                     f"Node {name!r} subscribes to unknown channel {key!r} (V-1)"
                 )
     for source, targets in spec.edges.items():
-        # ⚠️ **入口哨兵豁免**（2026-11-12 · 上游对齐 P1-0-1）：`__start__` 是**图的入口**
-        # （上游 `START` 伪节点 · `langgraph/constants.py:30`；入口边写法
-        # `add_edge(START, "a")` · `langgraph/graph/state.py:321`）⇒ 它**不必**是节点表里的
-        # 一个节点 ⇒ 但**必须**是**合法的边源**（否则图无法起跑）。
-        if source not in spec.nodes and source != _START_MARKER:
-            raise ValueError(f"Edge source {source!r} is not in the node table (V-2)")
-        for target in targets:
-            if target not in spec.nodes:
-                raise ValueError(
-                    f"Edge target {target!r} is not in the node table (V-2)"
-                )
+        # ⚠️ **边键分流**（**B7F4** · 契约 §2.2）：``str`` ⇒ 单源边（既有语义
+        # **逐字不变**）· ``tuple`` ⇒ **多源边**（AND / 屏障）· 其它类型 ⇒
+        # 内置 ``TypeError``（**FR-021** · 上游同族 · 实测 **E-10**）。
+        if isinstance(source, str):
+            # ⚠️ **入口哨兵豁免**（2026-11-12 · 上游对齐 P1-0-1）：`__start__` 是**图的入口**
+            # （上游 `START` 伪节点 · `langgraph/constants.py:30`；入口边写法
+            # `add_edge(START, "a")` · `langgraph/graph/state.py:321`）⇒ 它**不必**是节点表里的
+            # 一个节点 ⇒ 但**必须**是**合法的边源**（否则图无法起跑）。
+            if source not in spec.nodes and source != _START_MARKER:
+                raise ValueError(f"Edge source {source!r} is not in the node table (V-2)")
+            for target in targets:
+                if target not in spec.nodes:
+                    raise ValueError(
+                        f"Edge target {target!r} is not in the node table (V-2)"
+                    )
+            continue
+        if isinstance(source, tuple):
+            _validate_multisource_edge(source, targets, spec)
+            continue
+        raise TypeError(
+            f"GraphSpec edge key must be a str or a tuple of str, "
+            f"got {type(source).__name__}"
+        )
     if spec.conditional_edges:
         raise ValueError(
             "GraphSpec.conditional_edges must stay empty in this feature (V-8)"
+        )
+
+
+def _validate_multisource_edge(
+    source: tuple[str, ...],
+    targets: tuple[str, ...],
+    spec: GraphSpec,
+) -> None:
+    """**多源边**的校验（契约 §2.2 · **V-16** 形态 + **V-2** 语义）。
+
+    ⚠️ **校验的优先级**（澄清轮 **C-Q15**）：**形态校验（`V-16`）MUST 先于缺源 /
+    缺目标校验（`V-2`）** ⇒ ⇒ 元组同时命中两者时（典型 = 元组含 `__start__`）
+    ⇒ **归 `V-16`** ⇒ ⇒ 失败信号仍是内置 `ValueError`（**零新增错误类型**）
+    ⇒ ⇒ 差异**只在错误消息**。
+
+    * **V-16**（形态）：元组**非空** · **不含** `__start__` · 目标**恰为一个** ·
+      目标 **MUST NOT** 为 `__end__`（**X-04** · 上游静默 no-op · 比上游**更严**）；
+    * **V-2**（语义）：**每个**源 MUST 在节点表里（**点名全部**缺失者）·
+      **目标** MUST 在节点表里（**点名该目标**）。
+    """
+    # ── V-16（形态校验 · MUST 先于 V-2）──
+    if not source:
+        raise ValueError(
+            f"Multi-source edge {source!r} must have at least one source (V-16)"
+        )
+    if _START_MARKER in source:
+        raise ValueError(
+            f"Multi-source edge {source!r} must not contain the entry marker "
+            f"{_START_MARKER!r} (V-16)"
+        )
+    if len(targets) != 1:
+        raise ValueError(
+            f"Multi-source edge {source!r} must have exactly one target, "
+            f"got {len(targets)} (V-16)"
+        )
+    target = targets[0]
+    if target == _TERMINAL_MARKER:
+        raise ValueError(
+            f"Multi-source edge {source!r} must not target the terminal marker "
+            f"{_TERMINAL_MARKER!r} (V-16)"
+        )
+    # ── V-2（语义校验族 · 缺源 / 缺目标）──
+    missing = [name for name in source if name not in spec.nodes]
+    if missing:
+        raise ValueError(
+            f"Multi-source edge {source!r} has sources not in the node table: "
+            f"{missing!r} (V-2)"
+        )
+    if target not in spec.nodes:
+        raise ValueError(
+            f"Multi-source edge target {target!r} is not in the node table (V-2)"
         )
 
 
@@ -353,44 +419,91 @@ def _run_channels(spec: GraphSpec, state: SchedulerState) -> dict[str, Channel]:
     return instances
 
 
-def _trigger_sources(
+def _edge_sources(source: str | tuple[str, ...]) -> tuple[str, ...]:
+    """一条边的**源节点名序列**（契约 §2.3 · research **DR-4**）。
+
+    * ``str`` ⇒ ``(source,)``（**单源**）；
+    * ``tuple`` ⇒ **去重保序**（``("a", "a")`` ⇒ ``("a",)`` ⇒ 等价**单源口径**）⇒
+      **不报错**（**上游同款** · 上游 ``NamedBarrierValue(str, set(starts))`` 天然去重）。
+
+    ⚠️ **规范化发生在「触发源枚举」期** ⇒ **不改写**用户的 ``edges``
+    ⇒ ``GraphSpec`` 的**字段不可改写**口径（data-model §1）**零破**。
+    """
+    if isinstance(source, str):
+        return (source,)
+    sources: list[str] = []
+    for item in source:
+        if item not in sources:
+            sources.append(item)
+    return tuple(sources)
+
+
+def _trigger_groups(
     spec: GraphSpec,
     state: SchedulerState,
     node_name: str,
     node: NodeSpec,
-) -> list[tuple[str, str]]:
-    """枚举一个节点的**全部**触发源（契约 §3.1 · FR-002）。
+) -> list[tuple[tuple[str, str], ...]]:
+    """枚举一个节点的**全部触发源组**（契约 §3.1 · research **DR-3**）。
 
-    * **通道触发源** —— ``("c", 通道 key)``：节点订阅的每个通道；
-    * **边触发源** —— ``("e", 源节点名)``：每条指向该节点的边的**源**节点。
+    * **组** = ``tuple[边触发源, ...]``（成员的元组）⇒ **零新增类型**；
+    * **每条入边一个组**（**不是**「每个源一个组」）；
+    * **静态边与动态边同处「边」空间**（裁定 1 · FR-002）⇒ 两者**叠加**（FR-008）；
+    * **去重**：按**成员集合**（``frozenset``）去重（**保序** ⇒ 先出现者胜出）⇒
+      同成员的两条边合成**一组**（research **DR-3**）⇒ ⇒ 与上游「按**节点**去重」
+      **同款**（实测 **E-11** · ``_algo.py:476-482``）。
 
-    ⚠️ **两个标识空间 MUST 分离** ⇒ 避免「通道 key 与节点名同名」时互相覆盖
-    （裁定 3）。
-
-    ⚠️ **静态边与动态边同处「边」空间**（裁定 1 · FR-002）⇒ 两者**叠加**
-    （FR-008）⇒ 同一对 (源, 目标) 只枚举**一次**（SC-007：「一轮内至多触发
-    一次」）⇒ 本函数对触发源**去重**（**保序**）。
-
-    ⚠️ **动态边的存在性**由**动态边表**决定（源节点 → 其**最近一次执行**给出
-    的跳转目标）⇒ 源节点再次执行且**不**给 ``goto`` ⇒ 旧目标**从本枚举中
-    消失** ⇒ 该目标**不再**被触发（FR-009 · 裁定 2）。
-
-    ⚠️ **版本口径**：边触发源的版本 = **源节点的执行版本**（每执行成功一次
-    +1）⇒ 静态边与动态边**同款**（契约 §5）⇒ 配合 ``seen`` 记录 ⇒
-    「动态边**只影响下一轮**」（FR-002）。
+    ⚠️ **动态边的存在性**由**动态边表**决定（源节点 → 其**最近一次执行**给出的
+    跳转目标）⇒ 源节点再次执行且**不**给 ``goto`` ⇒ 旧目标**从本枚举中消失**
+    ⇒ 该目标**不再**被触发（FR-009 · 裁定 2）⇒ ⇒ **动态边恒为单元素组**
+    （**H-3** · B9F1 → B7F4）。
     """
-    sources: list[tuple[str, str]] = []
+    groups: list[tuple[tuple[str, str], ...]] = []
     for source, targets in spec.edges.items():
         if node_name in targets:
-            sources.append((_EDGE_SOURCE, source))
+            groups.append(tuple((_EDGE_SOURCE, name) for name in _edge_sources(source)))
     for source, targets in state.dynamic_edges.items():
         if node_name in targets:
-            sources.append((_EDGE_SOURCE, source))
-    deduplicated: list[tuple[str, str]] = []
-    for source in sources:
-        if source not in deduplicated:
-            deduplicated.append(source)
+            groups.append(((_EDGE_SOURCE, source),))
+    deduplicated: list[tuple[tuple[str, str], ...]] = []
+    seen_members: set[frozenset[tuple[str, str]]] = set()
+    for group in groups:
+        members = frozenset(group)
+        if members in seen_members:
+            continue
+        seen_members.add(members)
+        deduplicated.append(group)
     return deduplicated
+
+
+def _satisfied_groups(
+    state: SchedulerState,
+    node_name: str,
+    groups: list[tuple[tuple[str, str], ...]],
+) -> list[tuple[tuple[str, str], ...]]:
+    """**已满足的组**（契约 §3.2 · research **DR-2**）。
+
+    判定式（**逐字**）::
+
+        ∃ 组 g ∈ groups(N) : ∀ s ∈ g : version(s) > seen(N)[s]
+
+    * **组内全**（AND / 屏障）· **组间任一**（**上游同款** · 实测 **E-3 / E-4**）；
+    * **单源口径的退化**：单源边的组是**单元素** ⇒ 上式**逐字退化**为 B7F1 的旧判定式
+      「∃ 触发源 s ∈ sources(N) : version(s) > seen(N)[s]」⇒ **既有行为零变化**；
+    * **判定与记账共用同一判据**（research **DR-2**）⇒ **不可能漂移**。
+
+    ⚠️ **「无「有值」合取项」**：边触发源**没有**「值」概念（沿用 B7F1 契约 §3.2）⇒
+    判定式**只有**版本比较。
+    """
+    seen = state.versions_seen.get(node_name, {})
+    satisfied: list[tuple[tuple[str, str], ...]] = []
+    for group in groups:
+        if all(
+            _source_version(state, ident) > seen.get((kind, ident), 0)
+            for kind, ident in group
+        ):
+            satisfied.append(group)
+    return satisfied
 
 
 
@@ -399,13 +512,13 @@ def _is_triggered(
     state: SchedulerState,
     node_name: str,
     node: NodeSpec,
-    sources: list[tuple[str, str]],
+    groups: list[tuple[tuple[str, str], ...]],
 ) -> bool:
     """判定一个节点本轮**是否被触发**（契约 §3.2 · 裁定 28）。
 
     判定式（**逐字**）::
 
-        ∃ 触发源 s ∈ sources(N) : has_value(s) ∧ version(s) > seen(N)[s]
+        ∃ 组 g ∈ groups(N) : ∀ s ∈ g : version(s) > seen(N)[s]
 
     * **触发源恒为边**（**上游对齐 P1-0-2 · 2026-11-12**）：判定式 = ``version > seen``
       ⇒ 边触发源**无「值」概念**（源节点的执行版本本身即「发生过执行」的信号）。
@@ -413,12 +526,7 @@ def _is_triggered(
       `langgraph/graph/state.py:1531-1532`）⇒ 节点**订阅**的通道**不再**是触发源
       ⇒ 「节点写自己订阅的通道」**不再**自触发。
     """
-    seen = state.versions_seen.get(node_name, {})
-    for kind, ident in sources:
-        version = _source_version(state, ident)
-        if version > seen.get((kind, ident), 0):
-            return True
-    return False
+    return bool(_satisfied_groups(state, node_name, groups))
 
 
 def _determine_triggers(spec: GraphSpec, state: SchedulerState) -> list[str]:
@@ -429,8 +537,8 @@ def _determine_triggers(spec: GraphSpec, state: SchedulerState) -> list[str]:
     """
     triggered: list[str] = []
     for node_name, node in spec.nodes.items():
-        sources = _trigger_sources(spec, state, node_name, node)
-        if _is_triggered(spec, state, node_name, node, sources):
+        groups = _trigger_groups(spec, state, node_name, node)
+        if _is_triggered(spec, state, node_name, node, groups):
             triggered.append(node_name)
     # ⚠️ **上游同款**（2026-11-12 · P2-c）：上游把候选节点**按名字排序**
     # （``langgraph/pregel/_algo.py:482`` 的 ``sorted(triggered_nodes)``）⇒
@@ -445,20 +553,29 @@ def _determine_triggers(spec: GraphSpec, state: SchedulerState) -> list[str]:
 def _consume_versions(
     state: SchedulerState,
     node_name: str,
-    sources: list[tuple[str, str]],
+    groups: list[tuple[tuple[str, str], ...]],
 ) -> None:
-    """**消费**一个节点的**全部**触发源的当前版本（阶段 ② · 裁定 16 · T056）。
+    """**消费**一个节点的**已满足的组**的当前版本（阶段 ② · 裁定 16 · T056）。
 
-    * 节点被**准备执行**时 ⇒ ``seen(N)[s] = version(s)``（对**全部**触发源）；
+    * 节点被**准备执行**时 ⇒ ``seen(N)[s] = version(s)``（**对已满足的组的
+      全部成员** · **逐源各一条**）；
     * ⇒ **同一版本的同一触发源 MUST NOT 重复触发同一节点**（FR-004）；
     * ⇒ 一个触发源的推进 MUST **不**掩盖另一个触发源的推进（FR-003 · SC-003）。
+
+    ⚠️ **范围 = 只消费「已满足的组」**（契约 §3.3 · research **DR-2 / DR-11**）⇒
+    **未满足的组不记账** ⇒ 屏障**后来齐了仍能再次触发**（**上游同款** · 实测 **E-5**）
+    ⇒ ⇒ **单源口径的等价性**：单源组的「已满足」⟺ ``version > seen`` ⇒ 记账后
+    ``seen = version``；**未满足** ⇒ ``version ≤ seen`` ⇒ 版本**只增不减** ⇒
+    ``version == seen`` ⇒ 旧口径的「记 ``seen = version``」是**同值记账**
+    ⇒ **可观察行为零变化** ⇒ **既有断言一条不删**。
 
     ⚠️ **消费时点 = plan（任务准备）阶段** —— 与上游的 apply 阶段**不同**
     ⇒ 登记为 **DR-1**（已知边界 · 只登记 · 不改判据）。
     """
     seen = state.versions_seen.setdefault(node_name, {})
-    for kind, ident in sources:
-        seen[(kind, ident)] = _source_version(state, ident)
+    for group in groups:
+        for kind, ident in group:
+            seen[(kind, ident)] = _source_version(state, ident)
 
 
 def _node_input(
@@ -943,9 +1060,10 @@ def _run_round(
     tasks: list[tuple[str, NodeSpec, dict[str, Any]]] = []
     for node_name in triggered:
         node = spec.nodes[node_name]
-        sources = _trigger_sources(spec, state, node_name, node)
+        groups = _trigger_groups(spec, state, node_name, node)
+        satisfied = _satisfied_groups(state, node_name, groups)
         node_input = _node_input(spec, state, node)
-        _consume_versions(state, node_name, sources)
+        _consume_versions(state, node_name, satisfied)
         tasks.append((node_name, node, node_input))
 
     # ── ③ 并发执行（线程池 · 每轮新建 + 关闭 ⇒ 零悬挂线程 · FR-018） ──

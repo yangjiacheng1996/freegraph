@@ -175,6 +175,18 @@
 
 ---
 
+## 下游承接（**B7F4** · 2026-11-13 · **只接线 · 逐条最小改动**）
+
+- **D-1 · 构建器侧的 `add_edge([a, b], c)` 接线**：B6F1 的 `StateGraph.add_edge`
+  **MUST** 接受**列表 / 元组**形态的源 ⇒ ⇒ **直接透传**为 `GraphSpec.edges` 的
+  **元组键** ⇒ ⇒ **MUST NOT** 另写一套屏障语义（屏障语义**完全**由 **L2 触发层**实现）
+  ⇒ ⇒ 权威出处 = 立项书 **§4.3 #4**（`add_edge` **同名同签名** · 签名
+  `(start_key: str | list[str], end_key: str) -> Self`）。
+  ⚠️ **已知不支持**：上游的 `defer=True` **节点专用屏障**
+  （`NamedBarrierValueAfterFinish`）**本 feature 不做** ⇒ ⇒ 偏离登记 **X-03** ⇒
+  ⇒ B6F1 若要支持 `defer`，**MUST** 另行立项（**MUST NOT** 塞进 B6F1）。
+  ⇒ 落点：`specs/b7f4-multisource-join/spec.md` 的**承接条款 D-1** · 登记项 **PR-4**。
+
 ## 依据
 
 - 立项书 §4.3（18 项 API 裁定 · 7 项同名同签名）、§5.1（分层拍板）、§5.2（B6F1 行）、

@@ -76,3 +76,40 @@ def test_the_verdict_vocabulary_is_closed(upstream_version: str) -> None:
             assert scenario.note, (
                 f"场景 {scenario.name!r} 的判词 {scenario.verdict!r} MUST 带理由（note）"
             )
+
+
+@pytest.mark.parametrize(
+    ("barrier_shape", "channel_kind", "reachability"),
+    parity_probe.d24_parameter_space(),
+    ids=lambda value: value,
+)
+def test_d24_parameterized_barrier_scenarios_match_the_upstream(
+    barrier_shape: str,
+    channel_kind: str,
+    reachability: str,
+    upstream_version: str,
+) -> None:
+    """**D-24**（判词 **SAME**）—— **参数化**（**屏障形态 × 通道类型 × 源可达性**）。
+
+    ⇒ 断言两侧的**节点序列 + 最终状态**逐字一致 ⇒ ⇒ 兑现**承接条款 H-6** /
+    立项书 §4.2 **S5 ③** 的「**B7F4 起逐个补**」的**最小增量**
+    ⇒ ⇒ **MUST NOT** 一次性铺开 **S5 ③** 的**全量**枚举（归后续 feature）。
+
+    ⚠️ 上游缺席即 **skip**（沿用 B5F2 的「缺席即 skip」纪律）⇒ ⇒ **不是失败**。
+    """
+    scenario = parity_probe.d24_scenario(barrier_shape, channel_kind, reachability)
+
+    fg_kind, fg_state, _, _ = parity_probe.run_freegraph(scenario)
+    scenario.clear()
+    up_kind, up_state, _, _ = parity_probe.run_upstream(scenario)
+
+    label = f"{barrier_shape} × {channel_kind} × {reachability}"
+    assert fg_kind == up_kind, (
+        f"D-24 参数化场景 {label} 的「成功 / 失败」不一致："
+        f"freegraph={fg_kind} · upstream={up_kind}"
+    )
+    if fg_kind == "OK":
+        assert fg_state == up_state, (
+            f"D-24 参数化场景 {label} 的最终状态不一致："
+            f"freegraph={fg_state} · upstream={up_state}"
+        )

@@ -356,3 +356,18 @@ data-model §4.2（**不**回滚）· plan 的 Complexity Tracking（**不**回�
 | 上游 `_triggers` / `prepare_next_tasks` / `apply_writes` 的**行号核实** | ✅ **已完成**（D-01…D-12 · `langgraph 1.2.11` · 2026-11-10） | contracts/upstream-parity.md |
 | 上游的**可观察差异**是否需在**差分夹具**中比对 | ⚠️ **归 B8F1**（差分夹具的扩展属 B8F1 · Out of Scope） | 下游承接 **D-1** 的姊妹项 · 登记于 parity P-05 |
 | `recursion_limit` 的**对外载体** | ⚠️ **归 B13F1**（FR-011 的 ⚠️ 段已声明） | 交接 |
+
+---
+
+> ⚠️ **2026-11-13 · B7F4 回溯修订**（**只加注记 · 不改历史**）：
+> **R-1…R-10** 已落（**拆分而不删**）⇒ 本 feature 的**既有决策**（**DR-1…DR-12** 与 §4 的取证表）
+> **原文逐字保留** ⇒ ⇒ 追加的落点：
+> ① **R-1…R-6** ⇒ `contracts/superstep-contract.md`（**§1** / **§2.1** / **§3.1** / **§3.2** / **§4** / **§5.1** / **§7 I-12**）⇒
+> ② **R-7** ⇒ `spec.md`（**FR-002** / **FR-013** / **Edge Cases**）⇒
+> ③ **R-8** ⇒ `data-model.md`（**§3.2** / **§4.2** / **§6**）⇒
+> ④ **R-9** ⇒ `tests/runtime/` 的 **10 个**冻结断言文件**逐字未变** ⇒
+> ⑤ **R-10** ⇒ 本注记 + `tasks.md` 的同款注记 ⇒
+> ⇒ ⇒ **多源口径**的**唯一权威** =
+> `specs/b7f4-multisource-join/contracts/superstep-multisource-contract.md` ⇒
+> ⇒ ⇒ **既有决策一条不改**（**只加注记**）⇒ ⇒ **发起者追认**（**PR-1…PR-8** · **一次**）落在
+> `harness/verification/B7F4/manual-verification.md`。

@@ -65,7 +65,11 @@ class Scenario:
     #: 节点：``name -> (订阅的通道, 函数)``
     nodes: dict[str, tuple[tuple[str, ...], Callable[[dict[str, Any]], Any]]]
     #: 静态边：``源 -> 目标们``（``__start__`` 是入口）
-    edges: dict[str, tuple[str, ...]]
+    #:
+    #: ⚠️ **2026-11-13 · B7F4**：键类型放宽为 ``str | tuple[str, ...]`` ——
+    #: ``str`` 键 = **单源边**（写法**逐字不变**）· ``tuple`` 键 = **多源边**
+    #: （AND / 屏障）⇒ ⇒ **既有 30 个场景逐字不变**（**FR-018** · 裁定 12）。
+    edges: dict[str | tuple[str, ...], tuple[str, ...]]
     #: 上游侧的**节点函数**（默认同 ``nodes``）—— 两边原语不同类时用
     nodes_upstream: dict[str, tuple[tuple[str, ...], Callable[[dict[str, Any]], Any]]] | None = None
     #: 节点执行顺序记录（两侧共用一个列表 ⇒ 跑完清空）
@@ -103,6 +107,17 @@ class Scenario:
     compare_started: bool = False
     #: 比对两侧捕获到的**异常对象 identity**（⇒ D-02）
     expect_exception_identity: bool = False
+
+    # ── B7F4 扩展（**全部可选** · 缺省 ⇒ 既有 30 个场景的行为与判词**逐字不变**）──
+
+    #: **期望 freegraph 侧在构造期失败**（⇒ **D-22 / D-25 / D-26 / D-28**）
+    fg_construct_error: bool = False
+    #: **期望上游侧在构造期失败**（⇒ **D-22 / D-28**）⇒ ⇒ 可表达「**两侧都失败**」
+    #: 与「**一侧失败一侧不失败**」两种形态（research **DR-7** · **FR-018**）。
+    up_construct_error: bool = False
+    #: **期望两侧抛出的异常类型名**（**两侧同名** · 如 ``"TypeError"``）⇒
+    #: 缺省 ⇒ **不比对**异常类型（既有口径：只比「成功 / 失败」）。
+    expect_exception_type: str = ""
 
     def clear(self) -> None:
         self.calls.clear()
@@ -237,11 +252,35 @@ def run_freegraph(
 
     # 自由图侧的 ``__end__`` 只作 **goto 目标**；边到 ``__end__`` 会被校验拒绝
     # ⇒ 「**无出边**」即「终止」，与上游「边到 END」**同义** ⇒ 对跑时归一
+    # ⚠️ **2026-11-13 · B7F4**：**只剥除「单源键」的** ``__end__`` 目标 ⇒ ⇒
+    # **多源键**的 ``__end__`` 目标**穿透**到 ``GraphSpec`` 构造期 ⇒ ⇒
+    # freegraph 的「多源边 → ``__end__`` ⇒ 构造期显式失败」（**V-16** · **X-04**）
+    # 在差分夹具里**可判定**（**否则该分支永远不可达** ⇒ **D-25 落空**）⇒ ⇒
+    # 「**边到 ``__end__`` 即终止**」的既有语义**逐字不变**。
     edges = {
-        src: tuple(target for target in targets if target != "__end__")
+        src: (
+            tuple(target for target in targets if target != "__end__")
+            if isinstance(src, str)
+            else tuple(targets)
+        )
         for src, targets in scenario.edges.items()
     }
-    spec = GraphSpec(channels=channels, nodes=nodes, edges=edges)
+    try:
+        spec = GraphSpec(channels=channels, nodes=nodes, edges=edges)
+    except Exception as exc:  # noqa: BLE001
+        # ⚠️ **构造期失败**（**B7F4**）⇒ 与「运行期失败」**区分**记录
+        return (
+            "ERROR",
+            f"{type(exc).__name__}",
+            _exc_detail(exc),
+            {
+                "exception": exc,
+                "interrupt": (),
+                "calls": list(scenario.calls),
+                "state": {},
+                "stage": "construct",
+            },
+        )
     scheduler_state = SchedulerState()
     try:
         result = run_super_steps(spec, scheduler_state, max_concurrency=cap)
@@ -255,6 +294,7 @@ def run_freegraph(
                 "interrupt": _interrupt_payload(exc),
                 "calls": list(scenario.calls),
                 "state": _sparse(scheduler_state),
+                "stage": "run",
             },
         )
     return (
@@ -266,6 +306,7 @@ def run_freegraph(
             "interrupt": (),
             "calls": list(scenario.calls),
             "state": dict(result.state),
+            "stage": "ok",
         },
     )
 
@@ -297,6 +338,7 @@ def run_upstream(scenario: Scenario) -> tuple[str, Any, str, dict[str, Any]]:
 
     from typing_extensions import TypedDict
 
+    from langgraph.channels.ephemeral_value import EphemeralValue
     from langgraph.graph import END, START, StateGraph
 
     gate = threading.Barrier(scenario.barrier) if scenario.barrier else None
@@ -308,25 +350,55 @@ def run_upstream(scenario: Scenario) -> tuple[str, Any, str, dict[str, Any]]:
             # ⚠️ 上游的**归约通道** MUST 用 ``Annotated[..., operator.add]``
             # （否则上游建的是 LastValue ⇒ 同轮多写会报错 ⇒ 比的是另一套语义）
             annotations[name] = Annotated[list, operator.add]
+        elif kind == "ephemeral":
+            # ⚠️ **2026-11-13 · B7F4**：上游的**路由型通道** MUST 显式声明
+            # ``Annotated[Any, EphemeralValue]``（上游 ``graph/state.py:1892-1900``
+            # 的 ``_is_field_channel``）⇒ ⇒ 裸 ``Any`` 建的是 **LastValue**
+            # ⇒ ⇒ 「ephemeral」这一维**只在两侧都真的是路由型**时才有意义。
+            annotations[name] = Annotated[Any, EphemeralValue]
         else:
             annotations[name] = Any
     schema = TypedDict("S", annotations)  # type: ignore[valid-type]
 
     graph = StateGraph(schema)
     upstream_nodes = scenario.nodes_upstream or scenario.nodes
-    for name, (_subscribes, fn) in upstream_nodes.items():
-        graph.add_node(name, _instrument(scenario, fn, name, gate))
-    for src, targets in scenario.edges.items():
-        if src == "__start__":
-            graph.add_edge(START, targets[0])
-            for extra in targets[1:]:
-                graph.add_edge(START, extra)
-        else:
-            for target in targets:
-                graph.add_edge(src, END if target == "__end__" else target)
-    if scenario.upstream_extra is not None:
-        scenario.upstream_extra(graph)
-    compiled = graph.compile()
+    try:
+        for name, (_subscribes, fn) in upstream_nodes.items():
+            graph.add_node(name, _instrument(scenario, fn, name, gate))
+        for src, targets in scenario.edges.items():
+            if isinstance(src, tuple):
+                # ⚠️ **上游的真实形态**（research **DR-7**）：多源边 ⇒
+                # ``add_edge(list(starts), target)``（上游 ``graph/state.py:928``
+                # 的 ``add_edge`` · ``:969`` 的 ``for start in start_key:``）⇒
+                # ⇒ 上游建的**正是**一条 join 屏障通道（``:1560-1575`）⇒
+                # ⇒ 比的**确实是**「上游同款」的屏障语义。
+                graph.add_edge(
+                    list(src), END if targets[0] == "__end__" else targets[0]
+                )
+            elif src == "__start__":
+                graph.add_edge(START, targets[0])
+                for extra in targets[1:]:
+                    graph.add_edge(START, extra)
+            else:
+                for target in targets:
+                    graph.add_edge(src, END if target == "__end__" else target)
+        if scenario.upstream_extra is not None:
+            scenario.upstream_extra(graph)
+        compiled = graph.compile()
+    except Exception as exc:  # noqa: BLE001
+        # ⚠️ **构造期失败**（**B7F4**）⇒ 与「运行期失败」**区分**记录
+        return (
+            "ERROR",
+            f"{type(exc).__name__}",
+            _exc_detail(exc),
+            {
+                "exception": exc,
+                "interrupt": (),
+                "calls": list(scenario.calls),
+                "state": {},
+                "stage": "construct",
+            },
+        )
     try:
         result = compiled.invoke(dict(scenario.initial))
     except Exception as exc:  # noqa: BLE001
@@ -339,6 +411,7 @@ def run_upstream(scenario: Scenario) -> tuple[str, Any, str, dict[str, Any]]:
                 "interrupt": (),
                 "calls": list(scenario.calls),
                 "state": {},
+                "stage": "run",
             },
         )
     interrupt = tuple(result.get("__interrupt__", ()) or ())
@@ -351,6 +424,7 @@ def run_upstream(scenario: Scenario) -> tuple[str, Any, str, dict[str, Any]]:
             "interrupt": interrupt,
             "calls": list(scenario.calls),
             "state": {k: v for k, v in dict(result).items() if k != "__interrupt__"},
+            "stage": "ok",
         },
     )
 
@@ -364,6 +438,91 @@ STRICTER_NOTES = {
     "空命令列表": "freegraph 失败（TypeError）；上游失败（InvalidUpdateError）—— 类型不同 · 语义等价",
     "覆盖型通道同轮重复写": "freegraph 失败（InvalidChannelUpdateError）；上游失败（InvalidUpdateError）—— 同族",
 }
+
+
+# ── B7F4 · D-24 的参数化空间（**H-6** · 立项书 §4.2 S5 ③ 的最小增量）─────────
+
+#: **屏障形态**（单源 / 多源）。
+D24_BARRIER_SHAPES: tuple[str, ...] = ("single", "multi")
+
+#: **通道类型**（``last`` / ``binop`` / ``ephemeral``）。
+D24_CHANNEL_KINDS: tuple[str, ...] = ("last", "binop", "ephemeral")
+
+#: **源可达性**（全可达 / 缺一源）。
+D24_REACHABILITIES: tuple[str, ...] = ("all-reachable", "one-unreachable")
+
+#: 各**通道类型**的**初始值**与**写入值**（⇒ 两侧的类型**逐字对齐**）。
+_D24_SEED_AND_WRITE: dict[str, tuple[Any, Any]] = {
+    "last": (0, 1),
+    "binop": ([], None),
+    "ephemeral": ("", None),
+}
+
+
+def d24_parameter_space() -> list[tuple[str, str, str]]:
+    """**D-24** 的参数化取值空间（**屏障形态 × 通道类型 × 源可达性**）。
+
+    ⚠️ **只铺「屏障维度」的最小增量**（research **DR-6** · 承接 **H-6**）⇒ ⇒
+    **MUST NOT** 一次性铺开立项书 §4.2 **S5 ③** 的**全量**枚举（reducer × 通道
+    的全组合）⇒ ⇒ 归后续 feature（**M-13**）。
+    """
+    return [
+        (shape, kind, reach)
+        for shape in D24_BARRIER_SHAPES
+        for kind in D24_CHANNEL_KINDS
+        for reach in D24_REACHABILITIES
+    ]
+
+
+def d24_scenario(shape: str, kind: str, reach: str) -> Scenario:
+    """构造**一个** **D-24** 的参数化场景（屏障形态 × 通道类型 × 源可达性）。
+
+    * **拓扑刻意「一轮一个节点」** ⇒ ⇒ **覆盖型**（``last``）通道**不会**遇到
+      「同轮多写」⇒ ⇒ 三种通道形态**可比**；
+    * **两个通道**：``value``（**形态随参数变**）+ ``trace``（**恒为归约型** ⇒
+      **节点序列**逐字可观测）；
+    * **源可达性**：``one-unreachable`` ⇒ 屏障的**某个源**不可达 ⇒ ⇒ 屏障
+      **不齐** ⇒ ⇒ 目标**不执行**（**上游同款** · 实测 **E-2**）。
+    """
+    seed, write = _D24_SEED_AND_WRITE[kind]
+    calls: list[str] = []
+
+    def _make(name: str) -> Any:
+        def _run(state: dict[str, Any]) -> dict[str, Any]:
+            calls.append(name)
+            payload = [name] if kind == "binop" else write
+            return {"value": payload, "trace": [name]}
+
+        return _run
+
+    if shape == "single":
+        node_names = ("a", "b", "c")
+        edges: dict[Any, tuple[str, ...]] = {
+            "__start__": ("a",),
+            "a": ("b",),
+            "b": ("c",),
+        }
+    else:
+        node_names = ("a", "b", "d", "c")
+        edges = {
+            "__start__": ("a",),
+            "a": ("b",),
+            "b": ("d",),
+            ("b", "d"): ("c",),
+        }
+    if reach == "one-unreachable":
+        # ⚠️ 让屏障的**某个源**不可达 ⇒ ⇒ 屏障**不齐** ⇒ ⇒ 目标**不执行**。
+        edges = {k: v for k, v in edges.items() if k != "b"}
+
+    return Scenario(
+        name=f"D-24 · 参数化 · {shape} × {kind} × {reach}",
+        channels={"value": kind, "trace": "binop"},
+        initial={"value": seed, "trace": []},
+        nodes={name: ((), _make(name)) for name in node_names},
+        edges=edges,
+        calls=calls,
+        verdict="SAME",
+    )
 
 
 def _scenarios() -> list[Scenario]:
@@ -1284,6 +1443,257 @@ def _scenarios() -> list[Scenario]:
         )
     )
 
+    # ── B7F4 · 多源汇合边（AND / 屏障）的差分场景组（D-16…D-28）────────────
+    def _msgs_node(name: str) -> Any:
+        def _run(state: dict[str, Any]) -> dict[str, Any]:
+            return {"msgs": [name]}
+
+        return _run
+
+    def _msgs_nodes(*names: str) -> dict[str, tuple[tuple[str, ...], Any]]:
+        return {name: (("msgs",), _msgs_node(name)) for name in names}
+
+    # ── D-16 · 标准屏障（上游 E-1 · **SAME**）───────────────────────────────
+    out.append(
+        Scenario(
+            name="D-16 · 标准屏障（两源皆可达）",
+            channels={"msgs": "binop"},
+            initial={"msgs": []},
+            nodes=_msgs_nodes("a", "b", "c"),
+            edges={"__start__": ("a", "b"), ("a", "b"): ("c",)},
+            verdict="SAME",
+            note="上游 E-1 基线 ``{'msgs': ['a','b','c']}`` ⇒ 屏障目标**严格晚于**所有源",
+        )
+    )
+
+    # ── D-17 · 屏障不齐（上游 E-2 · **SAME**）───────────────────────────────
+    out.append(
+        Scenario(
+            name="D-17 · 屏障不齐（一个源永不可达）",
+            channels={"msgs": "binop"},
+            initial={"msgs": []},
+            nodes=_msgs_nodes("a", "b", "c", "d"),
+            edges={"__start__": ("a", "b"), ("b", "d"): ("c",)},
+            verdict="SAME",
+            note="上游 E-2 基线 ``{'msgs': ['a','b']}`` ⇒ 屏障**不齐** ⇒ 目标**从不执行**且**不报错**",
+        )
+    )
+
+    # ── D-18 · 单源边 + 不齐的屏障边并存（上游 E-3 · **SAME**）───────────────
+    out.append(
+        Scenario(
+            name="D-18 · 单源边 + 不齐的屏障边并存（组间任一）",
+            channels={"msgs": "binop"},
+            initial={"msgs": []},
+            nodes=_msgs_nodes("a", "b", "c", "d"),
+            edges={"__start__": ("a", "b"), "a": ("c",), ("b", "d"): ("c",)},
+            verdict="SAME",
+            note="上游 E-3 基线 ``{'msgs': ['a','b','c']}`` ⇒ **组间任一** ⇒ 单源边满足即触发",
+        )
+    )
+
+    # ── D-19 · 屏障后齐（上游 E-5 · **SAME**）───────────────────────────────
+    out.append(
+        Scenario(
+            name="D-19 · 屏障后齐（目标再执行一次）",
+            channels={"msgs": "binop"},
+            initial={"msgs": []},
+            nodes=_msgs_nodes("a", "b", "c", "d"),
+            edges={
+                "__start__": ("a", "b"),
+                "a": ("c",),
+                "b": ("d",),
+                ("b", "d"): ("c",),
+            },
+            verdict="SAME",
+            note="上游 E-5 基线 ``{'msgs': ['a','b','c','d','c']}`` ⇒ 未满足的组**不被记账** ⇒ 目标**再执行一次**",
+        )
+    )
+
+    # ── D-20 · 屏障的并发无关性（**SAME** · freegraph 内部对照）──────────────
+    def _d20_judge(scenario: Scenario) -> tuple[bool, str]:
+        concurrent = run_freegraph(scenario)
+        serial = run_freegraph(scenario, max_concurrency=1)
+        if concurrent[0] != "OK" or serial[0] != "OK":
+            return False, f"并发侧={concurrent[0]} · 串行侧={serial[0]}"
+        same_state = concurrent[1] == serial[1]
+        same_writes = concurrent[3]["state"] == serial[3]["state"]
+        return (same_state and same_writes), (
+            f"并发状态={concurrent[1]} · 串行状态={serial[1]}"
+        )
+
+    out.append(
+        Scenario(
+            name="D-20 · 屏障的并发无关性（并发档 == 串行档）",
+            channels={"msgs": "binop"},
+            initial={"msgs": []},
+            nodes=_msgs_nodes("a", "b", "c"),
+            edges={"__start__": ("a", "b"), ("a", "b"): ("c",)},
+            fg_only=_d20_judge,
+            verdict="SAME",
+            note="**同一份规格**在**并发档**与 ``max_concurrency=1`` **串行档** ⇒ 最终状态 + 待写入序列**逐字相等**"
+            "⇒ ⇒ 屏障语义**与并发无关**（裁定 13）",
+        )
+    )
+
+    # ── D-21 · 两条屏障并存（其中一条不齐）（上游 E-4 · **SAME**）─────────────
+    out.append(
+        Scenario(
+            name="D-21 · 两条屏障并存（其中一条不齐）",
+            channels={"msgs": "binop"},
+            initial={"msgs": []},
+            nodes=_msgs_nodes("a", "b", "c", "d", "e"),
+            edges={
+                "__start__": ("a", "b", "d"),
+                ("a", "b"): ("c",),
+                ("d", "e"): ("c",),
+            },
+            verdict="SAME",
+            note="上游 E-4 基线 ``{'msgs': ['a','b','d','c']}`` ⇒ **先齐的那条生效** ⇒ 再次确认「组间任一」",
+        )
+    )
+
+    # ── D-22 · 缺源的多源边（上游 E-8 · 两侧都构造期失败 · **SAME**）─────────
+    out.append(
+        Scenario(
+            name="D-22 · 缺源的多源边（两侧都构造期失败）",
+            channels={"msgs": "binop"},
+            initial={"msgs": []},
+            nodes=_msgs_nodes("a", "c"),
+            edges={"__start__": ("a",), ("a", "zz"): ("c",)},
+            fg_construct_error=True,
+            up_construct_error=True,
+            verdict="SAME",
+            note="上游 E-8（``ValueError: Need to add_node 'zz' first``）⇒ freegraph 的 **V-2** 同族"
+            "⇒ ⇒ **失败与否**一致 ⇒ 判词 = **SAME**",
+        )
+    )
+
+    # ── D-23 · 元组顺序无关（**SAME** · freegraph 内部对照）──────────────────
+    def _d23_judge(scenario: Scenario) -> tuple[bool, str]:
+        def _run_with(key: tuple[str, ...]) -> tuple[dict[str, Any], list[str]]:
+            scenario.edges = {key: ("c",)}
+            scenario.clear()
+            _, _, _, extra = run_freegraph(scenario)
+            return dict(extra["state"]), list(extra["state"].get("msgs", []))
+
+        state_ab, order_ab = _run_with(("a", "b"))
+        state_ba, order_ba = _run_with(("b", "a"))
+        ok = state_ab == state_ba and order_ab == order_ba
+        return ok, (
+            f"('a','b') ⇒ state={state_ab} order={order_ab} · "
+            f"('b','a') ⇒ state={state_ba} order={order_ba}"
+        )
+
+    out.append(
+        Scenario(
+            name="D-23 · 元组顺序无关（('a','b') == ('b','a')）",
+            channels={"msgs": "binop"},
+            initial={"msgs": []},
+            nodes=_msgs_nodes("a", "b", "c"),
+            edges={"__start__": ("a", "b"), ("a", "b"): ("c",)},
+            fg_only=_d23_judge,
+            verdict="SAME",
+            note="**组内合取无序**（语义点 **P-14**）⇒ 两种书写顺序的**节点序列 + 最终状态**逐字相等",
+        )
+    )
+
+    # ── D-24 · 参数化（屏障形态 × 通道类型 × 源可达性）（**SAME**）────────────
+    def _d24_judge(scenario: Scenario) -> tuple[bool, str]:
+        failures: list[str] = []
+        for shape, kind, reach in d24_parameter_space():
+            sub = d24_scenario(shape, kind, reach)
+            fg_kind, fg_state, _, _ = run_freegraph(sub)
+            sub.clear()
+            up_kind, up_state, _, _ = run_upstream(sub)
+            if fg_kind != up_kind or (fg_kind == "OK" and fg_state != up_state):
+                failures.append(
+                    f"{shape}/{kind}/{reach}：freegraph={fg_kind} {fg_state} · upstream={up_kind} {up_state}"
+                )
+        return (not failures), (
+            f"{len(d24_parameter_space())} 组参数化场景全绿"
+            if not failures
+            else "；".join(failures)
+        )
+
+    out.append(
+        Scenario(
+            name="D-24 · 参数化（屏障形态 × 通道类型 × 源可达性）",
+            channels={"msgs": "binop"},
+            initial={"msgs": []},
+            nodes=_msgs_nodes("a", "b", "c"),
+            edges={"__start__": ("a", "b"), ("a", "b"): ("c",)},
+            fg_only=_d24_judge,
+            verdict="SAME",
+            note="**H-6** · 立项书 §4.2 **S5 ③** 的**最小增量**（承接条款）⇒ "
+            "**屏障形态 × 通道类型 × 源可达性** ⇒ **MUST NOT** 一次性铺开全量枚举",
+        )
+    )
+
+    # ── D-25 · 多源边指向 __end__（上游 E-9 · **STRICTER** · X-04）───────────
+    out.append(
+        Scenario(
+            name="D-25 · 多源边指向 __end__（上游静默 no-op）",
+            channels={"msgs": "binop"},
+            initial={"msgs": []},
+            nodes=_msgs_nodes("a", "b"),
+            edges={"__start__": ("a", "b"), ("a", "b"): ("__end__",)},
+            fg_construct_error=True,
+            verdict="STRICTER",
+            note="上游 E-9：``add_edge(['a','b'], END)`` ⇒ **被接受但静默 no-op**"
+            "（``graph/state.py:1560`` 的 ``elif end != END:`` ⇒ 不建 join 通道）⇒ "
+            "freegraph **构造期显式失败**（内置 ``ValueError`` · **V-16**）⇒ **比上游更严**（**X-04**）",
+        )
+    )
+
+    # ── D-26 · 空的多源边（上游 E-6 · **STRICTER** · X-02）────────────────────
+    out.append(
+        Scenario(
+            name="D-26 · 空的多源边（上游静默）",
+            channels={"msgs": "binop"},
+            initial={"msgs": []},
+            nodes=_msgs_nodes("a", "b", "c"),
+            edges={"__start__": ("a", "b"), (): ("c",)},
+            fg_construct_error=True,
+            verdict="STRICTER",
+            note="上游 E-6：``add_edge([], 'c')`` ⇒ **被接受但静默**（目标**从未执行**且**不报错**）⇒ "
+            "freegraph **构造期显式失败**（内置 ``ValueError`` · **V-16**）⇒ **比上游更严**（**X-02**）",
+        )
+    )
+
+    # ── D-27 · 两条同成员不同序的多源边并存（上游 E-11 · **SAME**）────────────
+    out.append(
+        Scenario(
+            name="D-27 · 两条同成员不同序的多源边并存（目标只触发 1 次）",
+            channels={"msgs": "binop"},
+            initial={"msgs": []},
+            nodes=_msgs_nodes("a", "b", "c"),
+            edges={"__start__": ("a", "b"), ("a", "b"): ("c",), ("b", "a"): ("c",)},
+            verdict="SAME",
+            note="上游 E-11 基线 ``{'msgs': ['a','b','c']}`` ⇒ 上游按**节点**去重"
+            "（``pregel/_algo.py:476-482`` 的 ``triggered_nodes: set[str]``）⇒ "
+            "freegraph 的「按**成员集合**去重」**与上游同款** ⇒ 行为面**零分叉**",
+        )
+    )
+
+    # ── D-28 · 边键类型非法（上游 E-10 · 两侧均抛 TypeError · **SAME**）───────
+    out.append(
+        Scenario(
+            name="D-28 · 边键类型非法（两侧均抛内置 TypeError）",
+            channels={"msgs": "binop"},
+            initial={"msgs": []},
+            nodes=_msgs_nodes("a"),
+            edges={"__start__": ("a",), 123: ("a",)},
+            fg_construct_error=True,
+            up_construct_error=True,
+            expect_exception_type="TypeError",
+            verdict="SAME",
+            note="上游 E-10：``add_edge(123, 'a')`` ⇒ ``TypeError: 'int' object is not iterable``"
+            "（锚点 ``graph/state.py:969`` 的 ``for start in start_key:``）⇒ "
+            "freegraph 用内置 ``TypeError`` ⇒ **同族** ⇒ 语义点 **P-16** = **SAME**",
+        )
+    )
+
     return out
 
 
@@ -1386,6 +1796,26 @@ def run_all(keyword: str = "") -> list[ProbeResult]:
                 and up_extra["exception"] is scenario.raised[0]
             )
             ok = ok and identity_ok
+        if scenario.fg_construct_error:
+            # ⚠️ **B7F4**：freegraph 侧 MUST **在构造期**失败（**不是**运行期）
+            ok = ok and fg_extra.get("stage") == "construct"
+        if scenario.up_construct_error:
+            ok = ok and up_extra.get("stage") == "construct"
+        if scenario.expect_exception_type:
+            # ⚠️ **B7F4**：**类型族**的可判定性（⇒ **D-28**）⇒ 两侧 MUST 抛
+            # **同名**的内置异常（**不比对**消息文本）。
+            expected = scenario.expect_exception_type
+            fg_type = (
+                type(fg_extra["exception"]).__name__
+                if fg_extra["exception"] is not None
+                else ""
+            )
+            up_type = (
+                type(up_extra["exception"]).__name__
+                if up_extra["exception"] is not None
+                else ""
+            )
+            ok = ok and fg_type == expected and up_type == expected
 
         if scenario.verdict == "SAME":
             passed = ok

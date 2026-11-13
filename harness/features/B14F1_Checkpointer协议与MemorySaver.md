@@ -205,6 +205,16 @@
 
 ---
 
+## 下游承接（**B7F4** · 2026-11-13 · **只接线 · 逐条最小改动**）
+
+- **D-4 · 跨 checkpoint 的屏障状态持久化**：上游的屏障通道把「已收齐的名字」落进
+  checkpoint（`langgraph/channels/named_barrier_value.py:52-64` 的 `checkpoint()` /
+  `from_checkpoint()`）⇒ ⇒ **B14F1** 落地时 **MUST** 让「屏障的已消费状态」
+  **跨 checkpoint 存活**（否则「暂停后恢复 ⇒ 屏障被重放」⇒ 目标被重复触发）⇒ ⇒
+  ⇒ 本 feature **MUST NOT** 自创持久化载体（沿用**调度状态**里的 `seen`）⇒ ⇒
+  ⇒ 判据 **FR-004** / **FR-016**。
+  ⇒ 落点：`specs/b7f4-multisource-join/spec.md` 的**承接条款 D-4** · 登记项 **PR-4**。
+
 ## 依据
 
 - 立项书 §5.2（B14F1 行）、§5.3（C19 / C22）、§5.4（P2 `Checkpointer` 协议 +
