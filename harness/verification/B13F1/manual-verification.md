@@ -1,6 +1,6 @@
 # B13F1 人工验证记录 · 静态中断点 + `recursion_limit`
 
-**日期**：2026-11-15 · **环境**：CPython **3.11.16** · Linux · 仓库 `.venv`  
+**日期**：2026-11-15 · **环境**：CPython **3.11.16** · Linux · 仓库 `.venv`
 **基线**：B13F1 之前 **1203 passed / 4 skipped**；本 feature 完成后 **1281 passed / 4 skipped**。
 
 ---
