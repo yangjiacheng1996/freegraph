@@ -198,3 +198,8 @@
 - 契约权威：`harness/reports/Q8-图运行时最小契约.md` §3.4。
 - 验收脚本：`harness/demo/graph_core.py`（`case_build_and_compile`）。
 - 宪法 `.specify/memory/constitution.md`：原则 III。
+
+## 下游承接（B13F1 · 2026-11-15 · 只接线 · 逐条最小改动）
+
+- **D-1（B13F1 → B7F2 · M2 · 静态断点关键字）**：`compile(interrupt_before=..., interrupt_after=...)` MUST 被接受，并 MUST 原样填入 `GraphSpec.interrupt_before` / `interrupt_after`；接受形态与上游逐字一致：**裸 `"*"` 或 `list[str]`**，裸非 `"*"` 字符串 / 元组 / `["*"]` 失败，`None` 归一为 `()`。MUST NOT 另立第三套静态断点载体。
+- **D-2（B13F1 → B7F2 · M2 · 编译期可达性）**：不存在的断点节点名 MUST 在**编译期**失败（`ValueError`，消息点名该节点），不得推迟到 `invoke()`；`START` / `END` / 空串 / `["*"]` / 裸非 `"*"` 字符串 / 非 `str` 的失败信号与 `GraphSpec` 构造期逐字同款；裸 `"*"` = 全部可执行节点。

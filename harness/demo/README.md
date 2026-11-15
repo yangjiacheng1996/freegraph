@@ -63,12 +63,11 @@ python harness/demo/acceptance.py --record harness/verification/freegraph/manual
   C16 的 `Command(goto=, update=, resume=)`、C17 的 `__interrupt__`、C18 的 `Send`、
   C22 的 `RunConfig` 四字段、C7 的 list/dict 两种 `path_map`。
 * **◌ 软断言** —— **语义由章程规定、但调用形态尚未拍板**的检查，**不判失败**，
-  只标注「待锁定」。当前两处：
+  只标注「待锁定」。当前一处：
 
   | 检查 | 待锁定的东西 | 由谁拍板 |
   |---|---|---|
   | C25 节点别名的调用形态 | `add_node(..., alias=)` 还是别的 | B8F3 |
-  | `recursion_limit` 的载体 | dict / `RunConfig` / 其他 | B13F1 |
 
   **形态一旦拍板，这里的软断言就该升级为硬断言。**
 

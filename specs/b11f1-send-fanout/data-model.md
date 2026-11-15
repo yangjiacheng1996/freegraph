@@ -140,7 +140,7 @@ fanout: dict[TaskId, _FanOut] = field(default_factory=dict)
 | **构造签名** | `SchedulerState()` 的**签名与名字逐字不变**（B9F1 裁定 12 的先例）⇒ **B7F2 / B7F3 / B8F1 / B12F1 零改动** |
 | **可变性** | 可变（运行期记账 · 与 `dynamic_edges` 同款） |
 | **生命周期** | **一次性**：载荷在下一轮被**消费后清空**（上游 `TASKS` 的 `accumulate=False`）⇒ **MUST NOT** 重复触发；产生者任务**再次执行** ⇒ **整体替换**（含**空集** ⇒ 旧的 fan-out 被清空 · FR-002） |
-| **落盘** | **不落盘**（`to_checkpoint` **不含**它）⇒ 理由 = 载荷含**用户对象**（未必可 JSON 序列化）⇒ **DR-02** |
+| **落盘** | **B11F1 交付时（历史）**：**不落盘**（`to_checkpoint` **不含**它）⇒ 理由 = 载荷含**用户对象**（未必可 JSON 序列化）⇒ **DR-02**。⚠️ **B13F1 F-3 起（拆分而不删）**：`to_checkpoint` **增** `fanout` 键（缺省 `{}`）；非 JSON 兼容 `arg` 的持久化失败面归 **B14F1** |
 | **键** | **产生者 TaskId** ⇒ 其产生的 `_FanOut`（同一节点在一轮内执行多次时**各次任务分别记录**） |
 
 ---
@@ -204,7 +204,7 @@ fanout: dict[TaskId, _FanOut] = field(default_factory=dict)
 | **I-9** | **fan-out 任务不消费触发源版本** | 断言 `versions_seen` 不因 fan-out 变化 |
 | **I-10** | **`node_versions` 按成功执行次数递增**（N 次 ⇒ **+N**） | 逐轮断言 |
 | **I-11** | **`executed` 逐次列出**（同节点可重复 · 顺序 = TaskId 序） | 逐轮断言 |
-| **I-12** | **载荷不落盘**（`to_checkpoint` 不含 `fanout`） | 断言 checkpoint 载荷的键集合 |
+| **I-12** | **B11F1 交付时载荷不落盘**（`to_checkpoint` 不含 `fanout`）⇒ **B13F1 F-3 起拆分**：`to_checkpoint` **含** `fanout`（键集合断言按 F-3 更新） | 历史断言保留；B13F1 起断言「含 `fanout` 且 JSON 兼容 `arg` 可往返」 |
 | **I-13** | **fan-out 任务的并发度受 `max_concurrency` 约束** | `max_concurrency=1` ⇒ 不重叠；`= N` ⇒ 可重叠 |
 | **I-14** | **失败消息同时点名产生者与目标**（**V-19**） | 断言消息含**两个**节点名 |
 

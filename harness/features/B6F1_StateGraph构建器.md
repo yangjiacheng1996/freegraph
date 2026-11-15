@@ -201,3 +201,7 @@
 
 - **承接条款（B11F1 → B6F1 · M2 · 构建器透传）**：`add_node` / `add_conditional_edges` MUST 接受"返回 `Send` / `list[Send]`"的节点函数与条件边函数（透传 ⇒ 零代码改动）⇒ MUST NOT 在构建层另行拒绝"返回 `Send` 列表"的节点函数。
 
+## 下游承接（B13F1 · 2026-11-15 · 只接线 · 逐条最小改动）
+
+- **D-7（B13F1 → B6F1 · M2 · 静态断点透传）**：`StateGraph` 构建器 MUST 允许用户把 `interrupt_before` / `interrupt_after` 一路带到 `compile()`；MUST NOT 在 `add_node` / `add_edge` 层静默丢弃或改名这两个配置。对外接受形态与失败信号由 **B7F2** 的 `compile()` 入口层收紧。
+

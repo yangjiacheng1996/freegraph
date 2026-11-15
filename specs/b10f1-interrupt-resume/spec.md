@@ -221,6 +221,12 @@
 > 普通字典会被**误判** ⇒ freegraph 改用「**全部 key 都是当前挂起中断的 id**」⇒ **更精确**
 > （**STRICTER** · 非更严的失败信号，而是**消除歧义**）⇒ 偏离登记 **X-3**。
 
+> ⚠️ **B13F1 静态挂起例外（F-5 · 2026-11-15 接线）**：当快照的 `suspension_kind` 为
+> `static_before` / `static_after` 且 `interrupts == ()` 时，合法静态挂起 **MUST NOT** 被
+> 误判为 `no_pending_interrupt`；`Command(resume=...)` 的恢复值**不投递**，按 `snapshot.next`
+> 继续。**非静态**（`suspension_kind` 为空）且无动态中断 ⇒ 仍抛 `no_pending_interrupt`
+> （**不论 `next` 是否为空**）。
+
 ### 裁定 5 · 恢复时「**从节点起点重跑**」的载体（最容易实现错的语义）
 
 | 项 | 内容 |
@@ -260,14 +266,14 @@
 | 项 | 内容 |
 |---|---|
 | **问题** | L1 的 `Checkpointer` 协议（**8 方法** · B2F1 冻结）的**返回结构与载荷形状挂起 B14F1**（协议 docstring 逐字）⇒ 而本 feature（M1）必须**经由 checkpointer 读快照 + pending writes**才能恢复 ⇒ 两者之间需要一个**最小契约**。 |
-| **裁定** | 本 feature 定义并**只消费**下列**最小契约**（L2 **不** import L4 实现 · ARCH-1 不变）：<br>**读侧** —— `checkpointer.get_tuple(config)` 的返回值 MUST 暴露**三个**具名属性：<br>　• `.snapshot` —— **L1 的 `StateSnapshot`**（含 `values` / `next` / `interrupts` / `tasks`）⇒ 快照的**载体**用 L1 **已有**的数据类（**同类项同类承载** · 原则 XII ③ · **零新增**）；<br>　• `.pending_writes` —— **待写入**序列（每个元素 = `(task_id, channel, value)` 三元组 · **上游同款** `PendingWrite`）；<br>　• `.scheduler` —— **调度账本**（**纯数据** · 可 JSON 序列化）⇒ 承载 `versions_seen` / `channel_versions` / `node_versions` / `dynamic_edges` ⇒ ⇒ 恢复 MUST 据此**重建调度状态**（**H-5 ⑤**）⇒ ⇒ **恢复后的触发判定与首次运行同款** ⚠️ **本属性是 plan 阶段回修新增**（**PR-1**）—— 初版只列两个属性 ⇒ 与 **H-5 ⑤** 自相矛盾 ⇒ ⇒ **不是 L1 冻结面**（是**本 feature 自己**定义的契约）⇒ ⇒ **L1 零改动**（`StateSnapshot` **不加**字段）⇒ ⇒ 与澄清轮 **Q3** 的拍板（「B10F1 不破 L1 冻结面」）**一致**。<br>⚠️ **「会话连续」路径同样 MUST 读 `.scheduler`**（**2026-11-13 分析轮拍板 · 照抄上游** · **实测 E-26**）⇒ ⇒ 该 `thread_id` 已有历史快照时 ⇒ 用 `.scheduler` 重建调度状态 ⇒ ⇒ **续跑**（检查点的调度状态被沿用）⇒ ⇒ ⚠️ **两种输入形态行为不同**（**实测 E-26**）⇒ ⇒ **`input = None`** ⇒ **不**写任何通道 ⇒ **只有被中断的节点**重跑 · `.id` **不变**；**`input = StateDict`** ⇒ **写通道** ⇒ **通道版本推进** ⇒ 订阅节点**重新触发** ⇒ 被触及的节点**重跑** · `.id` **可变** ⇒ ⇒ 与**恢复**路径（**显式**跑 `.snapshot.next` · **不走**触发判定）**刻意不同**（见 **FR-013** 末两行）。<br>**写侧** —— 挂起时 MUST 经由 `checkpointer.put(config, values=..., metadata=...)` 写**快照**、经由 `checkpointer.put_writes(config, writes=..., task_id=..., task_path=...)` 写**待写入**（含中断留痕）。<br>**保留通道名** —— 内部通道名 `__interrupt__`（中断留痕）与 `__resume__`（恢复值）⇒ **上游同款**（`langgraph/_internal/_constants.py:9` / `:11`）⇒ 且 `__interrupt__` **同时**是结果字典的**键名**（上游用**同一个**常量 · 原则 XI ②）。 |
+| **裁定** | 本 feature 定义并**只消费**下列**最小契约**（L2 **不** import L4 实现 · ARCH-1 不变）：<br>**读侧** —— `checkpointer.get_tuple(config)` 的返回值 MUST 暴露**三个**具名属性：<br>　• `.snapshot` —— **L1 的 `StateSnapshot`**（含 `values` / `next` / `interrupts` / `tasks`）⇒ 快照的**载体**用 L1 **已有**的数据类（**同类项同类承载** · 原则 XII ③ · **零新增**）；<br>　• `.pending_writes` —— **待写入**序列（每个元素 = `(task_id, channel, value)` 三元组 · **上游同款** `PendingWrite`）；<br>　• `.scheduler` —— **调度账本**（**纯数据** · 可 JSON 序列化）⇒ 承载 `versions_seen` / `channel_versions` / `node_versions` / `dynamic_edges` / `fanout`（**B13F1 的 F-3**）⇒ ⇒ 恢复 MUST 据此**重建调度状态**（**H-5 ⑤**）⇒ ⇒ **恢复后的触发判定与首次运行同款** ⚠️ **本属性是 plan 阶段回修新增**（**PR-1**）—— 初版只列两个属性 ⇒ 与 **H-5 ⑤** 自相矛盾 ⇒ ⇒ **不是 L1 冻结面**（是**本 feature 自己**定义的契约）⇒ ⇒ **L1 零改动**（`StateSnapshot` **不加**字段）⇒ ⇒ 与澄清轮 **Q3** 的拍板（「B10F1 不破 L1 冻结面」）**一致**。<br>⚠️ **「会话连续」路径同样 MUST 读 `.scheduler`**（**2026-11-13 分析轮拍板 · 照抄上游** · **实测 E-26**）⇒ ⇒ 该 `thread_id` 已有历史快照时 ⇒ 用 `.scheduler` 重建调度状态 ⇒ ⇒ **续跑**（检查点的调度状态被沿用）⇒ ⇒ ⚠️ **两种输入形态行为不同**（**实测 E-26**）⇒ ⇒ **`input = None`** ⇒ **不**写任何通道 ⇒ **只有被中断的节点**重跑 · `.id` **不变**；**`input = StateDict`** ⇒ **写通道** ⇒ **通道版本推进** ⇒ 订阅节点**重新触发** ⇒ 被触及的节点**重跑** · `.id` **可变** ⇒ ⇒ 与**恢复**路径（**显式**跑 `.snapshot.next` · **不走**触发判定）**刻意不同**（见 **FR-013** 末两行）。<br>**写侧** —— 挂起时 MUST 经由 `checkpointer.put(config, values=..., metadata=...)` 写**快照**、经由 `checkpointer.put_writes(config, writes=..., task_id=..., task_path=...)` 写**待写入**（含中断留痕）；⚠️ **B13F1 的两项只增扩展**（F-9 / F-10）：① 静态挂起的 metadata **只增** `suspension_kind` / `static_ack`（并镜像进 `scheduler`）；② 静态恢复完成时 **只增**一次**完成快照写**（`next=()` / `interrupts=()` / `tasks=()` / `suspension_kind=None` / `static_ack=None` / `fanout={}`）⇒ **该完成写是一次性收尾，不是「每轮末快照」**（后者仍归 B14F1 的持久化策略）。<br>**保留通道名** —— 内部通道名 `__interrupt__`（中断留痕）与 `__resume__`（恢复值）⇒ **上游同款**（`langgraph/_internal/_constants.py:9` / `:11`）⇒ 且 `__interrupt__` **同时**是结果字典的**键名**（上游用**同一个**常量 · 原则 XI ②）。 |
 | **理由** | ① L1 的协议用 `*args, **kwargs` + `-> Any` ⇒ **不**约束载荷形状 ⇒ 由本 feature 冻结**读侧 / 写侧**的最小面是**唯一**可行路径（**不**改 L1 ⇒ G7 / G8 / G16 / G19 零改动）；② 快照载体用 L1 已有的 `StateSnapshot` ⇒ **零新增数据类**；③ 读侧 / 写侧**成对**冻结 ⇒ 否则「写得出的读不回」⇒ ⇒ **下游承接 B14F1**（见 §下游承接条款 **D-1**）；④ `__interrupt__` / `__resume__` 两个通道名 **与上游逐字同款** ⇒ 上游形状的 saver 的**待写入**可直接被 freegraph 读取；⑤ ⚠️ **调度账本 MUST 是「一等」载体**（**不**塞进 `StateSnapshot.metadata`）⇒ 上游把 `channel_versions` / `versions_seen` 放在 `Checkpoint` 的**一等字段**里（`langgraph/checkpoint/base/__init__.py:105-112`）⇒ ⇒ 同款；⇒ 「借位 `metadata`」被排除（原则 XII「层次对应优先于容器对应」）。 |
 
 ### 裁定 10 · L2 的**入口形态**与「结果键」的归属
 
 | 项 | 内容 |
 |---|---|
-| **裁定** | 本 feature 在 L2 新增**一个**入口 —— **`run_graph(spec, input=None, *, state=None, checkpointer=None, config=None, max_steps=10007, max_concurrency=None) -> SuperStepResult \| InterruptResult`** ⇒ **参数口径（逐条写死 · 消除歧义）**：① `input` = `StateDict \| Command \| None`（**图输入** · 为 `Command` ⇒ **恢复**路径）② ⚠️ **`state` = `SchedulerState \| None`（**调度状态** · ⚠️ **MUST NOT** 读成「状态字典」）** ③ `checkpointer` = `Checkpointer \| None`（**只消费** L1 协议 · **不**实现）④ `config` = `RunConfig \| None` ⑤ `max_steps` = `int`（**缺省 10007** · **上游同款**）⑥ `max_concurrency` = `int \| None` ⇒ 返回 **`SuperStepResult \| InterruptResult`**（**挂起 ⇒ `InterruptResult`**）⇒ **B7F3** 的 `invoke` 据此把 `InterruptResult` 转成 `{**state, "__interrupt__": interrupts}` ⇒ ⇒ **「异常 → `__interrupt__` 键」的转成路径只此一条**（本 feature 独占）。**既有**的 `run_super_step` / `run_super_steps` **签名与返回类型一字不动**（B7F1 冻结面）⇒ 新入口**另立**，MUST **NOT** 改写既有入口。 |
+| **裁定** | 本 feature 在 L2 新增**一个**入口 —— **`run_graph(spec, input=None, *, state=None, checkpointer=None, config=None, max_steps=10007, max_concurrency=None) -> SuperStepResult \| InterruptResult`** ⇒ **参数口径（逐条写死 · 消除歧义）**：① `input` = `StateDict \| Command \| None`（**图输入** · 为 `Command` ⇒ **恢复**路径）② ⚠️ **`state` = `SchedulerState \| None`（**调度状态** · ⚠️ **MUST NOT** 读成「状态字典」）** ③ `checkpointer` = `Checkpointer \| None`（**只消费** L1 协议 · **不**实现）④ `config` = `RunConfig \| Mapping[str, Any] \| None`（**B13F1 的 F-4** 放宽注解；**不新增** `recursion_limit=` 关键字）⑤ `max_steps` = `int`（**缺省 10007** · **上游同款**）⑥ `max_concurrency` = `int \| None` ⇒ 返回 **`SuperStepResult \| InterruptResult`**（**挂起 ⇒ `InterruptResult`**）⇒ **B7F3** 的 `invoke` 据此把 `InterruptResult` 转成 `{**state, "__interrupt__": interrupts}` ⇒ ⇒ **「异常 → `__interrupt__` 键」的转成路径只此一条**（本 feature 独占）。**既有**的 `run_super_step` / `run_super_steps` **签名与返回类型一字不动**（B7F1 冻结面）⇒ 新入口**另立**，MUST **NOT** 改写既有入口。 |
 | **理由** | ① B12F1 的 D-1 + 提示词 §2.1：「本 feature MUST 负责把接住的这个异常转成结果键」+「MUST **NOT** 要求 B12F1 预先产出带 `__interrupt__` 的结果对象」⇒ 转成路径归本 feature；② B7F3 的 FR-006（承 B12F1 的 D-2 + Q12）逐字：「待 **B10F1** 落地后，`invoke` 才把它**转成**结果里的 `__interrupt__` 键 ⇒ **本 feature MUST NOT** 另写一条转成路径」⇒ 两棒**同一条**路径；③ 既有入口的返回类型是**冻结面** ⇒ 新入口另立（B12F1 增 `max_concurrency` 时也是「只**增** keyword-only」的最小组改面 · 本条改动面**更大** ⇒ 故另立）。 |
 
 ### 裁定 11 · 「真异常 + 中断同现」时的中断信息去向
@@ -657,12 +663,17 @@
 - **FR-018**：检查点的**读侧 / 写侧最小契约** MUST 是（裁定 9）：
   **读** —— `get_tuple(config)` 的返回值 MUST 暴露 `.snapshot`（L1 的 `StateSnapshot`）、
   `.pending_writes`（`(task_id, channel, value)` 三元组序列）**与** `.scheduler`（**调度账本** · 纯数据 ·
-  可 JSON 序列化 · 承载 `versions_seen` / `channel_versions` / `node_versions` / `dynamic_edges`）
+  可 JSON 序列化 · 承载 `versions_seen` / `channel_versions` / `node_versions` / `dynamic_edges` /
+  `fanout`（**B13F1 的 F-3**））
   ⚠️ **`.scheduler` 是 plan 阶段回修新增**（**PR-1**）⇒ 初版只列两个属性 ⇒ 与 **H-5 ⑤**「恢复 MUST 重建
   调度状态」自相矛盾 ⇒ ⇒ **不是 L1 冻结面** ⇒ ⇒ **L1 零改动** ⇒ ⇒ 澄清轮 **Q3** 的拍板仍成立；**写** ——
   `put(config, values=..., metadata=...)` 与
   `put_writes(config, writes=..., task_id=..., task_path=...)`；保留通道名 =
   `__interrupt__` / `__resume__`。
+  ⚠️ **B13F1 的只增扩展**（F-9 / F-10）：静态挂起 metadata 增 `suspension_kind` /
+  `static_ack`（镜像进 `scheduler`）；静态恢复完成时增一次**完成快照写**
+  （`next=()` / `interrupts=()` / `tasks=()` / `suspension_kind=None` /
+  `static_ack=None` / `fanout={}`）⇒ 该完成写**不是**「每轮末快照」（后者仍归 B14F1）。
   ⚠️ **恢复轮的「显式首轮 / 触发后续轮」分工（口径写死 · 消除歧义 · 2026-11-13 分析轮补齐）**：
   **第 1 轮** = **显式**跑 `.snapshot.next` 的节点（**不走**触发判定 · **上游同款** ·
   `prepare_next_tasks` 按 checkpoint 的 `next` 重建）⇒ **第 2 轮起** = 用 `.scheduler`

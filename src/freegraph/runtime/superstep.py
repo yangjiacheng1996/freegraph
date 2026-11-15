@@ -68,7 +68,23 @@ from ._interrupt import (
     new_run_table,
     prepare_task,
 )
-from ._fanout import TaskId, _FanOut, _FanOutTask, make_fanout
+from ._fanout import (
+    TaskId,
+    _FanOut,
+    _FanOutTask,
+    decode_fanout,
+    encode_fanout,
+    make_fanout,
+)
+from ._recursion import resolve_config, resolve_limit
+from ._static import (
+    STATIC_AFTER,
+    STATIC_BEFORE,
+    build_static_ack,
+    normalize_static_points,
+    static_allowed,
+    static_hit,
+)
 from .channel import Channel, EphemeralValue
 from .errors import InterruptError, InvalidChannelUpdateError
 from .read import read_channels
@@ -201,6 +217,8 @@ class GraphSpec:
     nodes: dict[str, NodeSpec]
     edges: dict[str | tuple[str, ...], tuple[str, ...]]
     conditional_edges: dict[str, Any] = field(default_factory=dict, kw_only=True)
+    interrupt_before: str | Sequence[str] = field(default=(), kw_only=True)
+    interrupt_after: str | Sequence[str] = field(default=(), kw_only=True)
 
     def __post_init__(self) -> None:
         """构造期校验（裁定 32 · 契约 §2.1.1）—— 四条失败路径逐条唯一。"""
@@ -282,6 +300,7 @@ class SchedulerState:
                 node_name: list(targets)
                 for node_name, targets in self.dynamic_edges.items()
             },
+            "fanout": encode_fanout(self.fanout),
         }
 
     @classmethod
@@ -314,6 +333,7 @@ class SchedulerState:
             channel_versions=dict(data.get("channel_versions") or {}),
             node_versions=dict(data.get("node_versions") or {}),
             dynamic_edges=dynamic_edges,
+            fanout=decode_fanout(data.get("fanout")),
         )
 
 
@@ -464,6 +484,27 @@ def _validate_graph_spec(spec: GraphSpec) -> None:
     if spec.conditional_edges:
         raise ValueError(
             "GraphSpec.conditional_edges must stay empty in this feature (V-8)"
+        )
+    # ── B13F1 · 静态断点字段归一 / 校验（V-22…V-25 · 单一入口）──
+    # ⚠️ 先完成节点表 / 边表校验，再展开 ``"*"`` 与做 V-25（未知节点）。
+    object.__setattr__(
+        spec,
+        "interrupt_before",
+        normalize_static_points(spec.interrupt_before, spec.nodes, "interrupt_before"),
+    )
+    object.__setattr__(
+        spec,
+        "interrupt_after",
+        normalize_static_points(spec.interrupt_after, spec.nodes, "interrupt_after"),
+    )
+
+
+def _reject_static_points_for_low_level(spec: GraphSpec) -> None:
+    """**V-26** —— 静态断点只在图级 ``run_graph`` 生效。"""
+    if spec.interrupt_before or spec.interrupt_after:
+        raise ValueError(
+            "静态断点只在图级 run_graph 生效；"
+            "run_super_step / run_super_steps 不支持静态断点 (V-26)"
         )
 
 
@@ -1344,6 +1385,7 @@ def run_super_step(
       （FR-017 · 裁定 2 / 18）。
     """
     _validate_max_concurrency(max_concurrency)
+    _reject_static_points_for_low_level(spec)
     triggered = _determine_triggers(spec, state)
     executed: list[str] = []
     pending: dict[str, dict[str, tuple[Any, ...]]] = {}
@@ -1396,6 +1438,7 @@ def run_super_steps(
     **且**下一轮任务集非空 ⇒ 抛错」（裁定 30 的判定顺序）。
     """
     _validate_max_concurrency(max_concurrency)
+    _reject_static_points_for_low_level(spec)
     scheduler_state = state if state is not None else SchedulerState()
     executed: list[str] = []
     pending: dict[str, dict[str, tuple[Any, ...]]] = {}
@@ -1497,6 +1540,8 @@ def _restore_scheduler(state: SchedulerState, data: Mapping[str, Any]) -> None:
     state.node_versions.update(restored.node_versions)
     state.dynamic_edges.clear()
     state.dynamic_edges.update(restored.dynamic_edges)
+    state.fanout.clear()
+    state.fanout.update(restored.fanout)
 
 
 def _restore_channels(
@@ -1575,6 +1620,9 @@ def _suspend_metadata(
     next_nodes: Sequence[str],
     interrupts: Sequence[Interrupt],
     scheduler: Mapping[str, Any],
+    *,
+    suspension_kind: str | None = None,
+    static_ack: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """产出**挂起时**写给 checkpointer 的 **metadata**（契约 §4 的写侧载荷）。
 
@@ -1593,6 +1641,8 @@ def _suspend_metadata(
         "next": tuple(next_nodes),
         "interrupts": tuple(interrupts),
         "tasks": (),
+        "suspension_kind": suspension_kind,
+        "static_ack": static_ack,
         "scheduler": dict(scheduler),
     }
 
@@ -1612,6 +1662,15 @@ def _resume_target_nodes(
     return tuple(sorted(interrupts))
 
 
+def _fanout_targets(state: SchedulerState) -> list[str]:
+    """本轮已派发、待下一轮执行的 fan-out 任务目标。"""
+    return [
+        task.target
+        for payload in state.fanout.values()
+        for task in payload.tasks
+    ]
+
+
 def _run_graph_loop(
     spec: GraphSpec,
     state: SchedulerState,
@@ -1622,6 +1681,8 @@ def _run_graph_loop(
     first_round: Sequence[str] | None,
     max_steps: int,
     max_concurrency: int | None,
+    static_ack: Mapping[str, Any] | None = None,
+    static_resume: bool = False,
 ) -> SuperStepResult | InterruptResult:
     """跑**多轮** ⇒ **完成**（``SuperStepResult``）或**挂起**（``InterruptResult``）。
 
@@ -1645,6 +1706,32 @@ def _run_graph_loop(
             raise GraphRecursionError(
                 recursion_limit=max_steps, current_step=state.step
             )
+        if (
+            spec.interrupt_before
+            and static_allowed(static_ack, state)
+            and static_hit(
+                (*triggered, *_fanout_targets(state)), spec.interrupt_before
+            )
+        ):
+            result = InterruptResult(
+                state=_sparse_state(spec, state),
+                interrupts=(),
+                executed=tuple(executed),
+                steps=steps - 1,
+            )
+            if checkpointer is not None:
+                _write_suspend(
+                    run_config,
+                    checkpointer,
+                    state,
+                    result.state,
+                    {},
+                    (),
+                    suspension_kind=STATIC_BEFORE,
+                    static_ack=build_static_ack(state),
+                    next_nodes=tuple(triggered),
+                )
+            return result
         try:
             round_executed, round_pending = _run_round(
                 spec, state, triggered, max_concurrency=max_concurrency
@@ -1669,13 +1756,40 @@ def _run_graph_loop(
             for key, values in writes.items():
                 bucket[key] = bucket.get(key, ()) + tuple(values)
         state.step += 1
+        if (
+            spec.interrupt_after
+            and static_allowed(static_ack, state)
+            and static_hit(round_executed, spec.interrupt_after)
+        ):
+            result = InterruptResult(
+                state=_sparse_state(spec, state),
+                interrupts=(),
+                executed=tuple(executed),
+                steps=steps,
+            )
+            if checkpointer is not None:
+                _write_suspend(
+                    run_config,
+                    checkpointer,
+                    state,
+                    result.state,
+                    {},
+                    (),
+                    suspension_kind=STATIC_AFTER,
+                    static_ack=build_static_ack(state),
+                    next_nodes=tuple(_determine_triggers(spec, state)),
+                )
+            return result
         triggered = None
-    return SuperStepResult(
+    result = SuperStepResult(
         state=_sparse_state(spec, state),
         executed=tuple(executed),
         node_writes=pending,
         steps=steps,
     )
+    if static_resume and checkpointer is not None:
+        _clear_static_suspension(run_config, checkpointer, state, result.state)
+    return result
 
 
 def _suspend(
@@ -1735,6 +1849,10 @@ def _write_suspend(
     values: Mapping[str, Any],
     produced: Mapping[str, Interrupt],
     all_interrupts: Sequence[Interrupt],
+    *,
+    suspension_kind: str | None = None,
+    static_ack: Mapping[str, Any] | None = None,
+    next_nodes: Sequence[str] | None = None,
 ) -> None:
     """**挂起时**的**写侧**（契约 §4 · FR-012 · T041）。
 
@@ -1747,13 +1865,20 @@ def _write_suspend(
     * ⚠️ **关键字名逐字**：``values`` / ``metadata`` / ``writes`` /
       ``task_id`` / ``task_path``（契约 §4 冻结）。
     """
+    scheduler = state.to_checkpoint()
+    scheduler["suspension_kind"] = suspension_kind
+    scheduler["static_ack"] = static_ack
+    if next_nodes is None:
+        next_nodes = tuple(sorted(produced))
     checkpointer.put(
         run_config,
         values=dict(values),
         metadata=_suspend_metadata(
-            tuple(sorted(produced)),
+            tuple(next_nodes),
             all_interrupts,
-            state.to_checkpoint(),
+            scheduler,
+            suspension_kind=suspension_kind,
+            static_ack=static_ack,
         ),
     )
     for node_name, payload in produced.items():
@@ -1765,13 +1890,38 @@ def _write_suspend(
         )
 
 
+def _clear_static_suspension(
+    run_config: RunConfig,
+    checkpointer: Any,
+    state: SchedulerState,
+    values: Mapping[str, Any],
+) -> None:
+    """静态恢复完成时写一次**完成快照**（F-10 · 不是每轮末快照）。"""
+    scheduler = state.to_checkpoint()
+    scheduler["suspension_kind"] = None
+    scheduler["static_ack"] = None
+    scheduler["fanout"] = {}
+    checkpointer.put(
+        run_config,
+        values=dict(values),
+        metadata={
+            "next": (),
+            "interrupts": (),
+            "tasks": (),
+            "suspension_kind": None,
+            "static_ack": None,
+            "scheduler": scheduler,
+        },
+    )
+
+
 def run_graph(
     spec: GraphSpec,
     input: StateDict | Command | None = None,
     *,
     state: SchedulerState | None = None,
     checkpointer: Any | None = None,
-    config: RunConfig | None = None,
+    config: RunConfig | Mapping[str, Any] | None = None,
     max_steps: int = 10007,
     max_concurrency: int | None = None,
 ) -> SuperStepResult | InterruptResult:
@@ -1785,7 +1935,7 @@ def run_graph(
             *,
             state: SchedulerState | None = None,
             checkpointer: Checkpointer | None = None,
-            config: RunConfig | None = None,
+            config: RunConfig | Mapping[str, Any] | None = None,
             max_steps: int = 10007,
             max_concurrency: int | None = None,
         ) -> SuperStepResult | InterruptResult
@@ -1813,7 +1963,8 @@ def run_graph(
     """
     _validate_max_concurrency(max_concurrency)
     scheduler_state = state if state is not None else SchedulerState()
-    run_config = config if config is not None else RunConfig()
+    run_config = resolve_config(config)
+    effective_limit = resolve_limit(run_config.recursion_limit, max_steps)
     table = new_run_table()
     with bind_run(table):
         if isinstance(input, Command):
@@ -1824,7 +1975,7 @@ def run_graph(
                 run_config,
                 table,
                 checkpointer=checkpointer,
-                max_steps=max_steps,
+                max_steps=effective_limit,
                 max_concurrency=max_concurrency,
             )
         return _first_graph(
@@ -1834,7 +1985,7 @@ def run_graph(
             run_config,
             table,
             checkpointer=checkpointer,
-            max_steps=max_steps,
+            max_steps=effective_limit,
             max_concurrency=max_concurrency,
         )
 
@@ -1873,13 +2024,18 @@ def _first_graph(
     # ⚠️ **会话连续**（**续跑** · **上游同款** · 实测 E-26）
     snapshot = history.snapshot
     pending_writes = history.pending_writes
-    _restore_scheduler(state, history.scheduler)
+    scheduler_data = history.scheduler
+    static_kind = scheduler_data.get("suspension_kind")
+    static_ack = scheduler_data.get("static_ack")
+    _restore_scheduler(state, scheduler_data)
     _restore_channels(spec, state, snapshot.values)
     interrupts = _pending_interrupts(pending_writes)
-    if input is None:
+    is_static = static_kind in (STATIC_BEFORE, STATIC_AFTER) and not interrupts
+    if input is None or (is_static and isinstance(input, dict) and not input):
         # ⚠️ **不**写任何通道 ⇒ ⇒ **只有被中断的节点**重跑（其它节点**不**重跑）
         # ⇒ ⇒ 结果与挂起时**完全相同** ⇒ ⇒ `.id` **逐字不变**（**上游同款** ·
         # 实测 E-15 / E-26 ① · 补记 **F-1**）⇒ ⇒ **不**消费 `__resume__`。
+        # ⚠️ B13F1：空 ``StateDict`` 与 ``input=None`` 同款（静态挂起时）。
         for node_name, payload in interrupts.items():
             prepare_task(table, node_name, resume=[], existing=payload)
         return _run_graph_loop(
@@ -1891,6 +2047,8 @@ def _first_graph(
             first_round=_resume_target_nodes(snapshot, interrupts),
             max_steps=max_steps,
             max_concurrency=max_concurrency,
+            static_ack=static_ack,
+            static_resume=is_static,
         )
     # ⚠️ **状态字典**输入 ⇒ 先读 `.snapshot.values`（已恢复）⇒ 再把 `input`
     # **按通道写入**叠加上去 ⇒ ⇒ 写通道 ⇒ 通道版本推进 ⇒ **订阅节点重新触发**
@@ -1906,6 +2064,8 @@ def _first_graph(
         first_round=None,
         max_steps=max_steps,
         max_concurrency=max_concurrency,
+        static_ack=static_ack,
+        static_resume=is_static,
     )
 
 
@@ -1934,9 +2094,33 @@ def _resume_graph(
         raise InterruptError(reason=InterruptError.REASON_NO_PENDING_INTERRUPT)
     snapshot = history.snapshot
     pending_writes = history.pending_writes
+    scheduler_data = history.scheduler
+    static_kind = scheduler_data.get("suspension_kind")
+    static_ack = scheduler_data.get("static_ack")
     interrupts = _pending_interrupts(pending_writes)
-    if not interrupts:
+    is_static = static_kind in (STATIC_BEFORE, STATIC_AFTER) and not interrupts
+    if not interrupts and not is_static:
         raise InterruptError(reason=InterruptError.REASON_NO_PENDING_INTERRUPT)
+
+    if is_static:
+        # B13F1 · 静态恢复：值**不投递**给任何节点；按 snapshot.next 继续。
+        _restore_scheduler(state, scheduler_data)
+        _restore_channels(spec, state, snapshot.values)
+        if input.update:
+            _apply_input_writes(spec, state, input.update)
+        targets = _resume_target_nodes(snapshot, interrupts)
+        return _run_graph_loop(
+            spec,
+            state,
+            table,
+            run_config,
+            checkpointer=checkpointer,
+            first_round=targets,
+            max_steps=max_steps,
+            max_concurrency=max_concurrency,
+            static_ack=static_ack,
+            static_resume=True,
+        )
 
     interrupt_ids = {payload.id for payload in interrupts.values()}
     per_node: dict[str, Any] = {}

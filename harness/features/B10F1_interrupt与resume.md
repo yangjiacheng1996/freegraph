@@ -201,7 +201,7 @@
 
 - **交付物**：`interrupt()` 函数、中断异常与 `__interrupt__` 结果结构、`resume` 恢复路径
   （含节点起点重跑）、单元测试 + 人工验证记录。
-- **后续解锁**：**B13F1**（静态中断点 + `recursion_limit`，依赖 B10F1）→
+- **后续解锁**：**B13F1**（静态中断点 + `recursion_limit`，依赖 B10F1,B11F1）→
   **B7F3**（`invoke` 对外 API）。
 - **软断言联动**：`harness/demo/graph_core.py` 中「C17 `Command(resume=)` 从节点起点
   重跑并拿到 resume 值」当前是**软断言**（形态待 B14F1 拍板）；本 feature 落地后，

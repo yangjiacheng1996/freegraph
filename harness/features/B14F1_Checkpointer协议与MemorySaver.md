@@ -258,3 +258,7 @@
 
 - **D-3（B11F1 → B14F1 · M3 · pending writes）**：由 `Send` 产生的调用 MUST 与普通调用同款地进入 pending writes（标准任务 task_id = 节点名；fan-out 任务 = `f"{节点名}:{TaskId}"`）⇒ B14F1 MUST NOT 为 fan-out 另立载体，且 MUST 接受"一轮一个节点可有多个任务"。
 
+## 下游承接（B13F1 · 2026-11-15 · 只接线 · 逐条最小改动）
+
+- **D-5（B13F1 → B14F1 · M3 · 静态挂起持久化）**：`MemorySaver` MUST 能原样存取**静态挂起**的快照 + 调度账本（`interrupts = ()` · `suspension_kind` · `static_ack` · `next` 可为空）⇒ MUST NOT 要求「静态挂起也必须有一条动态中断载荷」才能恢复；fan-out 载荷（目标 + 原样入参 + TaskId）MUST 随调度账本一起保存 / 还原；**F-10 的完成快照由 B13F1 写一次**，B14F1 的每轮末快照 MUST NOT 与之重复 / 冲突。
+

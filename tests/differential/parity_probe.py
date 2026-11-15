@@ -139,6 +139,16 @@ class Scenario:
     #: 重跑**」这类**次数**判据使用（DI-03 · **上游同款** · 实测 E-8）。
     compare_call_counts: bool = False
 
+    # ── B13F1 扩展（全部可选 · 缺省 ⇒ 既有 49 个场景逐字不变）──
+
+    #: 静态断点配置（``str`` = 裸 ``"*"`` / 元组 = 节点名序列）。
+    interrupt_before: str | tuple[str, ...] = ()
+    interrupt_after: str | tuple[str, ...] = ()
+    #: ``recursion_limit``（两侧同款配置）。
+    recursion_limit: int | None = None
+    #: 强制走**图级入口** ``run_graph``（静态断点 / 递归上限场景）。
+    use_graph_entry: bool = False
+
     def clear(self) -> None:
         self.calls.clear()
         self.windows.clear()
@@ -400,7 +410,13 @@ def run_freegraph(
         for src, targets in scenario.edges.items()
     }
     try:
-        spec = GraphSpec(channels=channels, nodes=nodes, edges=edges)
+        spec = GraphSpec(
+            channels=channels,
+            nodes=nodes,
+            edges=edges,
+            interrupt_before=scenario.interrupt_before,
+            interrupt_after=scenario.interrupt_after,
+        )
     except Exception as exc:  # noqa: BLE001
         # ⚠️ **构造期失败**（**B7F4**）⇒ 与「运行期失败」**区分**记录
         return (
@@ -416,7 +432,11 @@ def run_freegraph(
             },
         )
     scheduler_state = SchedulerState()
-    if scenario.resume_input is not _UNSET or scenario.fg_suspends:
+    if (
+        scenario.use_graph_entry
+        or scenario.resume_input is not _UNSET
+        or scenario.fg_suspends
+    ):
         # ⚠️ **B10F1**：**图级入口**（``run_graph``）—— 恢复路径**必须**经由
         # checkpointer（**上游同款**）⇒ ⇒ **两段式**跑法（第一次 ⇒ 挂起；
         # 第二次 ⇒ 以 ``resume_input`` 恢复）⇒ ⇒ 比**恢复后**的结果。
@@ -464,7 +484,10 @@ def _run_freegraph_graph(
     from freegraph.runtime import run_graph
 
     stub = _ProbeCheckpointer()
-    config = RunConfig(thread_id="diff")
+    config = RunConfig(
+        thread_id="diff",
+        recursion_limit=scenario.recursion_limit,
+    )
     # ⚠️ **DI-04**：**不挂** checkpointer ⇒ ⇒ 恢复**必须**显式失败
     # （**上游同款** · **实测 E-3**）⇒ ⇒ 两侧**都**失败 ⇒ ⇒ 判词 **STRICTER**。
     saver = None if scenario.fg_no_checkpointer else stub
@@ -486,9 +509,14 @@ def _run_freegraph_graph(
         )
     if scenario.resume_input is not _UNSET:
         try:
+            second_input = (
+                None
+                if scenario.resume_input is None
+                else _as_command(scenario.resume_input)
+            )
             result = run_graph(
                 spec,
-                _as_command(scenario.resume_input),
+                second_input,
                 checkpointer=saver,
                 config=config,
             )
@@ -618,12 +646,27 @@ def run_upstream(scenario: Scenario) -> tuple[str, Any, str, dict[str, Any]]:
             scenario.upstream_extra(graph)
         # ⚠️ **B10F1**：恢复路径**必须**挂 checkpointer（**上游同款** · 实测 E-3）
         # ⇒ ⇒ 上游侧**挂** ``InMemorySaver``（**上游的形状**）⇒ ⇒ 两段式可比。
+        compile_kwargs: dict[str, Any] = {}
+        if scenario.interrupt_before:
+            compile_kwargs["interrupt_before"] = (
+                scenario.interrupt_before
+                if isinstance(scenario.interrupt_before, str)
+                else list(scenario.interrupt_before)
+            )
+        if scenario.interrupt_after:
+            compile_kwargs["interrupt_after"] = (
+                scenario.interrupt_after
+                if isinstance(scenario.interrupt_after, str)
+                else list(scenario.interrupt_after)
+            )
         if scenario.upstream_checkpointer:
             from langgraph.checkpoint.memory import InMemorySaver
 
-            compiled = graph.compile(checkpointer=InMemorySaver())
+            compiled = graph.compile(
+                checkpointer=InMemorySaver(), **compile_kwargs
+            )
         else:
-            compiled = graph.compile()
+            compiled = graph.compile(**compile_kwargs)
     except Exception as exc:  # noqa: BLE001
         # ⚠️ **构造期失败**（**B7F4**）⇒ 与「运行期失败」**区分**记录
         return (
@@ -642,17 +685,22 @@ def run_upstream(scenario: Scenario) -> tuple[str, Any, str, dict[str, Any]]:
         # ⚠️ **B10F1**：挂了 checkpointer ⇒ 上游**必须**带 ``thread_id``
         # （上游 ``Checkpointer requires one or more of the following
         # 'configurable' keys`` · ``thread_id``）⇒ ⇒ 两侧**同一会话**。
-        up_config = (
-            {"configurable": {"thread_id": "diff"}}
-            if scenario.upstream_checkpointer
-            else None
-        )
+        up_config: dict[str, Any] | None = None
+        if scenario.upstream_checkpointer or scenario.recursion_limit is not None:
+            up_config = {}
+            if scenario.upstream_checkpointer:
+                up_config["configurable"] = {"thread_id": "diff"}
+            if scenario.recursion_limit is not None:
+                up_config["recursion_limit"] = scenario.recursion_limit
         result = compiled.invoke(dict(scenario.initial), up_config)
         if scenario.resume_input is not _UNSET:
             # ⚠️ **两段式**（**B10F1**）：第二次 ⇒ 以 ``resume_input`` 恢复
-            result = compiled.invoke(
-                _as_upstream_command(scenario.resume_input), up_config
+            second_input = (
+                None
+                if scenario.resume_input is None
+                else _as_upstream_command(scenario.resume_input)
             )
+            result = compiled.invoke(second_input, up_config)
     except Exception as exc:  # noqa: BLE001
         return (
             "ERROR",
@@ -666,6 +714,8 @@ def run_upstream(scenario: Scenario) -> tuple[str, Any, str, dict[str, Any]]:
                 "stage": "run",
             },
         )
+    if result is None:
+        result = {}
     interrupt = tuple(result.get("__interrupt__", ()) or ())
     return (
         "OK",
@@ -2512,6 +2562,325 @@ def _scenarios() -> list[Scenario]:
             edges={"__start__": ("fan",), "fan": ("worker",)},
             verdict="DIFF",
             note="上游无「节点返回 list[Send]」形态（直接抛错）；freegraph 载体 B 让 Send 胜出（X-3 · X-6）",
+        )
+    )
+
+
+    # ── B13F1 · D-38…D-49（静态断点 + recursion_limit）────────────────────
+    # D-38 · 自环 + recursion_limit=3（SAME）
+    d38_calls: list[str] = []
+
+    def _d38_loop(state: dict[str, Any]) -> dict[str, Any]:
+        d38_calls.append("loop")
+        return {"count": state.get("count", 0) + 1}
+
+    out.append(
+        Scenario(
+            name="D-38 · 自环 + recursion_limit=3（SAME）",
+            channels={"count": "last"},
+            initial={"count": 0},
+            nodes={"loop": (("count",), _d38_loop)},
+            edges={"__start__": ("loop",), "loop": ("loop",)},
+            recursion_limit=3,
+            use_graph_entry=True,
+            calls=d38_calls,
+            verdict="SAME",
+        )
+    )
+
+    # D-39 · 缺省上限远大于 25（SAME）
+    d39_calls: list[str] = []
+    d39_nodes: dict[str, tuple[tuple[str, ...], Callable[[dict[str, Any]], Any]]] = {}
+    d39_edges: dict[str, tuple[str, ...]] = {}
+    for index in range(30):
+        name = f"n{index}"
+
+        def _d39_node(state: dict[str, Any], name: str = name) -> dict[str, Any]:
+            d39_calls.append(name)
+            return {"trace": [name]}
+
+        d39_nodes[name] = ((), _d39_node)
+        d39_edges["__start__" if index == 0 else f"n{index - 1}"] = (name,)
+    out.append(
+        Scenario(
+            name="D-39 · 缺省上限 > 25 轮（SAME）",
+            channels={"trace": "binop"},
+            initial={"trace": []},
+            nodes=d39_nodes,
+            edges=d39_edges,
+            use_graph_entry=True,
+            calls=d39_calls,
+            verdict="SAME",
+        )
+    )
+
+    # D-40 · 每轮 2 个节点 + recursion_limit=3（SAME）
+    d40_calls: list[str] = []
+
+    def _d40_a(state: dict[str, Any]) -> dict[str, Any]:
+        d40_calls.append("a")
+        return {"trace": ["a"]}
+
+    def _d40_b(state: dict[str, Any]) -> dict[str, Any]:
+        d40_calls.append("b")
+        return {"trace": ["b"]}
+
+    out.append(
+        Scenario(
+            name="D-40 · 每轮 2 节点 + recursion_limit=3（SAME）",
+            channels={"trace": "binop"},
+            initial={"trace": []},
+            nodes={"a": ((), _d40_a), "b": ((), _d40_b)},
+            edges={"__start__": ("a", "b"), "a": ("a",), "b": ("b",)},
+            recursion_limit=3,
+            use_graph_entry=True,
+            calls=d40_calls,
+            compare_call_counts=True,
+            verdict="SAME",
+        )
+    )
+
+    # D-41 · static before（DIFF：仅 freegraph 结果键不同）
+    d41_calls: list[str] = []
+
+    def _d41_a(state: dict[str, Any]) -> dict[str, Any]:
+        d41_calls.append("a")
+        return {"count": 1}
+
+    out.append(
+        Scenario(
+            name="D-41 · interrupt_before=[\"a\"]（DIFF：结果键）",
+            channels={"count": "last"},
+            initial={},
+            nodes={"a": ((), _d41_a)},
+            edges={"__start__": ("a",)},
+            interrupt_before=("a",),
+            fg_suspends=True,
+            calls=d41_calls,
+            verdict="DIFF",
+            note="freegraph 结果补 `__interrupt__: ()`；上游无该键（X-1）；执行次数与状态相同",
+        )
+    )
+
+    # D-42 · static after（含最后节点 next == ()）
+    d42_calls: list[str] = []
+
+    def _d42_a(state: dict[str, Any]) -> dict[str, Any]:
+        d42_calls.append("a")
+        return {"count": 1}
+
+    out.append(
+        Scenario(
+            name="D-42 · interrupt_after=[\"a\"]（DIFF：结果键）",
+            channels={"count": "last"},
+            initial={},
+            nodes={"a": ((), _d42_a)},
+            edges={"__start__": ("a",)},
+            interrupt_after=("a",),
+            fg_suspends=True,
+            calls=d42_calls,
+            verdict="DIFF",
+            note="freegraph 结果补 `__interrupt__: ()`；上游无该键（X-1）；最后节点 after 的 next 为空仍可恢复",
+        )
+    )
+
+    # D-43 · static before 后 input=None 恢复（SAME）
+    d43_calls: list[str] = []
+
+    def _d43_a(state: dict[str, Any]) -> dict[str, Any]:
+        d43_calls.append("a")
+        return {"count": 1}
+
+    out.append(
+        Scenario(
+            name="D-43 · static before + input=None 恢复（SAME）",
+            channels={"count": "last"},
+            initial={},
+            nodes={"a": ((), _d43_a)},
+            edges={"__start__": ("a",)},
+            interrupt_before=("a",),
+            fg_suspends=True,
+            upstream_checkpointer=True,
+            resume_input=None,
+            calls=d43_calls,
+            verdict="SAME",
+        )
+    )
+
+    # D-44 · static after 后 Command(resume=...) 恢复（SAME）
+    d44_calls: list[str] = []
+
+    def _d44_a(state: dict[str, Any]) -> dict[str, Any]:
+        d44_calls.append("a")
+        return {"count": 1}
+
+    out.append(
+        Scenario(
+            name="D-44 · static after + Command(resume)（SAME）",
+            channels={"count": "last"},
+            initial={},
+            nodes={"a": ((), _d44_a)},
+            edges={"__start__": ("a",)},
+            interrupt_after=("a",),
+            fg_suspends=True,
+            upstream_checkpointer=True,
+            resume_input="X",
+            calls=d44_calls,
+            verdict="SAME",
+        )
+    )
+
+    # D-45 · fan-out N=2 + static before（只判执行次数 · SAME）
+    d45_calls: list[str] = []
+
+    def _d45_fg(state: dict[str, Any]) -> Any:
+        from freegraph.graph import Command as FgCommand
+
+        return FgCommand(
+            goto=[_fg_send("worker", {"n": 1}), _fg_send("worker", {"n": 2})]
+        )
+
+    def _d45_up(state: dict[str, Any]) -> Any:
+        from langgraph.types import Command as UpCommand
+
+        return UpCommand(
+            goto=[_up_send("worker", {"n": 1}), _up_send("worker", {"n": 2})]
+        )
+
+    def _d45_worker(state: dict[str, Any]) -> dict[str, Any]:
+        d45_calls.append(f"w{state['n']}")
+        return {"trace": [state["n"]]}
+
+    out.append(
+        Scenario(
+            name="D-45 · fan-out N=2 + static before（SAME：执行次数）",
+            channels={"trace": "binop"},
+            initial={"trace": []},
+            nodes={"fan": ((), _d45_fg), "worker": ((), _d45_worker)},
+            nodes_upstream={"fan": ((), _d45_up), "worker": ((), _d45_worker)},
+            edges={"__start__": ("fan",)},
+            interrupt_before=("worker",),
+            fg_suspends=True,
+            calls=d45_calls,
+            compare_call_counts=True,
+            verdict="SAME",
+            note="只判执行次数；纯 fan-out 的空 next / 任务保留由本地 T076 覆盖",
+        )
+    )
+
+    # D-46 · fan-out N=2 + static after
+    d46_calls: list[str] = []
+
+    def _d46_worker(state: dict[str, Any]) -> dict[str, Any]:
+        d46_calls.append(f"w{state['n']}")
+        return {"trace": [state["n"]]}
+
+    out.append(
+        Scenario(
+            name="D-46 · fan-out N=2 + static after（SAME：执行次数）",
+            channels={"trace": "binop"},
+            initial={"trace": []},
+            nodes={"fan": ((), _d45_fg), "worker": ((), _d46_worker)},
+            nodes_upstream={"fan": ((), _d45_up), "worker": ((), _d46_worker)},
+            edges={"__start__": ("fan",)},
+            interrupt_after=("worker",),
+            fg_suspends=True,
+            calls=d46_calls,
+            compare_call_counts=True,
+            verdict="SAME",
+        )
+    )
+
+    # D-47 · 同一节点同时配 before / after（SAME）
+    d47_calls: list[str] = []
+
+    def _d47_a(state: dict[str, Any]) -> dict[str, Any]:
+        d47_calls.append("a")
+        return {"count": 1}
+
+    out.append(
+        Scenario(
+            name="D-47 · 同节点 before + after（SAME）",
+            channels={"count": "last"},
+            initial={},
+            nodes={"a": ((), _d47_a)},
+            edges={"__start__": ("a",)},
+            interrupt_before=("a",),
+            interrupt_after=("a",),
+            fg_suspends=True,
+            calls=d47_calls,
+            verdict="SAME",
+        )
+    )
+
+    # D-48a/48b/48c · 非法断点名 / 裸 "*" / ["*"]
+    d48_calls: list[str] = []
+
+    def _d48_a(state: dict[str, Any]) -> dict[str, Any]:
+        d48_calls.append("a")
+        return {"count": 1}
+
+    out.append(
+        Scenario(
+            name='D-48a · interrupt_before=["nope"]（两侧构造失败 · SAME）',
+            channels={"count": "last"},
+            initial={},
+            nodes={"a": ((), _d48_a)},
+            edges={"__start__": ("a",)},
+            interrupt_before=("nope",),
+            fg_construct_error=True,
+            up_construct_error=True,
+            calls=d48_calls,
+            verdict="SAME",
+        )
+    )
+    out.append(
+        Scenario(
+            name='D-48b · interrupt_before="*"（All · DIFF：结果键）',
+            channels={"count": "last"},
+            initial={},
+            nodes={"a": ((), _d48_a)},
+            edges={"__start__": ("a",)},
+            interrupt_before="*",
+            fg_suspends=True,
+            calls=d48_calls,
+            verdict="DIFF",
+            note="裸 `*` = 全部可执行节点；freegraph 结果补 `__interrupt__: ()`（X-1）",
+        )
+    )
+    out.append(
+        Scenario(
+            name='D-48c · interrupt_before=["*"]（两侧构造失败 · SAME）',
+            channels={"count": "last"},
+            initial={},
+            nodes={"a": ((), _d48_a)},
+            edges={"__start__": ("a",)},
+            interrupt_before=("*",),
+            fg_construct_error=True,
+            up_construct_error=True,
+            calls=d48_calls,
+            verdict="SAME",
+        )
+    )
+
+    # D-49 · 真异常 + static after（SAME）
+    d49_calls: list[str] = []
+
+    def _d49_boom(state: dict[str, Any]) -> dict[str, Any]:
+        d49_calls.append("boom")
+        raise RuntimeError("boom")
+
+    out.append(
+        Scenario(
+            name="D-49 · 真异常 + static after（SAME）",
+            channels={"count": "last"},
+            initial={},
+            nodes={"boom": ((), _d49_boom)},
+            edges={"__start__": ("boom",)},
+            interrupt_after=("boom",),
+            use_graph_entry=True,
+            calls=d49_calls,
+            verdict="SAME",
         )
     )
 

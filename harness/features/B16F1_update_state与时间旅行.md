@@ -161,3 +161,7 @@
 - 验收脚本约定：`harness/demo/README.md`（M3 待锁定形态清单）。
 - 宪法 `.specify/memory/constitution.md`：原则 IV（trace / state / interrupt /
   time-travel 四类能力 MUST 有最小可用实现）。
+
+## 下游承接（B13F1 · 2026-11-15 · 只接线 · 逐条最小改动）
+
+- **D-6（B13F1 → B16F1 · M3 · 时间旅行）**：历史快照 MUST 能把「静态挂起」表示为 `interrupts == ()` 且 `suspension_kind` / `static_ack` 为静态值（`next` 允许为空）；从历史静态快照恢复 MUST 不要求动态中断载荷；MUST NOT 继续假设「`next` 非空 ⇒ 必有中断」。

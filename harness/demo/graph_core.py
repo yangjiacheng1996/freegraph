@@ -45,6 +45,7 @@ import typing
 from typing import Annotated, Any, TypedDict
 
 try:
+    from freegraph.contracts import GraphRecursionError
     from freegraph.graph import (
         END,
         START,
@@ -458,10 +459,15 @@ def case_recursion_limit() -> None:
     app = g.compile()
     try:
         app.invoke({"messages": [], "llm_calls": 0}, {"recursion_limit": 3})
-        # 「超限抛明确异常」的语义由章程规定（B13F1），但**载体**（dict / RunConfig / 其他）章程未锁
-        soft(False, "recursion_limit 超限抛明确异常", "以 dict 形态传 `recursion_limit` 未触发超限——载体待 B13F1 锁定")
-    except Exception as exc:  # noqa: BLE001
+        check(False, "recursion_limit 超限抛明确异常", "未抛出任何异常")
+    except GraphRecursionError as exc:
         check(True, "recursion_limit 超限抛明确异常", f"（{type(exc).__name__}）")
+    except Exception as exc:  # noqa: BLE001
+        check(
+            False,
+            "recursion_limit 超限抛明确异常",
+            f"非 GraphRecursionError：{type(exc).__name__}: {exc}",
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -546,9 +552,24 @@ def case_node_alias() -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+def _facade_ready() -> bool:
+    """M1 门面未就绪守卫（compile / invoke 仍为桩）⇒ 环境未就绪。"""
+    try:
+        compiled = StateGraph(dict).compile()
+    except NotImplementedError:
+        return False
+    except Exception:  # noqa: BLE001 - 空图编译失败 ≠ 门面未就绪
+        return True
+    return hasattr(compiled, "invoke")
+
+
 def main() -> int:
     print("══ graph_core · freegraph 图运行时内核验收（前置用例）══")
     print(f"Python {sys.version.split()[0]} · 只依赖 freegraph + 标准库")
+
+    if not _facade_ready():
+        print("[环境未就绪] compile() / invoke() 仍为桩（构建器 / 编译属 M2）")
+        return 2
 
     for case in (
         case_state_model,

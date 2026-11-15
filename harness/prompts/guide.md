@@ -569,7 +569,7 @@ freegraph 要实现的是 LangGraph 的**一个子集**，且**必须重写而�
 | **B12F1** | 节点并发执行：同 super-step 多节点并行 + 错误传播 + `GraphInterrupt` 合并 | 520 | 560 | **1,080** | B7F1,B9F1 | 并行节点不串行化；首个异常正确抛出 |
 | **B10F1** | `interrupt()` + `resume`：中断异常 + `__interrupt__` 结果键 + 从**节点起点**重跑语义 | 520 | 640 | **1,160** | B9F1 | HITL 中断/恢复闭环 |
 | **B11F1** | `Send`：动态 fan-out / map-reduce（条件边返回 `Send` → 自定义入参调用目标节点） | 460 | 520 | **980** | B7F1 | map-reduce 模式可运行 |
-| **B13F1** | `interrupt_before` / `interrupt_after` 静态中断点 + `recursion_limit` | 320 | 360 | **680** | B10F1 | 递归超限抛明确异常 |
+| **B13F1** | `interrupt_before` / `interrupt_after` 静态中断点 + `recursion_limit` | 320 | 360 | **680** | B10F1,B11F1 | 递归超限抛明确异常 |
 
 #### M2 图定义与对外 API（8 feature）
 

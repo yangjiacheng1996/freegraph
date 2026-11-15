@@ -103,7 +103,7 @@ contracts/（`send-contract.md` + `upstream-parity.md`）· quickstart.md
 - [X] T016 在 `src/freegraph/runtime/superstep.py` 的 `_run_round` 里把本轮任务集合改为（**裁定 2** · **H-1**）「标准任务 + fan-out 任务」并按 **TaskId** 排序（阶段 **②′** 骨架）⇒ FR-002 / FR-004
 - [X] T017 在 `src/freegraph/runtime/_fanout.py` 实现 fan-out 任务的构造（**裁定 2 / 3**）（目标节点 + **arg 逐字**）⇒ FR-003 / FR-004
 - [X] T018 在 `src/freegraph/runtime/superstep.py` 的**触发组枚举层**加「载体 B 抑制」的骨架（**裁定 5**）（**单元素**边触发组才抑制 · **按 `(producer, target)` 精确匹配** ⇒ 其它 producer 的静态边不抑制 · 多源屏障组不抑制）⇒ FR-006 · research D-04
-- [X] T019 核验 `src/freegraph/runtime/superstep.py` 的 `SchedulerState.to_checkpoint` **不含** `fanout`（载荷含用户对象 ⇒ 不落盘）⇒ FR-020 · research D-08 · I-12
+- [X] T019 核验 `src/freegraph/runtime/superstep.py` 的 `SchedulerState.to_checkpoint`（**B11F1 交付时**）**不含** `fanout`（载荷含用户对象 ⇒ 不落盘）⇒ FR-020 · research D-08 · I-12。⚠️ **2026-11-15 · B13F1 F-3 回溯修订**：自 B13F1 起改为**含** `fanout`（拆分而不删）；本任务的历史核验口径保留。
 - [X] T020 跑门禁 `harness/scripts/gates/gate_G21_dependencies.py`（依赖）/ `gate_G25_import_graph.py`（导入图）/ `gate_G30_attribution.py`（署名头）确认层纪律与纯净性**未破** ⇒ FR-013 · SC-014 / SC-021
 
 **Checkpoint**: 骨架就绪 —— 用户故事可开工
@@ -558,7 +558,7 @@ With multiple developers:
 | **PR-5** | `SchedulerState` 新增一个带缺省值的字段 | T013 |
 | **PR-6** | 归一形状增一个键 + `_TaskOutcome` 增一个字段 + `ordered_writes` | T012 · T015 · T035 · T036 · T059 |
 | **PR-7** | 两载体口径**不同**（DR-03） | T054 · T056 |
-| **PR-8** | fan-out 载荷**不落盘**（DR-02） | T019 · T078 |
+| **PR-8** | **B11F1 交付时** fan-out 载荷**不落盘**（DR-02）；⚠️ **B13F1 F-3 起拆分**：`to_checkpoint` 含 `fanout`（存储仍归 B14F1） | T019 · T078 |
 | **PR-9** | 立项书 §5.1 / §5.2 的修订 | T068 |
 | **PR-10** | 下游接线 D-1…D-8 | T076 · T077 · T078 · T079 · T080 · T081 · T095 |
 | **PR-11** | 差分场景 D-29…D-37 | T060 · T061 · T062 |

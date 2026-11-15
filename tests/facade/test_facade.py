@@ -347,7 +347,13 @@ class TestInterrupt:
 
 
 class TestAcceptanceScriptsCanImportTheFacade:
-    """既有消费者（验收脚本）的**导入段** MUST 成功（退出码 ≠ 2）。"""
+    """既有消费者（验收脚本）的**导入段** MUST 成功。
+
+    ⚠️ **B13F1（2026-11-15）**：``graph_core.py`` 新增「门面未就绪守卫」——
+    M1 阶段 ``compile()`` / ``invoke()`` 仍为桩时以退出码 **2** 结束（不判 FAIL）。
+    因此本测试对 ``graph_core`` 允许退出码 2，但 MUST 是**门面已导入**后的
+    「运行时未就绪」，而不是导入失败（输出不含「无法导入 freegraph」）。
+    """
 
     @pytest.mark.parametrize(
         "script",
@@ -357,11 +363,6 @@ class TestAcceptanceScriptsCanImportTheFacade:
     def test_script_does_not_exit_with_environment_not_ready(
         self, repo_root: Path, src_dir: Path, script: str
     ) -> None:
-        """脚本 MUST **不**以退出码 **2**（「环境未就绪」）结束。
-
-        退出码 **1**（断言失败）是**本 feature 的预期状态**——``StateGraph``
-        尚未接线（行为归 B6F1 / B7F2）。**2** 才说明门面还取不到。
-        """
         env = {**os.environ, "PYTHONPATH": str(src_dir)}
         # **验收脚本的输出含中文**（用例名 / 失败详情）⇒
         # ① 子进程强制 UTF-8 输出（Windows 默认 cp1252 ⇒ 打印中文即崩）·
@@ -379,6 +380,10 @@ class TestAcceptanceScriptsCanImportTheFacade:
             errors="replace",
             timeout=300,
         )
+        if script.endswith("graph_core.py") and proc.returncode == 2:
+            assert "[环境未就绪]" in proc.stdout, proc.stdout
+            assert "无法导入 freegraph" not in proc.stdout, proc.stdout
+            return
         assert proc.returncode != 2, (
             f"{script} 以退出码 2（环境未就绪）结束——门面导出面尚未就位：\n"
             f"{proc.stdout}\n{proc.stderr}"

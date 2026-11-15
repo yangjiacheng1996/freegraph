@@ -281,3 +281,81 @@ def test_the_runtime_never_imports_a_saver_implementation() -> None:
         or "class SqliteSaver" in path.read_text(encoding="utf-8")
     ]
     assert offenders == [], offenders
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# B13F1 · 静态挂起 metadata / fanout 账本 / 完成快照
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_static_suspend_metadata_has_kind_ack_and_scheduler_mirror() -> None:
+    """**F-9**：静态挂起的 metadata 只增 ``suspension_kind`` / ``static_ack``，
+    且二者镜像进 ``scheduler`` 子字典。"""
+    from freegraph.runtime.superstep import _suspend_metadata
+
+    ack = {"channel_versions": {"count": 1}}
+    metadata = _suspend_metadata(
+        ("review",),
+        (),
+        {"next": ("review",), "interrupts": (), "tasks": (), "scheduler": {}},
+        suspension_kind="static_before",
+        static_ack=ack,
+    )
+    assert metadata["suspension_kind"] == "static_before"
+    assert metadata["static_ack"] == ack
+    assert metadata["next"] == ("review",)
+    assert metadata["interrupts"] == ()
+
+
+def test_fanout_ledger_survives_json_round_trip() -> None:
+    """**F-3**：``to_checkpoint`` 的 ``fanout`` 键可 JSON 往返，缺键宽容。"""
+    from freegraph.contracts import Send
+    from freegraph.runtime import SchedulerState
+    from freegraph.runtime._fanout import _FanOut, make_fanout
+
+    tasks = make_fanout(
+        "fan",
+        [Send("worker", {"n": 1}), Send("worker", {"n": 2})],
+        {"worker"},
+        suppresses_static=False,
+    )
+    state = SchedulerState(
+        fanout={0: _FanOut(producer="fan", tasks=tasks, suppresses_static=False)}
+    )
+    ledger = state.to_checkpoint()
+    assert ledger["fanout"]["0"]["producer"] == "fan"
+    assert [t["arg"] for t in ledger["fanout"]["0"]["tasks"]] == [{"n": 1}, {"n": 2}]
+
+    round_tripped = json.loads(json.dumps(ledger))
+    restored = SchedulerState.from_checkpoint(round_tripped)
+    assert sorted(restored.fanout) == [0]
+    assert [task.arg for task in restored.fanout[0].tasks] == [{"n": 1}, {"n": 2}]
+
+
+def test_from_checkpoint_without_fanout_is_tolerant() -> None:
+    from freegraph.runtime import SchedulerState
+
+    restored = SchedulerState.from_checkpoint({})
+    assert restored.fanout == {}
+
+
+def test_decode_fanout_is_defensive_on_malformed_payloads() -> None:
+    from freegraph.runtime._fanout import decode_fanout
+
+    restored = decode_fanout(
+        {
+            "bad": "not-a-mapping",
+            "x": {"producer": "fan", "tasks": [{"target": "w"}]},
+            "0": {
+                "producer": "fan",
+                "tasks": [
+                    "not-a-mapping",
+                    {"target": 1},
+                    {"target": "w", "arg": {"n": 1}},
+                ],
+            },
+        }
+    )
+    assert "bad" not in restored
+    assert "x" in restored
+    assert [task.target for task in restored[0].tasks] == ["w"]

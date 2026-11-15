@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Container, Iterable
+from collections.abc import Container, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -102,3 +102,68 @@ def make_fanout(
             )
         )
     return tuple(tasks)
+
+
+def encode_fanout(fanout: Mapping[TaskId, _FanOut]) -> dict[str, Any]:
+    """把 fan-out 账本编码为**纯数据**（JSON 可序列化 · F-3）。
+
+    外层 key = ``str(TaskId)``（JSON 对象的 key 只能是字符串）；``arg`` **原样**
+    保存 ⇒ 非 JSON 兼容对象的持久化失败面归 B14F1（DR-01）。
+    """
+    return {
+        str(producer_id): {
+            "producer": payload.producer,
+            "suppresses_static": payload.suppresses_static,
+            "tasks": [
+                {
+                    "target": task.target,
+                    "arg": task.arg,
+                    "index": task.index,
+                    "suppresses_static": task.suppresses_static,
+                }
+                for task in payload.tasks
+            ],
+        }
+        for producer_id, payload in fanout.items()
+    }
+
+
+def decode_fanout(data: Mapping[str, Any] | None) -> dict[Any, _FanOut]:
+    """还原 fan-out 账本（缺键宽容 · 外层 key 能转 ``int`` 则转）。
+
+    防御性解码：单个载荷形状损坏 ⇒ 跳过该条，不因**旧快照 / 手工数据**阻断恢复。
+    """
+    restored: dict[Any, _FanOut] = {}
+    for raw_key, raw in (data or {}).items():
+        if not isinstance(raw, Mapping):
+            continue
+        try:
+            producer_id: Any = int(raw_key)
+        except (TypeError, ValueError):
+            producer_id = raw_key
+        tasks: list[_FanOutTask] = []
+        for item in raw.get("tasks") or ():
+            if not isinstance(item, Mapping):
+                continue
+            target = item.get("target")
+            if not isinstance(target, str):
+                continue
+            tasks.append(
+                _FanOutTask(
+                    target=target,
+                    arg=item.get("arg"),
+                    index=int(item.get("index", len(tasks))),
+                    suppresses_static=bool(
+                        item.get(
+                            "suppresses_static",
+                            raw.get("suppresses_static", False),
+                        )
+                    ),
+                )
+            )
+        restored[producer_id] = _FanOut(
+            producer=str(raw.get("producer", "")),
+            tasks=tuple(tasks),
+            suppresses_static=bool(raw.get("suppresses_static", False)),
+        )
+    return restored

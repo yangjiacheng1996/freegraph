@@ -208,3 +208,7 @@
 
 - **D-8（B11F1 → B15F1 · M3 · task_id / 中断现场）**：B11F1 允许同一节点在一轮内被 N 次调用 ⇒ `SqliteSaver` / 状态历史 MUST 接受 F-13 约定的持久化 `task_id`（标准任务 = 节点名；fan-out 任务 = `f"{节点名}:{TaskId}"`），且 `.pending_writes` MUST 能把 N 个同节点任务的中断记录区分开 ⇒ MUST NOT 继续假设"一轮一个节点一个任务"。
 
+## 下游承接（B13F1 · 2026-11-15 · 只接线 · 逐条最小改动）
+
+- **D-6（B13F1 → B15F1 · M3 · 状态历史）**：历史快照 MUST 能把「静态挂起」表示为 `interrupts == ()` 且 `suspension_kind` / `static_ack` 为静态值（`next` 允许为空）；从历史静态快照恢复 MUST 不要求动态中断载荷；MUST NOT 继续假设「`next` 非空 ⇒ 必有中断」。
+

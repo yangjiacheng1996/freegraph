@@ -92,7 +92,9 @@ TaskId = int   # 本轮任务的规范序号（0 起）
 | `fanout` | `dict[TaskId, _FanOut]` | `{}`（`default_factory`） | **产生者 TaskId** ⇒ 其产生的载荷（同一节点一轮内多次执行 ⇒ **各任务分别记录**）；`_FanOut` **带 `producer`（产生者节点名）** 供载体 B 抑制按 `(producer, target)` 匹配，且带 **`suppresses_static`（抑制判定的唯一聚合源）**；**下一轮消费后清空**（一次性）；再次执行即整体替换 |
 
 ⚠️ `SchedulerState()` 的**构造签名与名字逐字不变** ⇒ **B7F2 / B7F3 / B8F1 / B12F1 零改动**。
-⚠️ **不落盘**（`to_checkpoint` 不含它）⇒ 理由 = 载荷含**用户对象** ⇒ **DR-02**。
+⚠️ **B11F1 交付时口径（历史）**：**不落盘**（`to_checkpoint` 不含它）⇒ 理由 = 载荷含**用户对象** ⇒ **DR-02**。
+
+⚠️ **2026-11-15 · B13F1 F-3 回溯修订（拆分而不删）**：自 **B13F1** 起 `to_checkpoint` **增** `fanout` 键（静态挂起必须跨挂起保留 fan-out 现场 · B13F1 SC-009 / T076）⇒ B11F1 的「不含」历史断言保留并标注「**B13F1 F-3 起被拆分**」；`to_checkpoint` 仍是**纯数据**的承诺不变 ⇒ 非 JSON 兼容 `arg` 的持久化失败面归 **B14F1**（B13F1 DR-01）。
 
 ### 5.2 生命周期
 

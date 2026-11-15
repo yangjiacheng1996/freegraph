@@ -933,6 +933,9 @@ super-step，从而**独立验收**调度内核 —— 不用等 `StateGraph` / 
 - **`Send` 动态 fan-out** —— 属 **B11F1**。
 - **静态中断点（`interrupt_before` / `interrupt_after`）与 `recursion_limit` 的对外载体** ——
   属 **B13F1**；本 feature 只提供内核侧的步数上限与超限异常（FR-011）。
+  ⚠️ **B13F1 的 F-8 / V-26**：静态断点只在图级 `run_graph` 生效；`run_super_step` /
+  `run_super_steps` 收到**非空**静态字段时 MUST **显式拒绝**（`ValueError` · 消息说明
+  「静态断点只在图级 run_graph 生效」），**签名 / 返回类型不变**。
 - **条件边路由与 C8 独立回归测试** —— 属 **B8F1**；本 feature 只交付「待写入按节点分组」
   这一**复用前提**（FR-006）与「条件边字段的**预留**」（FR-033 · 恒空、填值即失败），
   **求值实现 MUST NOT 越界**（下游承接 **D-1**）。

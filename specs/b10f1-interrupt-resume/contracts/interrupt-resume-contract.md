@@ -7,6 +7,9 @@
 > **tasks 与实现 MUST 逐条照本契约**⇒ ⇒ 与 spec 冲突时 ⇒ **以 spec 为准**并**回修本契约**。
 > ⚠️ **本契约**只规定「**中断 / 恢复**」这条线 ⇒ **checkpointer 的读侧 / 写侧**归
 > [`checkpoint-contract.md`](./checkpoint-contract.md)。
+> ⚠️ **2026-11-15 · B13F1 只增扩展**（F-4 / F-5）：§2 `config` 注解接受 `Mapping`；
+> §6.1/§6.2 增**静态挂起**例外（静态标记 ⇒ 不抛 `no_pending_interrupt`；非静态仍抛）。
+> 动态中断 / 恢复语义**一字不动**。
 
 ---
 
@@ -39,11 +42,15 @@ run_graph(
     *,
     state: SchedulerState | None = None,
     checkpointer: Checkpointer | None = None,
-    config: RunConfig | None = None,
+    config: RunConfig | Mapping[str, Any] | None = None,
     max_steps: int = 10007,
     max_concurrency: int | None = None,
 ) -> SuperStepResult | InterruptResult
 ```
+
+> ⚠️ **B13F1 F-4**：`config` 注解由 `RunConfig | None` **放宽**为
+> `RunConfig | Mapping[str, Any] | None`（接受 dict 载体）；**MUST NOT** 新增显式
+> `recursion_limit=` 关键字。
 
 | 参数 | 语义 | 校验 |
 |---|---|---|
@@ -186,7 +193,7 @@ InterruptResult.as_result_dict() -> dict[str, Any]
 | ① | 输入**不是** `Command` ⇒ ⇒ **首次运行**路径（**不**要求 checkpointer） | — |
 | ② | 输入是 `Command` 但 `resume` 位**未提供**（`None`） | `InterruptError(reason="resume_value_required")` |
 | ③ | **未挂** checkpointer | `InterruptError(reason="checkpointer_required")` |
-| ④ | 该会话**没有**挂起的中断 | `InterruptError(reason="no_pending_interrupt")` |
+| ④ | 该会话**没有**挂起的中断（⚠️ **B13F1 F-5 例外**：`suspension_kind` 为 `static_before` / `static_after` 且 `interrupts == ()` ⇒ 合法**静态挂起**，**不**抛此错；非静态且无动态中断 ⇒ 仍抛，**不论 `next` 是否为空**） | `InterruptError(reason="no_pending_interrupt")` |
 | ⑤ | `resume` 是**标量** 且挂起中断 **> 1** | `InterruptError(reason="ambiguous_resume")` |
 | ⑥ | `resume` 是 **dict** 且**全部 key** 都是**当前挂起中断的 id** ⇒ ⇒ 按 id 逐个恢复（**未被指定的仍挂起**）⇒ ⚠️ **map 的「值」原样投递**（**标量即可** · **上游同款** · `langgraph/pregel/_algo.py:1313-1314`）⇒ ⇒ 该值 = 该节点**下一个** `interrupt()` 的恢复值 ⇒ ⇒ 同一节点的**第 2 个** `interrupt()` ⇒ **再次挂起**（裁定 7） | — |
 | ⑦ | `resume` 是 **dict** 但 key **不**全是挂起中断的 id ⇒ ⇒ **普通恢复值**（**仅当**挂起中断数 == 1 时有效 ⇒ **> 1** ⇒ 回到 ⑤） | `InterruptError(reason="ambiguous_resume")`（**> 1** 时） |
@@ -205,10 +212,13 @@ InterruptResult.as_result_dict() -> dict[str, Any]
 | 步 | 动作 | 落点 |
 |---|---|---|
 | 1 | `checkpointer.get_tuple(config)` ⇒ 取 `.snapshot` / `.pending_writes` / `.scheduler` | [`checkpoint-contract.md`](./checkpoint-contract.md) |
-| 2 | 从 `.pending_writes` 里取该会话的**挂起中断集合**（`__interrupt__` 通道）⇒ 校验「**有**挂起中断」 | spec 裁定 4 ④ |
+| 2 | 从 `.pending_writes` 里取该会话的**挂起中断集合**（`__interrupt__` 通道）⇒ 校验「**有**挂起中断」；⚠️ **B13F1 F-5**：先看 `.scheduler.suspension_kind`，静态值 + `interrupts == ()` ⇒ 合法静态挂起（**不**抛 `no_pending_interrupt`、**不**进入 per-node 映射） | spec 裁定 4 ④ |
 | 3 | 把**恢复值**写进 `__resume__` 的 pending write（值 = **列表** · 节点内顺序）⇒ 再写回 checkpointer | **上游同款**（`langgraph/pregel/_loop.py:904-925`）· research **DR-10** |
 | 4 | **重建**通道实例（`Channel.from_checkpoint`）+ 调度账本（`.scheduler`）⇒ ⚠️ **两条路径刻意不同**（**2026-11-13 分析轮拍板 · 照抄上游**）：<br>**④a · 恢复**（输入是 `Command`）⇒ 跑 `.snapshot.next` 的节点（**显式** · **不走**触发判定）⇒ 任务现场带 `resume` + `existing`；<br>**④b · 会话连续**（输入**非** `Command`）⇒ 先用 `.scheduler` **重建调度状态**（**续跑** · **上游同款** · **实测 E-26**）⇒ ⚠️ **两种输入形态行为不同**（**上游同款** · **实测 E-26**）：**`input = None`** ⇒ **不**写任何通道 ⇒ **只有被中断的节点**重跑 ⇒ `.id` **逐字不变**（**实测 E-15 / E-26 ①** · 补记 **F-1**）；**`input = StateDict`** ⇒ 先读 `.snapshot.values`、再把 `input` **按通道写入**叠加上去（**覆盖型 ⇒ 覆盖** · **归约型 ⇒ 追加** · **与 B5F1 的 `Channel.update` 同款** · **MUST NOT** 另写一条叠加路径）⇒ **写通道 ⇒ 通道版本推进 ⇒ 订阅节点重新触发** ⇒ 被触及的节点**重跑**（**实测 E-26 ②**）⇒ `.id` **可变**（新的检查点 ⇒ 新的任务路径）⇒ ⇒ 两条支路**共用**同一条续跑路径（**MUST NOT** 另写一条「整图重跑」路径）⇒ **不**消费 `__resume__` ⇒ ⇒ **不**触发恢复| research **DR-07** / **DR-08** · spec **H-5 ⑤** · **FR-013** 末行 · 裁定 9 |
 | 5 | 节点跑完 ⇒ **继续**后续轮次（触发判定与首次运行**同款**）⇒ 跑完 ⇒ 返回 `SuperStepResult` | spec **H-5 ⑤** |
+
+> ⚠️ **B13F1 F-5 静态恢复分支**：`Command(resume=...)` 命中静态挂起时，恢复值**不投递**
+> 给任何节点、按 `.snapshot.next` 继续；完成时由 **B13F1 F-10** 写一次完成快照清标记。
 
 ### 6.3 「从节点起点重跑」（**最容易实现错的语义**）
 

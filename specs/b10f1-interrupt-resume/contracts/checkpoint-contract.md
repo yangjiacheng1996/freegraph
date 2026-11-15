@@ -7,6 +7,9 @@
 > **B14F1** MUST **满足**它（承接 **D-1**）⇒ ⇒ **B10F1 MUST NOT** 越界实现 saver（FR-019）。
 > ⚠️ **L1 的 `Checkpointer` 协议**（8 方法 · B2F1 冻结）的**返回结构与载荷形状挂起 B14F1**
 > ⇒ ⇒ 本契约**就是**那个「挂起」的**解冻**⇒ ⇒ **L1 协议本身零改动**（G7 / G8 / G16 / G19 恒绿）。
+> ⚠️ **2026-11-15 · B13F1 只增扩展**（F-3 / F-9 / F-10）：§3 调度账本增 `fanout` 键；
+> §4 写侧增 `suspension_kind` / `static_ack` 与**静态恢复完成快照**（一次性）。
+> B10F1 原有读侧 / 写侧语义**一字不动**。
 
 ---
 
@@ -45,6 +48,7 @@
 | `channel_versions` | `SchedulerState.channel_versions`（`{通道key: 版本}`） | **原样** | 原样 |
 | `node_versions` | `SchedulerState.node_versions`（`{节点名: 版本}`） | **原样** | 原样 |
 | `dynamic_edges` | `SchedulerState.dynamic_edges`（`{节点名: (目标, ...)}`） | `{节点名: [目标, ...]}` | `tuple(目标, ...)` |
+| `fanout`（**B13F1 F-3**） | `SchedulerState.fanout`（`{TaskId: _FanOut}`） | `{str(TaskId): {producer, suppresses_static, tasks[]}}` | `{int(TaskId): _FanOut}`（缺键 ⇒ `{}` · 宽容解码） |
 
 ⚠️ **`versions_seen` 的 key 是二元组** ⇒ **JSON 不可直接序列化**（tuple → list ⇒ 键变 list ⇒ 不可哈希）
 ⇒ ⇒ **必须**用上面的**列表**编码 ⇒ ⇒ **纯数据**（C19 约束③）✓。
@@ -65,16 +69,19 @@ B14F1 **不需要**理解账本的内部结构（**只当不透明载荷**）⇒
 
 ---
 
-## 4. **写侧**最小契约（**B10F1 MUST 调用 · B14F1 MUST 实现**）
+## 4. **写侧**最小契约（**B10F1 / B13F1 MUST 调用 · B14F1 MUST 实现**）
 
 | 调用 | 时机 | 载荷 | 上游对照 |
 |---|---|---|---|
-| `checkpointer.put(config, values=..., metadata=...)` | **挂起时**（写**该步合并后的稀疏状态**）⇒ ⚠️ **口径订正**：初版写「每个 super-step 结束时」⇒ ⇒ 与 `tasks.md`（T041 只实现**挂起时**的写侧）**不一致** ⇒ ⇒ 本 feature 的**写侧**范围 = **挂起时**（`put` + `put_writes`）⇒ ⇒ 「每轮末写快照」**归 B14F1**（其 saver 的持久化策略）⇒ ⇒ **零行为影响**（恢复所需的快照在**挂起时**已写全） | `values` = 该步合并后的**稀疏状态** | 上游 `BaseCheckpointSaver.put(config, values, metadata, new_versions)` |
+| `checkpointer.put(config, values=..., metadata=...)` | **挂起时**（写**该步合并后的稀疏状态**）⇒ ⚠️ **口径订正**：初版写「每个 super-step 结束时」⇒ ⇒ 与 `tasks.md`（T041 只实现**挂起时**的写侧）**不一致** ⇒ ⇒ 本 feature 的**写侧**范围 = **挂起时**（`put` + `put_writes`）⇒ ⇒ 「每轮末写快照」**归 B14F1**（其 saver 的持久化策略）⇒ ⇒ **零行为影响**（恢复所需的快照在**挂起时**已写全）<br>⚠️ **B13F1 F-10 只增例外**：**静态恢复完成时**由 B13F1 写一次**完成快照**（`next=()` / `interrupts=()` / `tasks=()` / `suspension_kind=None` / `static_ack=None` / `fanout={}`）⇒ 该写是**一次性收尾**，**不是**「每轮末快照」；B14F1 的每轮末持久化 MUST NOT 与它重复 / 冲突 | `values` = 该步合并后的**稀疏状态**（静态完成写 = 最终稀疏状态） | 上游 `BaseCheckpointSaver.put(config, values, metadata, new_versions)` |
 | `checkpointer.put_writes(config, writes=..., task_id=..., task_path=...)` | **挂起时**（写**中断留痕**）与**恢复时**（写**恢复值**） | `writes` = 该任务的写入序列 | 上游 `BaseCheckpointSaver.put_writes(config, writes, task_id, task_path)` |
 
 ⚠️ **关键字名逐字**：`values` / `metadata` / `writes` / `task_id` / `task_path`
 ⇒ ⇒ L1 协议用 `*args, **kwargs` ⇒ **不约束**关键字 ⇒ ⇒ 由本契约**冻结** ⇒ ⇒ B14F1 MUST 照此实现。
 ⚠️ **挂起时 MUST 写快照 + 待写入**（FR-012）⇒ ⇒ 挂起态**可被再次恢复**（闭环**可重复** · SC-013）。
+⚠️ **静态挂起 metadata**（**B13F1 F-9**）：只增 `suspension_kind` / `static_ack`，并镜像进 `scheduler`；
+静态挂起 **MUST NOT** 为 `__interrupt__` 写 `put_writes`（载荷为空）。
+⚠️ **静态恢复完成快照**（**B13F1 F-10**）：一次性 `put` 写完成快照（见上表），**不是**每轮末快照。
 
 ---
 
@@ -94,7 +101,7 @@ B14F1 **不需要**理解账本的内部结构（**只当不透明载荷**）⇒
 
 ---
 
-## 6. **B14F1** MUST 满足的**验收清单**（承接 **D-1**）
+## 6. **B14F1** MUST 满足的**验收清单**（承接 **D-1** · 含 **B13F1** 的只增扩展）
 
 | # | 项 | 判定 |
 |---|---|---|
@@ -108,6 +115,9 @@ B14F1 **不需要**理解账本的内部结构（**只当不透明载荷**）⇒
 | 8 | 挂起 → 恢复 → **再次挂起** ⇒ 三次调用后状态**自洽** | 闭环断言（SC-013） |
 | 9 | **真异常 + 中断同现**时，中断元组**随 pending writes 留痕** | pending writes 断言（消解 **X-5**） |
 | 10 | **人工验证**补上「**恢复侧真跑一轮**」的实测输出 | 人工验证记录（偏离登记 **V-1** 的承接） |
+| 11 | `.scheduler` 的 `fanout` 键可 JSON 往返；旧快照缺键 ⇒ `{}`（**B13F1 F-3**） | JSON 往返 / 缺键宽容断言 |
+| 12 | 静态挂起 metadata 的 `suspension_kind` / `static_ack` 形状与 `scheduler` 镜像（**B13F1 F-9**） | metadata 形状断言 |
+| 13 | 静态恢复完成快照写一次且清标记（**B13F1 F-10**）；**不是**每轮末快照 | 调用 / metadata 断言 |
 
 ---
 

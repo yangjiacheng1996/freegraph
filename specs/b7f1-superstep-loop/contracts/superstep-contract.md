@@ -24,7 +24,7 @@
 |---|---|
 | 宿主模块 | `freegraph.runtime.superstep`（L2 · 独立文件 · 裁定 17） |
 | 导出 | `freegraph.runtime.__all__` **新增 6 个**：`GraphSpec` · `NodeSpec` · `SchedulerState` · `SuperStepResult` · `run_super_step` · `run_super_steps`（14 → **20**） |
-| 图规格 | `GraphSpec(channels: dict[str, Channel], nodes: dict[str, NodeSpec], edges: dict[str \| tuple[str, ...], tuple[str, ...]], *, conditional_edges: dict[str, Any] = <空映射>)` —— ⚠️ **`conditional_edges` 的缺省值 MUST 用「工厂语义」实现**（dataclass 的 `default_factory` 等价）⇒ **MUST NOT** 用字面可变默认值（`= {}`）⇒ dataclass 会抛 `ValueError: mutable default <class 'dict'>`（**实测**）· `channels` MUST 是**可变** `dict`（FR-034 · **MUST NOT** 用 `MappingProxyType` —— B4F1 的 `SchemaSpec.channels` 是只读映射，形态不同）<br>⚠️ **2026-11-13 · B7F4 回溯修订 R-1（拆分而不删）**：边表的**键类型**由 `str` 放宽为 **`str \| tuple[str, ...]`**（**兼容扩展** ⇒ **单源边的写法逐字不变** ⇒ 既有调用方**零改动**）⇒ **元组键** ⇒ 该边的**所有**源**共同**汇合到目标（**AND / 屏障**）⇒ **多源口径**的**唯一权威** = `specs/b7f4-multisource-join/contracts/superstep-multisource-contract.md` ⇒ ⇒ 本行的**其余文字逐字保留** |
+| 图规格 | `GraphSpec(channels: dict[str, Channel], nodes: dict[str, NodeSpec], edges: dict[str \| tuple[str, ...], tuple[str, ...]], *, conditional_edges: dict[str, Any] = <空映射>, interrupt_before: str \| Sequence[str] = (), interrupt_after: str \| Sequence[str] = ())` —— ⚠️ **`interrupt_before` / `interrupt_after` 是 B13F1 的兼容扩展**（keyword-only · 缺省 `()` · 构造后归一为 `tuple[str, ...]`；裸 `"*"` 展开为可执行节点）；⚠️ **`conditional_edges` 的缺省值 MUST 用「工厂语义」实现**（dataclass 的 `default_factory` 等价）⇒ **MUST NOT** 用字面可变默认值（`= {}`）⇒ dataclass 会抛 `ValueError: mutable default <class 'dict'>`（**实测**）· `channels` MUST 是**可变** `dict`（FR-034 · **MUST NOT** 用 `MappingProxyType` —— B4F1 的 `SchemaSpec.channels` 是只读映射，形态不同）<br>⚠️ **2026-11-13 · B7F4 回溯修订 R-1（拆分而不删）**：边表的**键类型**由 `str` 放宽为 **`str \| tuple[str, ...]`**（**兼容扩展** ⇒ **单源边的写法逐字不变** ⇒ 既有调用方**零改动**）⇒ **元组键** ⇒ 该边的**所有**源**共同**汇合到目标（**AND / 屏障**）⇒ **多源口径**的**唯一权威** = `specs/b7f4-multisource-join/contracts/superstep-multisource-contract.md` ⇒ ⇒ 本行的**其余文字逐字保留** |
 | 节点规格 | `NodeSpec(subscribes: tuple[str, ...], run: Callable[[dict[str, Any]], dict[str, Any]])` |
 | 调度状态 | `SchedulerState()` —— **由调用方持有**（裁定 16）· 承载「已消费版本」+ 轮次计数 |
 | 单轮结果 | `SuperStepResult(state: dict[str, Any], executed: tuple[str, ...], node_writes: dict[str, dict[str, tuple[Any, ...]]], steps: int)` |
@@ -33,6 +33,10 @@
 | 依赖 | **只依赖标准库**（`collections.abc` · `dataclasses` · `typing`）· MUST NOT import 第三方（L2 · FR-022） |
 | **节点表 MUST 保序** | `nodes` 的**迭代顺序** MUST 保序（**图规格的映射语义**）⇒ **但**同轮**执行顺序** = **节点名序**（**上游同款** · 2026-11-12 P2-c · `_algo.py:482`）⇒ 执行顺序**不随**节点表的声明顺序改变（**取代** FR-013 · 裁定 9 的原口径）|
 
+> ⚠️ **B13F1 V-26（入口期）**：`run_super_step` / `run_super_steps` 收到**非空**
+> `interrupt_before` / `interrupt_after` ⇒ 内置 `ValueError`（消息说明「静态断点只在图级
+> `run_graph` 生效」）；**签名 / 返回类型不变**，**MUST NOT** 静默忽略。
+>
 > ⚠️ **名字是跨 feature 契约**：**B7F2**（`compile()`）· **B7F3**（`invoke()`）· **B8F1**（条件边路由）·
 > **B9F1**（`Command`）· **B12F1**（并发）**全部**直接消费本契约 ⇒ 名字与语义**逐字冻结**。
 > ⚠️ **「逐字冻结」冻结的是**名字**与**语义**，不是**实现写法**：上表的 `dict[...]` 与「缺省 = 空映射」
@@ -49,7 +53,7 @@
 
 ## 2. 图规格（`GraphSpec`）
 
-### 2.1 三部分 + 一个预留字段
+### 2.1 三部分 + 一个预留字段 + 两个静态断点字段（B13F1 兼容扩展）
 
 | 部分 | 形态 | 语义 | 校验（**MUST 显式失败**） |
 |---|---|---|---|
@@ -57,6 +61,7 @@
 | **节点表** `nodes` | `dict[str, NodeSpec]`（**保序**） | 节点名 → 节点规格 | MUST **非空**；节点名 MUST 是 `str` |
 | **边表** `edges` | `dict[str, tuple[str, ...]]`（⚠️ **2026-11-13 · B7F4 回溯修订 R-1（拆分而不删）** ⇒ 键类型放宽为 `dict[str \| tuple[str, ...], tuple[str, ...]]` ⇒ **单源边的写法逐字不变**） | 源节点名 → 目标节点名序列（**单源边**）· **元组键** ⇒ **多源边**（AND / 屏障 · 该边的**所有**源**共同**汇合到目标 · 目标**恰为一个**） | 目标 MUST **在节点表里**；**源** MUST 在节点表里，**入口哨兵 `__start__` 除外**（§3.0 · 上游 `START` 伪节点）<br>⚠️ **多源口径的校验**（**B7F4** · **V-16** 形态族 + **V-2** 语义族）：**每个**源 MUST 在节点表里（**点名全部**缺失者）· 目标 MUST 在节点表里（**点名该目标**）· 元组**非空** / **不含** `__start__` / 目标**恰为一个** / 目标 **MUST NOT** 为 `__end__` ⇒ 内置 `ValueError`（**V-16**）· 边键**类型**非法（既非 `str` 亦非 `tuple`）⇒ 内置 **`TypeError`**（**FR-021**）⇒ ⇒ **零新增错误类型** |
 | **条件边** `conditional_edges` | `dict[str, Any]`（**缺省 = 空映射** · 工厂语义） | **本轮恒为空**（预留 · 裁定 25） | **非空 ⇒ 显式失败**（FR-033） |
+| **静态断点字段**（**B13F1**） | `interrupt_before: str \| Sequence[str] = ()` · `interrupt_after: str \| Sequence[str] = ()`（**keyword-only** · 构造后归一为 `tuple[str, ...]`） | 图级静态中断点（**只在 `run_graph` 生效**）· 裸 `"*"` = 全部**可执行**节点（排除 `__start__` / `__end__`） | **构造期**校验（**V-22…V-25**）· 低层入口 **V-26** 显式拒绝 |
 
 > ⚠️ **初始化写入豁免**（裁定 31 · 2026-11-11 分析轮 · 发起者批准）：调用方在**跑之前**直接向通道对象
 > 写入**初始值** = 「写入只由调度层发起」的唯一豁免（走通道自身的 `update()` ⇒ **通道语义 /
@@ -77,8 +82,19 @@
 | **V-3**（节点表**为空**） | 内置 **`ValueError`** |
 | **V-8**（`conditional_edges` **非空**） | **显式失败**（本轮不实现求值）· **内置 `ValueError`**（与 V-1…V-3 同族 —— 都是「传进来的东西不对」· **一致性订正** ⚠️ **2026-11-11 分析轮第 6 次**：原写「类型不冻结」⇒ 与本表「不变式」行的「只用**两种内置异常**」**自相矛盾** ⇒ **冻结为 `ValueError`**（判据**只收紧**：原口径允许任意类型 ⇒ 本口径唯一化）· 落点：spec **SC-025** · data-model §6 · tasks **T060**） |
 | **V-4**（节点返回值**不在** {`dict`, `Command`, `list[Command \| dict]`, **`None`**} 之内） | 内置 **`TypeError`**（**运行期** · FR-009）<br>⚠️ **2026-11-12 上游对齐 P3**：`None` 已**合法**（**无写入** · 上游 `langgraph/graph/state.py:1459-1460`）⇒ 原「含 `None`」**已回溯修订** |
+| **V-22**（静态断点**裸值 / 元素类型 / 容器类型**非法）| 裸非 `"*"` 字符串（含空串 / 裸哨兵）；或序列元素非 `str`；或整体不是 `str` / `Sequence`（`None` 另行）⇒ 内置 **`TypeError`**（**B13F1**） |
+| **V-23**（静态断点**序列元素为空串**） | 内置 **`ValueError`**（**B13F1**） |
+| **V-24**（静态断点**序列元素为 `__start__` / `__end__` / `"*"`**） | 内置 **`ValueError`**（**B13F1**） |
+| **V-25**（静态断点**序列元素不在节点表**） | 内置 **`ValueError`**（点名该节点 · **B13F1**） |
 > ⚠️ **回溯修订（2026-11-11 · B9F1 · 发起者特批 · 破 L1 冻结面）**：本行原为「节点返回值**不是 `dict`**」⇒ **B9F1 放宽**了返回形态（增 `Command` 与**命令列表**）⇒ 本行随之改为「**不在三形态之内**」（`None` **仍然**显式失败 —— 该口径**未放宽**）⇒ 见 B9F1 的 **裁定 21**。
 | **不变式** | 一个 feature 只用**两种内置异常**（`ValueError` / `TypeError`）⇒ 「同一场景出现两种异常类型」的出现次数 MUST == **0** · ⚠️ **2026-11-11 分析轮第 6 次订正**：本行原只覆盖 V-1…V-4 ⇒ **V-8 原写「类型不冻结」**会与之冲突 ⇒ 已冻结为 `ValueError`（**只收紧** · 不新增判据） |
+
+> ⚠️ **V-22…V-25 是 B13F1 的全局续编**（**只增**）；B7F1 契约既有 V-1…V-9 与
+> **B7F4 的 V-16 形态族** **一字不改**；**B11F1 的 V-15…V-21**（其 **V-16** 为 `goto`
+> 槽位规则）**段不动**。
+> ⚠️ **V-26 属入口期**（**不是**构造期）：`run_super_step` / `run_super_steps` 收到
+> **非空** `interrupt_before` / `interrupt_after` ⇒ 内置 `ValueError`（消息说明
+> 「静态断点只在图级 `run_graph` 生效」）；签名 / 返回类型不变（**B13F1 F-8**）。
 
 ### 2.2 节点规格（`NodeSpec`）
 
@@ -210,6 +226,11 @@ freegraph ran = ['a','b']  ⇒ b 被执行 ⇒ 随后 GraphRecursionError（自�
 | **版本推进** | 合并阶段先记录「本轮**哪些**通道写入了值」（`update()` 返回**真**）⇒ **全部合并成功后**才对它们各 **+1**（**值逐字相等也算推进**）· 本轮出错 ⇒ **一个都不推进** | research **D-03** · FR-002 ⚠️ · §5.4 |
 | **校验顺序** | ① **未知 key**（FR-007）→ ② **覆盖型多写**（FR-005 ②）→ ③ **逐通道合并**（§5.4）⇒ 一轮内同时命中多类错误时**只抛第一个**（顺序**固定** ⇒ 可复现） | —（**2026-11-11 分析轮** · 口径补齐） |
 | **屏障（多源边）的记账**（⚠️ **2026-11-13 · B7F4 回溯修订 R-5（拆分而不删）**） | 屏障**不改变**任何写入 / 合并语义 ⇒ 本节的**全部**规则**零改动**（**C4 / C5 / C6 / C8 / C17 零影响**）⇒ ⇒ 触发判定用的「**已消费版本**」（`seen`）的**记账口径**归 **§3.2**（**逐源各记一条** · **只消费已满足的组**）⇒ ⇒ 本节**不重复**维护该口径（**避免两处漂移**） | —（**上游同款** · 上游的屏障是**通道** ⇒ 不经本节的写入合并路径） |
+
+> ⚠️ **B13F1 V-26（入口期）**：静态断点属**图级策略** ⇒ `run_super_step` /
+> `run_super_steps` 收到**非空** `interrupt_before` / `interrupt_after` MUST **显式拒绝**
+> （`ValueError` · 消息说明「静态断点只在图级 `run_graph` 生效」）；**MUST NOT** 静默忽略，
+> **MUST NOT** 为低层入口改返回类型。
 
 ### 5.2 步末清空（**只清「本轮未被写入的」路由型通道**）
 
