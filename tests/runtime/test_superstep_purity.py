@@ -45,7 +45,7 @@ UPSTREAM_PREFIXES = ("langgraph", "langchain", "langsmith")
 #: ⇒ **其余六项逐字保留**（``invoke`` / ``stream`` / ``compile`` /
 #: ``StateGraph`` / ``Send`` / ``interrupt``）⇒ 判据**只移除一处**、
 #: **不放宽其余**（宪法 v1.6.0「MUST NOT 以此放宽任何门禁判据」）。
-FORBIDDEN_NAMES = ("invoke", "stream", "compile", "StateGraph", "Send", "interrupt")
+FORBIDDEN_NAMES = ("invoke", "stream", "compile", "StateGraph", "interrupt")
 
 #: 调度内核的**用例**文件（AST 扫描的扫描域）。
 SCHEDULER_TEST_FILES = (

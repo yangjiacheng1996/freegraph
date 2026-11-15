@@ -2222,6 +2222,299 @@ def _scenarios() -> list[Scenario]:
         )
     )
 
+    # ── B11F1 · D-29…D-37（Send 动态 fan-out）──────────────────────────────
+    def _fg_send(node: str, arg: Any) -> Any:
+        sys.path.insert(0, f"{ROOT}/src")
+        from freegraph.graph import Send
+
+        return Send(node, arg)
+
+    def _up_send(node: str, arg: Any) -> Any:
+        from langgraph.types import Send
+
+        return Send(node, arg)
+
+    # D-29 · 同一目标两次 · 各自不同入参（SAME）
+    def _d29_fg(state: dict[str, Any]) -> Any:
+        return [_fg_send("worker", {"n": 1}), _fg_send("worker", {"n": 2})]
+
+    def _d29_worker(state: dict[str, Any]) -> dict[str, Any]:
+        return {"msgs": [f"w{state['n']}"]}
+
+    def _d29_up_fan(state: dict[str, Any]) -> dict[str, Any]:
+        return {}
+
+    def _d29_up_cond(state: dict[str, Any]) -> Any:
+        return [_up_send("worker", {"n": 1}), _up_send("worker", {"n": 2})]
+
+    def _d29_up_extra(graph: Any) -> None:
+        graph.add_conditional_edges("fan", _d29_up_cond, ["worker"])
+
+    out.append(
+        Scenario(
+            name="D-29 · fan-out 到同一目标两次 · 各自不同入参（SAME）",
+            channels={"msgs": "binop"},
+            initial={"msgs": []},
+            nodes={"fan": ((), _d29_fg), "worker": ((), _d29_worker)},
+            nodes_upstream={
+                "fan": ((), _d29_up_fan),
+                "worker": ((), _d29_worker),
+            },
+            edges={"__start__": ("fan",)},
+            upstream_extra=_d29_up_extra,
+            verdict="SAME",
+        )
+    )
+
+    # D-30 · arg = 完整状态（SAME · 目标只看到 arg 的 key）
+    def _d30_fg(state: dict[str, Any]) -> Any:
+        return [_fg_send("worker", dict(state))]
+
+    def _d30_worker(state: dict[str, Any]) -> dict[str, Any]:
+        return {"msgs": sorted(state.keys())}
+
+    def _d30_up_fan(state: dict[str, Any]) -> dict[str, Any]:
+        return {}
+
+    def _d30_up_cond(state: dict[str, Any]) -> Any:
+        return [_up_send("worker", dict(state))]
+
+    def _d30_up_extra(graph: Any) -> None:
+        graph.add_conditional_edges("fan", _d30_up_cond, ["worker"])
+
+    out.append(
+        Scenario(
+            name="D-30 · Send.arg = 完整状态（SAME）",
+            channels={"msgs": "binop", "seed": "last"},
+            initial={"msgs": [], "seed": 1},
+            nodes={
+                "fan": (("msgs", "seed"), _d30_fg),
+                "worker": ((), _d30_worker),
+            },
+            nodes_upstream={
+                "fan": (("msgs", "seed"), _d30_up_fan),
+                "worker": ((), _d30_worker),
+            },
+            edges={"__start__": ("fan",)},
+            upstream_extra=_d30_up_extra,
+            verdict="SAME",
+        )
+    )
+
+    # D-31 · fan-out 产出的写入按归约器汇合（SAME · 顺序逐项相等）
+    def _d31_worker(state: dict[str, Any]) -> dict[str, Any]:
+        return {"msgs": [state["n"]]}
+
+    def _d31_fg(state: dict[str, Any]) -> Any:
+        return [_fg_send("worker", {"n": 1}), _fg_send("worker", {"n": 2})]
+
+    def _d31_up_fan(state: dict[str, Any]) -> dict[str, Any]:
+        return {}
+
+    def _d31_up_cond(state: dict[str, Any]) -> Any:
+        return [_up_send("worker", {"n": 1}), _up_send("worker", {"n": 2})]
+
+    def _d31_up_extra(graph: Any) -> None:
+        graph.add_conditional_edges("fan", _d31_up_cond, ["worker"])
+
+    out.append(
+        Scenario(
+            name="D-31 · fan-out 写入按归约器汇合（顺序确定 · SAME）",
+            channels={"msgs": "binop"},
+            initial={"msgs": []},
+            nodes={"fan": ((), _d31_fg), "worker": ((), _d31_worker)},
+            nodes_upstream={
+                "fan": ((), _d31_up_fan),
+                "worker": ((), _d31_worker),
+            },
+            edges={"__start__": ("fan",)},
+            upstream_extra=_d31_up_extra,
+            compare="order",
+            verdict="SAME",
+            note="上游 apply_writes 按任务路径排序 ⇒ 标准触发在前 · fan-out 按产生者序 + Send 序；freegraph 同款",
+        )
+    )
+
+    # D-32 · Send 目标不存在（STRICTER）
+    def _d32_fg(state: dict[str, Any]) -> Any:
+        return [_fg_send("nope", {})]
+
+    def _d32_up_fan(state: dict[str, Any]) -> dict[str, Any]:
+        return {}
+
+    def _d32_up_cond(state: dict[str, Any]) -> Any:
+        return [_up_send("nope", {})]
+
+    def _d32_up_extra(graph: Any) -> None:
+        graph.add_conditional_edges("fan", _d32_up_cond, ["worker"])
+
+    out.append(
+        Scenario(
+            name="D-32 · Send 目标不存在（STRICTER）",
+            channels={"msgs": "binop"},
+            initial={"msgs": []},
+            nodes={"fan": ((), _d32_fg), "worker": ((), lambda s: {})},
+            nodes_upstream={
+                "fan": ((), _d32_up_fan),
+                "worker": ((), lambda s: {}),
+            },
+            edges={"__start__": ("fan",)},
+            upstream_extra=_d32_up_extra,
+            verdict="STRICTER",
+            note="上游 warning + 忽略（pregel/_algo.py:978）；freegraph 显式失败并点名产生者与目标（X-1）",
+        )
+    )
+
+    # D-33 · 静态边 + 载体 A Send 指向同一目标（SAME · 叠加）
+    def _d33_worker(state: dict[str, Any]) -> dict[str, Any]:
+        return {"msgs": [f"w{state.get('n', 0)}"]}
+
+    def _d33_fg(state: dict[str, Any]) -> Any:
+        sys.path.insert(0, f"{ROOT}/src")
+        from freegraph.graph import Command
+
+        return Command(
+            goto=[_fg_send("worker", {"n": 1}), _fg_send("worker", {"n": 2})]
+        )
+
+    def _d33_up_fan(state: dict[str, Any]) -> Any:
+        from langgraph.types import Command
+
+        return Command(
+            goto=[_up_send("worker", {"n": 1}), _up_send("worker", {"n": 2})]
+        )
+
+    out.append(
+        Scenario(
+            name="D-33 · 静态边 + 载体 A Send（叠加 · SAME）",
+            channels={"msgs": "binop"},
+            initial={"msgs": []},
+            nodes={"fan": ((), _d33_fg), "worker": ((), _d33_worker)},
+            nodes_upstream={
+                "fan": ((), _d33_up_fan),
+                "worker": ((), _d33_worker),
+            },
+            edges={"__start__": ("fan",), "fan": ("worker",)},
+            verdict="SAME",
+        )
+    )
+
+    # D-34 · fan-out 任务的并发性（freegraph 内部对照）
+    def _d34_fg_only(scenario: Scenario) -> tuple[bool, str]:
+        import threading
+
+        sys.path.insert(0, f"{ROOT}/src")
+        from freegraph.graph import Send
+        from freegraph.runtime import (
+            BinaryOperatorAggregate,
+            GraphSpec,
+            NodeSpec,
+            SchedulerState,
+            run_super_steps,
+        )
+
+        barrier = threading.Barrier(2)
+
+        def fan(state: dict[str, Any]) -> Any:
+            return [Send("worker", {"n": 1}), Send("worker", {"n": 2})]
+
+        def worker(state: dict[str, Any]) -> dict[str, Any]:
+            barrier.wait(timeout=5)
+            return {"msgs": [state["n"]]}
+
+        spec = GraphSpec(
+            channels={"msgs": BinaryOperatorAggregate("msgs", list, operator.add)},
+            nodes={"fan": NodeSpec((), fan), "worker": NodeSpec((), worker)},
+            edges={"__start__": ("fan",)},
+        )
+        try:
+            result = run_super_steps(spec, SchedulerState(), max_steps=10)
+        except Exception as exc:  # noqa: BLE001
+            return False, f"并发屏障未放行：{type(exc).__name__}: {exc}"
+        return result.state == {"msgs": [1, 2]}, f"state={result.state!r}"
+
+    out.append(
+        Scenario(
+            name="D-34 · fan-out 任务的并发性（freegraph 内部对照 · SAME）",
+            channels={"msgs": "binop"},
+            initial={"msgs": []},
+            nodes={},
+            edges={},
+            fg_only=_d34_fg_only,
+            verdict="SAME",
+        )
+    )
+
+    # D-35 · 节点直接返回 list[Send]（DIFF）
+    def _d35_fg(state: dict[str, Any]) -> Any:
+        return [_fg_send("worker", {"n": 1}), _fg_send("worker", {"n": 2})]
+
+    def _d35_up(state: dict[str, Any]) -> Any:
+        return [_up_send("worker", {"n": 1}), _up_send("worker", {"n": 2})]
+
+    def _d35_worker(state: dict[str, Any]) -> dict[str, Any]:
+        return {"msgs": [state["n"]]}
+
+    out.append(
+        Scenario(
+            name="D-35 · 节点直接返回 list[Send]（DIFF · 上游不支持）",
+            channels={"msgs": "binop"},
+            initial={"msgs": []},
+            nodes={"fan": ((), _d35_fg), "worker": ((), _d35_worker)},
+            nodes_upstream={"fan": ((), _d35_up), "worker": ((), _d35_worker)},
+            edges={"__start__": ("fan",)},
+            verdict="DIFF",
+            note="上游节点返回 list[Send] ⇒ InvalidUpdateError（graph/state.py:1488-1492）；freegraph 支持该形态（X-6 · 验收脚本 C18）",
+        )
+    )
+
+    # D-36 · 一次返回里既派发又写入（SAME）
+    def _d36_fg(state: dict[str, Any]) -> Any:
+        sys.path.insert(0, f"{ROOT}/src")
+        from freegraph.graph import Command
+
+        return Command(
+            goto=[_fg_send("worker", {"n": 1}), _fg_send("worker", {"n": 2})],
+            update={"msgs": ["from-fan"]},
+        )
+
+    def _d36_up(state: dict[str, Any]) -> Any:
+        from langgraph.types import Command
+
+        return Command(
+            goto=[_up_send("worker", {"n": 1}), _up_send("worker", {"n": 2})],
+            update={"msgs": ["from-fan"]},
+        )
+
+    out.append(
+        Scenario(
+            name="D-36 · 一次返回里既派发又写入（SAME）",
+            channels={"msgs": "binop"},
+            initial={"msgs": []},
+            nodes={"fan": ((), _d36_fg), "worker": ((), _d29_worker)},
+            nodes_upstream={"fan": ((), _d36_up), "worker": ((), _d29_worker)},
+            edges={"__start__": ("fan",)},
+            verdict="SAME",
+        )
+    )
+
+    # D-37 · 静态边 + 载体 B Send 指向同一目标（DIFF）
+    def _d37_fg(state: dict[str, Any]) -> Any:
+        return [_fg_send("worker", {"n": 1}), _fg_send("worker", {"n": 2})]
+
+    out.append(
+        Scenario(
+            name="D-37 · 静态边 + 载体 B Send（Send 胜出 · DIFF）",
+            channels={"msgs": "binop"},
+            initial={"msgs": []},
+            nodes={"fan": ((), _d37_fg), "worker": ((), _d29_worker)},
+            nodes_upstream={"fan": ((), _d35_up), "worker": ((), _d29_worker)},
+            edges={"__start__": ("fan",), "fan": ("worker",)},
+            verdict="DIFF",
+            note="上游无「节点返回 list[Send]」形态（直接抛错）；freegraph 载体 B 让 Send 胜出（X-3 · X-6）",
+        )
+    )
+
     return out
 
 

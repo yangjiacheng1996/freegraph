@@ -2,12 +2,12 @@
 
 """freegraph 的**唯一数据与类型契约层**。
 
-公开符号面**恰为 20 个**（见 ``contracts/public-api.md`` §0）——
+公开符号面**恰为 21 个**（见 ``contracts/public-api.md`` §0）——
 ⚠️ **2026-11-12 上游对齐 P3**：新增 ``Interrupt`` 与 ``PregelTask``（**上游同款** ·
 上游 ``langgraph/types.py:575-620`` / ``:637-646``）⇒ **C17** 的 ``.value`` / ``.id``
 终于有了**类型载体** ⇒ 快照的 ``tasks`` / ``interrupts`` 元素类型也随之上游化。
-不多、不少；本层不导出 ``Send`` 与 ``interrupt``
-（二者归 **v2**：B11F1 / B10F1，本 feature **不导出**）。
+不多、不少；本层导出 ``Send``（**B11F1**），
+仍**不导出** ``interrupt``（其运行期语义归 **B10F1** · 由门面转出）。
 
 本包**零** freegraph 内部 import、**零**第三方 import（仅标准库），
 导入它不会连带加载任何内部层模块。
@@ -20,6 +20,7 @@ from .trace import Span, TraceQuery
 from .types import (
     Command,
     Interrupt,
+    Send,
     PregelTask,
     RunConfig,
     StateDict,
@@ -31,6 +32,7 @@ __all__ = [
     "Command",
     "StateSnapshot",
     "RunConfig",
+    "Send",
     "Interrupt",
     "PregelTask",
     "FreegraphError",

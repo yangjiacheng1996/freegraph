@@ -161,8 +161,9 @@ def bind_run(table: dict[str, _TaskScratchpad]) -> Iterator[dict[str, _TaskScrat
 
 def prepare_task(
     table: dict[str, _TaskScratchpad],
-    node_name: str,
+    task_key: str,
     *,
+    node_name: str | None = None,
     resume: Sequence[Any] = (),
     existing: Interrupt | None = None,
 ) -> _TaskScratchpad:
@@ -175,10 +176,10 @@ def prepare_task(
     * ⚠️ **不**消费 ``__resume__``（会话连续路径 · spec FR-013 末两行）⇒ ⇒
       调用方 MUST **不**在此路径写入恢复值。
     """
-    scratchpad = table.get(node_name)
+    scratchpad = table.get(task_key)
     if scratchpad is None:
-        scratchpad = _TaskScratchpad(namespace=make_namespace(node_name))
-        table[node_name] = scratchpad
+        scratchpad = _TaskScratchpad(namespace=make_namespace(node_name or task_key))
+        table[task_key] = scratchpad
     scratchpad.resume = list(resume)
     scratchpad.existing = existing
     return scratchpad
@@ -186,7 +187,10 @@ def prepare_task(
 
 @contextmanager
 def bind_task(
-    node_name: str, table: dict[str, _TaskScratchpad] | None = None
+    task_key: str,
+    table: dict[str, _TaskScratchpad] | None = None,
+    *,
+    node_name: str | None = None,
 ) -> Iterator[_TaskScratchpad]:
     """在**每个节点执行**期间设置**任务级**现场（契约 §3 · 任务级行）。
 
@@ -197,10 +201,10 @@ def bind_task(
     * MUST ``reset(token)`` 复原 ⇒ ⇒ 线程池**复用线程**时**零脏状态**。
     """
     target: dict[str, _TaskScratchpad] = table if table is not None else {}
-    scratchpad = target.get(node_name)
+    scratchpad = target.get(task_key)
     if scratchpad is None:
-        scratchpad = _TaskScratchpad(namespace=make_namespace(node_name))
-        target[node_name] = scratchpad
+        scratchpad = _TaskScratchpad(namespace=make_namespace(node_name or task_key))
+        target[task_key] = scratchpad
     run_token = _RUN.set(target)
     task_token = _TASK.set(scratchpad)
     try:

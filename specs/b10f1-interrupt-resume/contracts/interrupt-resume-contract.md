@@ -64,8 +64,8 @@ run_graph(
 
 | 级 | 载体 | 设置点 | 载荷 | 复原 |
 |---|---|---|---|---|
-| **运行级** | `contextvars.ContextVar` | `run_graph`（整次运行） | `{节点名: 任务现场}` | `run_graph` 返回前 `reset(token)` |
-| **任务级** | `contextvars.ContextVar` | `_bind._inner`（**每个节点执行**） | 该节点的任务现场 | 节点执行完 `reset(token)` |
+| **运行级** | `contextvars.ContextVar` | `run_graph`（整次运行） | `{任务标识: 任务现场}`（⚠️ **2026-11-14 · B11F1 F-13**：**标准任务 = 节点名 · fan-out 任务 = `f"{节点名}:{TaskId}"`**；原「节点名」在单任务场景逐字保留） | `run_graph` 返回前 `reset(token)` |
+| **任务级** | `contextvars.ContextVar` | `_bind._inner`（**每个任务执行**） | 该任务的任务现场 | 任务执行完 `reset(token)` |
 
 **任务现场**的字段：
 
@@ -74,9 +74,12 @@ run_graph(
 | `resume` | `list[Any]` | 该节点**已提供**的恢复值（**按节点内顺序** · 上游同款） |
 | `index` | `int` | 该节点内**第几次**调用 `interrupt()`（**原子计数**） |
 | `existing` | `Interrupt \| None` | 该节点**先前**挂起时的中断载荷（**恢复时读回** ⇒ 复用其 `.id`） |
-| `namespace` | `str \| None` | 命名空间 `f"{节点名}:{uuid4().hex}"`（**首次挂起时**才生成） |
+| `namespace` | `str \| None` | 命名空间 `f"{节点名}:{uuid4().hex}"`（**首次挂起时**才生成）。⚠️ **B11F1 F-13**：`namespace` 的**格式不变**；变化的是**表键**（标准 = 节点名 · fan-out = `f"{节点名}:{TaskId}"`）⇒ 同一节点 N 次 fan-out 各自生成独立 `uuid4` ⇒ `.id` 不串扰。 |
 
 ⚠️ **复原 MUST 用 `ContextVar.reset(token)`** ⇒ 线程池**复用线程**时**零脏状态**。
+⚠️ **2026-11-14 · B11F1 回溯修订 F-13（拆分而不删）**：上表的**表键**从「节点名」拆为「任务标识」；
+**单任务场景的原断言逐字保留**；`prepare_task` / `bind_task` MUST 接受**任务标识**而不仅是节点名
+（恢复路径 MUST 按持久化的 `task_id` 还原到对应任务现场）⇒ 未追认前 MUST NOT 合入。
 ⚠️ `contextvars` ⇒ **async 天然兼容**（v2 预留）⇒ ⇒ 零迁移成本。
 
 ---
@@ -142,7 +145,7 @@ answer = interrupt("approve?")
 |---|---|---|
 | `state` | `dict[str, Any]` | **合并后**的稀疏状态（**含**中断前已产生的写入） |
 | `interrupts` | `tuple[Interrupt, ...]` | 中断集合（= `exc.args[0]` · **元组**） |
-| `executed` | `tuple[str, ...]` | **已启动过**的节点名（**含**被中断的 · **节点名序** = **升序** · 与 `SuperStepResult.executed` **同排序口径**）⇒ ⚠️ 中断轮**不**产出 `SuperStepResult` ⇒ ⇒ 判据形态 = 「**逐字等于期望的节点名序**」+「**是升序的**」（**不**是「两个对象逐字相等」· **2026-11-13 分析轮回修**） |
+| `executed` | `tuple[str, ...]` | **已启动过**的节点名（**含**被中断的；**标准任务按节点名序** · **含 fan-out 的轮按 TaskId 序**（同一节点名可重复 · **B11F1 F-13/F-14**）· 与 `SuperStepResult.executed` **同排序口径**）⇒ ⚠️ 中断轮**不**产出 `SuperStepResult` ⇒ ⇒ 判据形态 = 「**逐字等于期望的节点名序 / TaskId 序**」（**不**是「两个对象逐字相等」· **2026-11-13 分析轮回修**） |
 | `steps` | `int` | **实际跑过的轮数**（**如实计** · **含**被中断的那轮 · **不含**那个空轮）⇒ ⚠️ **与 `SuperStepResult.steps` 计数口径「刻意不同」**（后者**含**空轮 · B7F1 冻结面）⇒ ⇒ 同一张图「挂起 N 轮」与「跑完 N+1 轮」⇒ ⇒ **数值不可直接比较** |
 
 ⚠️ **MUST NOT** 带「待写入」字段（`node_writes`）⇒ 挂起时那些写入**已合并进 `state`** ⇒ 语义不明

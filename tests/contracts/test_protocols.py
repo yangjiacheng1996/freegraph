@@ -28,6 +28,7 @@ from freegraph.contracts import (
     Command,
     CompiledGraph,
     NodeFunc,
+    Send,
     StateDict,
     StateSnapshot,
     Store,
@@ -136,7 +137,12 @@ class TestNodeFunc:
         hints = get_type_hints(NodeFunc.__call__)
         assert hints["state"] == StateDict
         assert hints["return"] == (
-            StateDict | Command | list[Command | StateDict] | None
+            StateDict
+            | Command
+            | Send
+            | list[Command | StateDict | Send]
+            | tuple[Send, ...]
+            | None
         )
 
     def test_isinstance_is_available(self) -> None:

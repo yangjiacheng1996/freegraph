@@ -28,6 +28,7 @@ from freegraph.contracts import (
     Command,
     FreegraphError,
     RunConfig,
+    Send,
     StateDict,
     StateSnapshot,
 )
@@ -232,10 +233,12 @@ class TestTypeHintResolution:
         assert not any(isinstance(value, str) for value in hints.values())
 
     def test_command_goto_hint_is_frozen(self) -> None:
-        """``goto`` 的冻结注解 = ``str | Sequence[str] | None``。"""
+        """``goto`` 的注解已按 B11F1 放宽为含 ``Send`` 的联合。"""
         hint = typing.get_type_hints(Command)["goto"]
-        assert str in typing.get_args(hint)
-        assert type(None) in typing.get_args(hint)
+        args = typing.get_args(hint)
+        assert str in args
+        assert Send in args
+        assert type(None) in args
 
     def test_state_snapshot_metadata_is_mapping(self) -> None:
         """快照的 ``metadata`` 注解 MUST 是 ``Mapping | None`` 形态（**上游同款**）。

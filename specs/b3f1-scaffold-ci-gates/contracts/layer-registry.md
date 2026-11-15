@@ -92,7 +92,6 @@
 | `src/freegraph/` | `L1` | — | **顶层包面**（目录条目 · **粒度统一为「目录优先 + 文件精确」**）· 新增**顶层模块**的**默认归属 = L1**（**更具体的条目优先** —— 最长前缀优先）· ⚠️ 新模块若属**其它层**，MUST **显式登记**（否则会按 L1 判定 ⇒ 可能误判反向 import） |
 | `src/freegraph/__init__.py` | `L1` | — | 顶层包**惰性 / 空壳**（仅 `__version__`）· 硬约束见 §0.3 **L-1**（ARCH-2 · D1 决议附加约束） |
 | `src/freegraph/contracts/` | `L1` | — | **契约层**（C1–C27 · 5 协议 · 5 纯数据类）· 只允许标准库（G2 · 硬约束见 §0.3 **L-2**） |
-| `src/freegraph/_primitives.py` | `L2` | — | **执行内核层**：`Send` / `interrupt`（立项书 §5.1：二者属 L2） |
 | `src/freegraph/_stategraph.py` | `L3` | — | **图定义层**：`StateGraph` 的实现体（立项书 §5.1：`StateGraph` 属 L3） |
 | `src/freegraph/graph.py` | `—` | `facade-L1-L3` | **公开 API 门面**（B2F2）· 横跨 L1–L3 ⇒ ARCH-1 的**唯一**例外 |
 | `src/freegraph/runtime/` | `L2` | — | **执行内核层**（B4F1 起）· 尚未存在 · 登记以保证「新增层零改动」 |

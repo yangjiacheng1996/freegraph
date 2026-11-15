@@ -52,7 +52,7 @@ def test_the_runtime_all_export_surface_holds_the_expected_symbols() -> None:
     """**SC-007** / **SC-017**（**判据级可追溯性** · 宪法原则 VI v1.11.0）：
 
     ① ``freegraph.runtime.__all__`` == **清单**（集合相等 · **不硬编码数字**）；
-    ② **L1 的 20 符号面零改动**（``freegraph.contracts.__all__`` == 清单 +
+    ② **L1 的 21 符号面零改动**（B11F1 经特批 +Send）（``freegraph.contracts.__all__`` == 清单 +
        **逐字相等**的清单 —— **不硬编码数字** ⇒ 写**清单**）；
     ③ L2 → L3 / L4 / L5 的依赖边数 == **0**（导入图断言 · 门禁 **G25**）；
     ④ **新增模块内**零 ``os.environ`` / ``os.getenv`` / ``socket`` / ``urllib``
@@ -84,6 +84,7 @@ def test_the_runtime_all_export_surface_holds_the_expected_symbols() -> None:
         "NodeFunc",
         "PregelTask",
         "RunConfig",
+        "Send",
         "Span",
         "StateDict",
         "StateSnapshot",

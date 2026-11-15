@@ -40,7 +40,7 @@ UPSTREAM_PREFIXES = ("langgraph", "langchain", "langsmith")
 
 #: **禁用标识符**（FR-022 · 不越界）—— 与 B7F1 的清单**同款**
 #: （⚠️ ``Command`` 已由 B9F1 交付 ⇒ 不在清单里 · 登记项 **R-8 ⑤**）。
-FORBIDDEN_NAMES = ("invoke", "stream", "compile", "StateGraph", "Send", "interrupt")
+FORBIDDEN_NAMES = ("invoke", "stream", "compile", "StateGraph", "interrupt")
 
 #: **构建器符号**（MUST NOT 出现在本 feature 的用例里 · FR-022）。
 BUILDER_NAMES = ("StateGraph", "compile", "invoke", "stream")
@@ -284,7 +284,7 @@ print(json.dumps({
 """
     )
 
-    assert payload["contracts"] == 20
+    assert payload["contracts"] == 21
     assert payload["facade"] == 7
 
 
@@ -362,6 +362,7 @@ def test_the_scheduler_state_constructor_signature_is_unchanged() -> None:
         "node_versions",
         "dynamic_edges",
         "channels",
+        "fanout",
     ]
     for parameter in signature.parameters.values():
         assert parameter.default is not inspect.Parameter.empty

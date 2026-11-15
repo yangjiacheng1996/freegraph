@@ -67,7 +67,7 @@
 
 | 字段 | 类型 | 缺省 | 语义 |
 |---|---|---|---|
-| `goto` | `str \| Sequence[str] \| None` | `None` | 跳转目标：单个节点名（字符串）或一组节点名（任意序列，元组/列表都收）。本 feature 不导出 `Send`，故目标**只能是节点名** |
+| `goto` | `str \| Send \| Sequence[str \| Send] \| None` | `None` | 跳转目标：单个节点名 / `Send`，或一组节点名 / `Send`（任意序列）。`Send` 归 **L1**（B11F1 接线） |
 | `update` | `StateDict \| None` | `None` | 要写入图状态的部分更新 |
 | `resume` | `Any \| None` | `None` | 恢复值（与 `interrupt` 配对使用；`interrupt` 实体属 B2F1） |
 

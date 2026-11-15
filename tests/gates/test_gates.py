@@ -324,7 +324,7 @@ def test_g25_rejects_cross_layer_import_of_l2(isolated_copy: Path) -> None:
         [("src/freegraph/_probe_cross.py", "—")],
         {
             "_probe_cross.py": (
-                "from ._primitives import Send\n" "\n" "__all__ = [\"Send\"]\n"
+                "from .runtime.superstep import SchedulerState\n" "\n" "__all__ = [\"SchedulerState\"]\n"
             )
         },
     )
@@ -499,13 +499,13 @@ def test_g29_check_compat_reports_not_landed(repo_root: Path) -> None:
 
 def test_g30_rejects_missing_signature_header(isolated_copy: Path) -> None:
     """G30 · 删掉署名头 ⇒ **失败并指名该文件**。"""
-    target = isolated_copy / "src" / "freegraph" / "_primitives.py"
+    target = isolated_copy / "src" / "freegraph" / "runtime" / "_fanout.py"
     lines = target.read_text(encoding="utf-8").splitlines(keepends=True)
     target.write_text("".join(lines[1:]), encoding="utf-8")
     result = run_gate("gate_G30_attribution.py", "--root", str(isolated_copy))
     output = result.stdout + result.stderr
     assert result.returncode != 0, f"缺署名头未被拦：\n{output}"
-    assert "_primitives.py" in output, f"输出未指名该文件：\n{output}"
+    assert "_fanout.py" in output, f"输出未指名该文件：\n{output}"
 
 
 def test_g30_rejects_third_party_brand_asset(isolated_copy: Path) -> None:

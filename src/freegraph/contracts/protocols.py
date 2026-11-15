@@ -24,7 +24,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from .graph import Graph
 from .trace import Span
-from .types import Command, RunConfig, StateDict, StateSnapshot
+from .types import Command, RunConfig, Send, StateDict, StateSnapshot
 
 __all__ = [
     "NodeFunc",
@@ -42,13 +42,14 @@ class NodeFunc(Protocol):
     ============== ============================================ ==========
     成员           签名                                          语义
     ============== ============================================ ==========
-    ``__call__``   ``(state: StateDict) -> StateDict | Command | list[Command | StateDict] | None`` 节点函数
+    ``__call__``   ``(state: StateDict) -> StateDict | Command | Send | list[Command | StateDict | Send] | tuple[Send, ...] | None`` 节点函数
     ============== ============================================ ==========
 
     **入参**：**稀疏**状态字典（只含「当前有值」的 key）。
 
     **返回**：**部分状态字典**（待归约的新状态）/ **命令原语**
     （跳转 / 写入 / 恢复）/ **命令列表**（多条命令按**列表顺序**依次生效）/
+    **动态 fan-out 载荷**（``Send`` / ``list[Send]`` / ``tuple[Send, ...]`` · B11F1）/
     **空值**（不写状态）。
 
     .. note::
@@ -58,6 +59,11 @@ class NodeFunc(Protocol):
        故本协议 MUST 与运行时**一致**（否则「用 ``NodeFunc`` 标注的节点」在**类型层**
        无法表达列表返回）。
        ``StateDict`` 即 ``dict[str, Any]`` ⇒ 与 B9F1 的 ``list[Command | dict]`` **逐字等价**。
+
+    .. note::
+       **``Send`` 入参例外**（**B11F1** · **H3**）：经 ``Send`` 调用的目标节点入参是
+       ``Send.arg`` **原样**（可为非 ``dict`` / ``None``）⇒ 上方「稀疏状态字典」的注记
+       **只适用于标准触发 / ``goto``**。
 
     .. note::
        ``isinstance(f, NodeFunc)`` 对**任意可调用对象**恒为真（因其自带
@@ -70,7 +76,14 @@ class NodeFunc(Protocol):
 
     def __call__(
         self, state: StateDict
-    ) -> StateDict | Command | list[Command | StateDict] | None: ...
+    ) -> (
+        StateDict
+        | Command
+        | Send
+        | list[Command | StateDict | Send]
+        | tuple[Send, ...]
+        | None
+    ): ...
 
 
 @runtime_checkable

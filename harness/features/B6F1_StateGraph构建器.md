@@ -196,3 +196,8 @@
 - 契约权威：`harness/reports/Q8-图运行时最小契约.md` §3.4。
 - 验收脚本：`harness/demo/target.py:142-155`、`harness/demo/graph_core.py`。
 - 宪法 `.specify/memory/constitution.md`：原则 III（7 项 MUST 同名同签名）。
+
+### 2.1 背景与上下文（补充 · 2026-11-14 · B11F1 → B6F1）
+
+- **承接条款（B11F1 → B6F1 · M2 · 构建器透传）**：`add_node` / `add_conditional_edges` MUST 接受"返回 `Send` / `list[Send]`"的节点函数与条件边函数（透传 ⇒ 零代码改动）⇒ MUST NOT 在构建层另行拒绝"返回 `Send` 列表"的节点函数。
+

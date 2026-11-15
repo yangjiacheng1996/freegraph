@@ -9,7 +9,7 @@
 
 **零实现体**（FR-006 · 门禁 G14）：本模块内**没有任何** ``class`` /
 ``def`` / ``async def`` 语句——只做**导出**与**常量**。
-实现体住在门面包内的私有模块（``_stategraph`` / ``_primitives``）、
+实现体住在门面包内的私有模块（``_stategraph``）、
 **L2 执行内核层**（``freegraph.runtime._interrupt``）与契约层
 （``freegraph.contracts``）⇒ 门面是 ARCH-4「公开 API 面只经由 L1
 导出」的执行手段，也是未来接线时**唯一需要改 import 行**的地方。
@@ -30,15 +30,13 @@ L5 可观测 · 门禁 G17 / G18）。
 （**ARCH-1 的唯一例外** ``facade-L1-L3`` ⇒ 门面 → L2 **合法** · 门禁
 G17 / G18 恒绿）。
 
-⚠️ **``src/freegraph/_primitives.py``（L2 单文件条目）MUST NOT import
-``runtime/``**（**L2 目录条目**）⇒ 二者互相 import = **跨注册表条目的
-同层 import** ⇒ **门禁 G25 判红**（实测两个方向都 FAIL）⇒ ⇒ 该文件
-**只留 ``Send``**（**B11F1** 接线）。
+⚠️ **``Send`` 的类型定义住在 L1**（``freegraph/contracts/types.py`` · 与
+``Command`` 同模块 · **B11F1**）⇒ 本门面从 **L1** 转出；``src/freegraph/_primitives.py``
+已随 B11F1 删除。
 """
 
-from ._primitives import Send
 from ._stategraph import StateGraph
-from .contracts import Command, RunConfig
+from .contracts import Command, RunConfig, Send
 from .runtime._interrupt import interrupt
 
 START = "__start__"

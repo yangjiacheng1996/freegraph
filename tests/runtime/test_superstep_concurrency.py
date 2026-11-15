@@ -634,6 +634,7 @@ def test_the_scheduler_state_constructor_signature_is_unchanged() -> None:
         "node_versions",
         "dynamic_edges",
         "channels",
+        "fanout",
     ]
     # ⚠️ **构造签名逐字不变** = 字段的**名字与顺序**不变，且**全部有缺省值**
     # ⇒ `SchedulerState()` **零参可构造**（既有调用方零改动）
@@ -645,6 +646,7 @@ def test_the_scheduler_state_constructor_signature_is_unchanged() -> None:
         "node_versions",
         "dynamic_edges",
         "channels",
+        "fanout",
     ]
     assert all(p.default is not inspect.Parameter.empty for p in parameters)
     SchedulerState()  # 零参可构造
@@ -801,12 +803,16 @@ def test_the_concurrency_module_is_pure() -> None:
     # **实现体**）」的**源码文本**断言 ⇒ ⇒ **判据零放宽**（**更强**：从
     # 「含某个字符串」定位到「**不含实现体**」本身）⇒ ⇒ 同步本测试的
     # **docstring / 命名**（不再说「归 B10F1」）。
-    primitives = (_REPO_ROOT / "src" / "freegraph" / "_primitives.py").read_text(
-        encoding="utf-8"
+    # B11F1：`Send` 迁入 L1 ⇒ `_primitives.py` 已删除；`interrupt` 的实现体
+    # 住在 `runtime/_interrupt.py`（原断言的意图逐字保留）。
+    assert not (_REPO_ROOT / "src" / "freegraph" / "_primitives.py").exists(), (
+        "_primitives.py 已随 Send 迁入 L1 而删除"
     )
-    assert "def interrupt" not in primitives, (
-        "_primitives.py 仍带 interrupt 的实现体（**必须**只留 `Send` —— "
-        "**跨注册表条目的同层 import** ⇒ 门禁 G25 判红）"
+    interrupt_source = (
+        _REPO_ROOT / "src" / "freegraph" / "runtime" / "_interrupt.py"
+    ).read_text(encoding="utf-8")
+    assert "def interrupt" in interrupt_source, (
+        "interrupt 的实现体 MUST 住在 runtime/_interrupt.py"
     )
 
 

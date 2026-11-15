@@ -1283,7 +1283,9 @@ def list_tracked_files(root: Path) -> list[Path]:
             same_tree = False
         if same_tree:
             names = [name for name in listed.stdout.split("\0") if name]
-            return [root / name for name in names]
+            # ⚠️ 已从工作区删除、但尚未提交的受控文件不参与扫描
+            # （B11F1 删除 `_primitives.py` 时的情形）。
+            return [root / name for name in names if (root / name).is_file()]
     return _walk_files(root)
 
 

@@ -182,3 +182,8 @@
 - 契约权威：`harness/reports/Q8-图运行时最小契约.md` §3.4（C7 / C8）。
 - 验收脚本：`harness/demo/graph_core.py`（条件边 list / dict 两形态用例）、
   `harness/demo/target.py:126-137`（`should_continue`）。
+
+### 2.1 背景与上下文（补充 · 2026-11-14 · B11F1 → B8F1）
+
+- **承接条款（B11F1 → B8F1 · M2）**：条件边函数返回 `Send` / `list[Send]` 时 MUST 产生**同款 fan-out 任务**（同一落点 · 同一入参形态 · 同一失败信号）⇒ MUST NOT 另写条件边专属 fan-out 路径。B11F1 只交付**节点返回**形态（`GraphSpec.conditional_edges` 恒空 · B7F1 的 V-8）。
+

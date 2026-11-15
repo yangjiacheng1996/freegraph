@@ -53,7 +53,7 @@ from functools import partial
 from typing import Any
 
 from freegraph.contracts.errors import GraphInterrupt, GraphRecursionError, InvalidUpdateError
-from freegraph.contracts.types import Command, Interrupt, RunConfig, StateDict
+from freegraph.contracts.types import Command, Interrupt, RunConfig, Send, StateDict
 
 from ._concurrency import (
     _TaskOutcome,
@@ -68,6 +68,7 @@ from ._interrupt import (
     new_run_table,
     prepare_task,
 )
+from ._fanout import TaskId, _FanOut, _FanOutTask, make_fanout
 from .channel import Channel, EphemeralValue
 from .errors import InterruptError, InvalidChannelUpdateError
 from .read import read_channels
@@ -244,6 +245,7 @@ class SchedulerState:
     node_versions: dict[str, int] = field(default_factory=dict)
     dynamic_edges: dict[str, tuple[str, ...]] = field(default_factory=dict)
     channels: dict[str, Channel] = field(default_factory=dict)
+    fanout: dict[TaskId, _FanOut] = field(default_factory=dict)
 
     def to_checkpoint(self) -> dict[str, Any]:
         """把**调度账本**编码成**纯数据**（**可 JSON 序列化** · C19 ③）。
@@ -587,9 +589,18 @@ def _trigger_groups(
     ⇒ 该目标**不再**被触发（FR-009 · 裁定 2）⇒ ⇒ **动态边恒为单元素组**
     （**H-3** · B9F1 → B7F4）。
     """
+    suppressed: set[tuple[str, str]] = {
+        (fanout.producer, task.target)
+        for fanout in state.fanout.values()
+        if fanout.suppresses_static
+        for task in fanout.tasks
+    }
     groups: list[tuple[tuple[str, str], ...]] = []
     for source, targets in spec.edges.items():
         if node_name in targets:
+            # 载体 B 的抑制只作用于单元素静态边组（多源屏障组不抑制）。
+            if isinstance(source, str) and (source, node_name) in suppressed:
+                continue
             groups.append(tuple((_EDGE_SOURCE, name) for name in _edge_sources(source)))
     for source, targets in state.dynamic_edges.items():
         if node_name in targets:
@@ -729,81 +740,60 @@ def _node_input(
 def _normalize_node_result(
     result: Any,
     node_names: Container[str],
+    producer: str,
 ) -> dict[str, Any]:
-    """**归一**节点返回值 —— 三形态 → **一种内部形状**（契约 §2）。
+    """**归一**节点返回值 —— 合法形态 → **一种内部形状**（契约 §2 · B11F1）。
 
-    **归一后的统一形状**（内部中间产物 · **不进公开面**）::
-
-        {"writes": dict[str, tuple[Any, ...]], "gotos": tuple[str, ...]}
-
-    * ``writes`` —— **待写入**（每 key 一个**值序列** · 键序 = 归一顺序）；
-    * ``gotos`` —— **跳转目标**（**保序去重**）。
-
-    **三种合法形态**（契约 §2 · FR-001）：
-
-    ============================ ==================================== ==========
-    形态                         语法                                   归一结果
-    ============================ ==================================== ==========
-    **部分状态**                 ``dict``                               该 dict 的 items
-    **单条命令**                 ``Command``                            ``update`` / ``goto``
-    **命令列表**                 ``list[Command | dict]``              按**列表顺序**归入
-    ============================ ==================================== ==========
-
-    ⚠️ **归一是唯一的新增概念** ⇒ 三形态归一后**只有一种内部表示** ⇒
-    「未知 key 报错」「归约器语义」「批量合并」「原子性」**全部复用 B7F1 的
-    同一条路径**（裁定 4 · FR-004）。
-
-    ⚠️ **失败信号**（契约 §7 · V-9…V-11）：
-
-    * **V-9**（返回值形态非法 · 含 ``None``）⇒ 内置 ``TypeError``；
-    * **V-10**（命令列表的**元素**类型非法）⇒ 内置 ``TypeError``；
-    * **V-11**（``Command.update`` **不是** ``dict``）⇒ 内置 ``TypeError``。
-
-    .. note::
-       **骨架期**（Phase 2 ⇒ 各故事落地前）：``Command`` 与**命令列表**两种形态
-       **一律**抛 ``NotImplementedError`` ⇒ 各故事的用例 MUST **先写 · 先失败**
-       （先红后绿）⇒ 实现由各用户故事**分摊**（T014 / T018）。
+    内部形状 = ``{"writes": ..., "gotos": ..., "fanout": ...}``。
+    ``fanout`` 的元素是 :class:`_FanOutTask`（载体 A = ``suppresses_static=False`` ·
+    载体 B = ``True``）。其余两键与 B9F1 的既有口径逐字一致。
     """
     if result is None:
-        # ⚠️ **上游同款**（**2026-11-12 上游对齐 P3** · 上游 ``graph/state.py:1459-1460``
-        # 的 ``if input is None: return None``）⇒ **无写入**（**不是**错误）。
-        return {"writes": {}, "gotos": ()}
+        return {"writes": {}, "gotos": (), "fanout": ()}
+    if isinstance(result, Send):
+        return {
+            "writes": {},
+            "gotos": (),
+            "fanout": make_fanout(
+                producer, [result], node_names, suppresses_static=True
+            ),
+        }
     if isinstance(result, dict):
         return {
             "writes": {key: (value,) for key, value in result.items()},
             "gotos": (),
+            "fanout": (),
         }
     if isinstance(result, Command):
-        return _normalize_command(result, node_names)
-    if isinstance(result, list):
-        return _normalize_command_list(result, node_names)
+        return _normalize_command(result, node_names, producer)
+    if isinstance(result, (list, tuple)):
+        if result and all(isinstance(item, Send) for item in result):
+            return {
+                "writes": {},
+                "gotos": (),
+                "fanout": make_fanout(
+                    producer, result, node_names, suppresses_static=True
+                ),
+            }
+        if isinstance(result, tuple):
+            raise TypeError(
+                "Node result tuple must contain only Send objects, "
+                f"got {result!r} (V-15)"
+            )
+        return _normalize_command_list(result, node_names, producer)
     raise TypeError(
-        f"Node result must be a dict, a Command or a list of them, "
-        f"got {type(result).__name__} (V-9)"
+        f"Node result must be a dict, a Command, a Send, a list of them "
+        f"or a tuple of Send, got {type(result).__name__} (V-9)"
     )
 
 
 def _normalize_command(
     command: Command,
     node_names: Container[str],
+    producer: str,
 ) -> dict[str, Any]:
-    """**归一**单条命令（契约 §2 · FR-003 · FR-004 · FR-010）。
-
-    * ``update`` —— ``None`` ⇒ **无写入**（该位**未提供**）；``dict`` ⇒ 逐 key
-      归入待写入（**空** ``dict`` ⇒ **无写入** · 该位**不产生动作**）；
-      **其它类型** ⇒ 内置 ``TypeError``（**V-11** · FR-010）；
-    * ``goto`` ⇒ 交由 :func:`_parse_goto_targets` 解析（契约 §3）；
-    * ``resume`` —— 本 feature **只接受**、**不产生任何效果**（FR-011 ·
-      恢复语义归 **B10F1**）。
-
-    ⚠️ **跳转与更新互不排斥**（FR-003）⇒ 两者**同时**归一进同一份结果 ⇒
-    「只生效其一」的现象**物理不可能**发生。
-    """
+    """**归一**单条命令（契约 §2 · FR-003 · FR-004 · FR-010）。"""
     if command.graph == Command.PARENT:
-        # ⚠️ **上游同款**（**2026-11-12 上游对齐 P3** · 上游 ``graph/state.py:1761-1762``
-        # 抛 ``ParentCommand`` · 上游 ``errors.py:129-133``）⇒ **失败**而非静默。
-        # ⇒ freegraph **无子图** ⇒ 抛 ``NotImplementedError``（与 ``goto=PARENT`` 的
-        # **V-14** 同一口径：合法但本版未实现）⇒ **异常类型与上游不同 · 语义等价**。
         raise NotImplementedError(
             "Command.graph == Command.PARENT ('__parent__') is not supported "
             "in this version: 子图属 v2 能力（跨层传播归 C26 · v2）(V-14)"
@@ -817,50 +807,42 @@ def _normalize_command(
         isinstance(item, tuple) and len(item) == 2 and isinstance(item[0], str)
         for item in update
     ):
-        # ⚠️ **上游同款**（**2026-11-12 上游对齐 P3** · 上游 ``langgraph/types.py:836-840``）：
-        # 上游接受 **list/tuple of 2-tuples**（元素**必须是 tuple** · 键**必须是 str**）
-        # ⇒ 逐条照抄（含「列表元素不算」的细节）。
         writes = {key: (value,) for key, value in update}
     else:
         raise TypeError(
             f"Command.update must be a dict or None, got {type(update).__name__} (V-11)"
         )
-    return {"writes": writes, "gotos": _parse_goto_targets(command.goto, node_names)}
+    gotos, fanout = _parse_goto_targets(command.goto, node_names, producer)
+    return {"writes": writes, "gotos": gotos, "fanout": fanout}
 
 
 def _normalize_command_list(
     commands: list[Any],
     node_names: Container[str],
+    producer: str,
 ) -> dict[str, Any]:
-    """**归一**命令列表（契约 §2 · FR-001 · FR-004 · 裁定 15）。
-
-    * 元素 MUST 是 ``Command`` 或 ``dict`` ⇒ 其它类型 ⇒ 内置 ``TypeError``
-      （**V-10**）；
-    * 各元素的写入按**列表顺序**归入**同一份**待写入 ⇒ 归约型通道按该顺序
-      归约（与上游 ``_get_updates`` 的 ``updates.extend(...)`` **逐字一致**）
-      ⇒ **MUST NOT** 让「后一条命令覆盖前一条」（**值序列** ⇒ 同 key 的多个值
-      **依次入列**）；
-    * 各条命令的 ``goto`` 各自成边 ⇒ **并集**（**保序去重**）；
-    * **空列表** ⇒ **明确无操作**（零写入 + 零跳转）。
-    """
+    """**归一**命令列表（契约 §2 · FR-001 · FR-004 · 裁定 15）。"""
     if not commands:
-        # ⚠️ **上游同款**（**2026-11-12 上游对齐 P3** · 上游 ``graph/state.py:1488-1492``）：
-        # 上游的判据是 ``isinstance(input,(list,tuple)) and input and any(...)``
-        # ⇒ **空列表落 ``else``** ⇒ 抛 ``InvalidUpdateError("Expected dict, got []")``
-        # ⇒ freegraph 原先「空列表 = 无操作」⇒ **更宽** ⇒ 本次**照抄上游**（改为失败）。
         raise TypeError(
             "Node result must be a dict, a Command or a list of them, "
             "got an empty list (V-9)"
         )
     writes: dict[str, tuple[Any, ...]] = {}
     gotos: list[str] = []
+    fanout: list[_FanOutTask] = []
     for element in commands:
+        if isinstance(element, Send):
+            raise TypeError(
+                "Command list elements must be a Command or a dict, "
+                "got Send (V-10)"
+            )
         if isinstance(element, Command):
-            part = _normalize_command(element, node_names)
+            part = _normalize_command(element, node_names, producer)
         elif isinstance(element, dict):
             part = {
                 "writes": {key: (value,) for key, value in element.items()},
                 "gotos": (),
+                "fanout": (),
             }
         else:
             raise TypeError(
@@ -872,67 +854,47 @@ def _normalize_command_list(
         for target in part["gotos"]:
             if target not in gotos:
                 gotos.append(target)
-    return {"writes": writes, "gotos": tuple(gotos)}
+        fanout.extend(part["fanout"])
+    return {"writes": writes, "gotos": tuple(gotos), "fanout": tuple(fanout)}
 
 
 def _parse_goto_targets(
     goto: Any,
     node_names: Container[str],
-) -> tuple[str, ...]:
-    """**解析** ``Command.goto`` ⇒ 跳转目标（契约 §3 · FR-007）。
-
-    ================================ ==================================== ==========
-    输入                             解析结果                              说明
-    ================================ ==================================== ==========
-    ``None``                         无跳转                                该位**未提供**
-    ``str``（**先判**）              **一个**目标                           见下
-    ``Sequence[str]``（非空）        **多个**目标（**保序去重**）            每条各自成边
-    ``Sequence[str]``（空）          无跳转                                该位不产生动作
-    终止标记 ``"__end__"``           无跳转                                该位不产生动作
-    ``Command.PARENT``               **显式失败**                          ``NotImplementedError``
-    其它 ``str``                     **显式失败**                          ``ValueError``
-    其它类型 / 序列含非 ``str``      **显式失败**                          ``TypeError``
-    ================================ ==================================== ==========
-
-    ⚠️ **``str`` MUST 先判**（``str`` 本身也是 ``Sequence[str]`` ⇒ 顺序判断会
-    把它拆成字符序列 —— L1 docstring 逐字点名）。
-
-    ⚠️ **终止标记以字面量判定**（L2 **MUST NOT** import 门面 · ARCH-1）⇒
-    门面 ``END`` 的值 MUST 与该字面量**逐字相等**（**可自动核对** · 裁定 6）。
-
-    ⚠️ **失败信号 MUST 分开**（裁定 7 · 澄清轮第 2 次 **Q2**）：
-
-    * **V-12**（形态非法）⇒ 内置 ``TypeError``；
-    * **V-13**（目标不在节点表 / 空串 / ``START``）⇒ 内置 ``ValueError``
-      （**点名目标**）；
-    * **V-14**（``goto == Command.PARENT``）⇒ 内置 ``NotImplementedError``
-      （**点名 ``__parent__``** + 「子图属 v2 能力」）⇒ 「**写错了**」与
-      「**合法但未实现**」**可区分**。
-
-    ⚠️ **形态校验先于语义校验**：序列里**任一**元素**不是** ``str`` ⇒ 先抛
-    ``TypeError``（V-12）⇒ 再逐个做**目标**校验 ⇒ 「序列含非 ``str``」**恒**是
-    **类型错误**（与 spec Edge Cases 的逐字口径一致）。
-    """
+    producer: str,
+) -> tuple[tuple[str, ...], tuple[_FanOutTask, ...]]:
+    """**解析** ``Command.goto`` ⇒ ``(跳转目标, fan-out 任务)``（契约 §3 · B11F1）。"""
     if goto is None:
-        return ()
+        return (), ()
+    if isinstance(goto, Send):
+        tasks = make_fanout(producer, [goto], node_names, suppresses_static=False)
+        return (), tasks
     if isinstance(goto, str):
-        return _parse_goto_target(goto, node_names)
+        return _parse_goto_target(goto, node_names), ()
     if isinstance(goto, Sequence):
         items = list(goto)
         for item in items:
-            if not isinstance(item, str):
+            if not isinstance(item, (str, Send)):
                 raise TypeError(
-                    f"Command.goto sequence items must be str, "
+                    f"Command.goto sequence items must be str or Send, "
                     f"got {type(item).__name__} (V-12)"
                 )
         targets: list[str] = []
+        tasks: list[_FanOutTask] = []
         for item in items:
-            for target in _parse_goto_target(item, node_names):
-                if target not in targets:
-                    targets.append(target)
-        return tuple(targets)
+            if isinstance(item, str):
+                for target in _parse_goto_target(item, node_names):
+                    if target not in targets:
+                        targets.append(target)
+            else:
+                tasks.extend(
+                    make_fanout(
+                        producer, [item], node_names, suppresses_static=False
+                    )
+                )
+        return tuple(targets), tuple(tasks)
     raise TypeError(
-        f"Command.goto must be a str or a sequence of str, "
+        f"Command.goto must be a str, Send or a sequence of them, "
         f"got {type(goto).__name__} (V-12)"
     )
 
@@ -964,76 +926,78 @@ def _parse_goto_target(
 
 def _execute_node_pure(
     spec: GraphSpec,
+    node_name: str,
     node: NodeSpec,
-    node_input: dict[str, Any],
+    node_input: Any,
 ) -> dict[str, Any]:
-    """**纯执行**一个节点（阶段 ③ · FR-009 · FR-013 · FR-015 · FR-001）。
-
-    * 只调 ``node.run`` + :func:`_normalize_node_result` **归一**
-      ⇒ **零共享状态写**（并发执行的前提 · FR-010 · 裁定 11）；
-    * 节点抛出的异常 MUST **原样**向上传播（**不**包装 · **不**吞掉）
-      ⇒ ``caught is raised_by_node`` 成立（B7F1 契约 **I-15** 不破）；
-    * 返回值 MUST 是 ``dict`` / ``Command`` / ``list[Command | dict]`` 之一
-      （**FR-001**）⇒ 其它类型（含 ``None``）⇒ **显式失败**（内置
-      ``TypeError`` · **V-9**）；
-    * 返回值经 :func:`_normalize_node_result` **归一** ⇒ 待写入交给**既有的**
-      :func:`_collect_writes` / :func:`_merge_writes`（MUST NOT 另写合并路径）；
-    * ⚠️ **本函数 MUST NOT** 触碰 ``SchedulerState`` ⇒ 落回由
-      :func:`_commit_outcome` 在**轮末**统一做（阶段 ③′）。
-    """
+    """**纯执行**一个节点（阶段 ③ · FR-009 · 执行期零共享状态写）。"""
     result = node.run(node_input)
-    return _normalize_node_result(result, spec.nodes)
+    return _normalize_node_result(result, spec.nodes, node_name)
 
 
 def _commit_outcome(
+    spec: GraphSpec,
     state: SchedulerState,
-    node_name: str,
+    task_id: TaskId,
+    target: str,
     outcome: _TaskOutcome,
 ) -> None:
-    """把一个**成功完成**的节点的结果**落回**调度状态（阶段 ③′ · FR-010 · 裁定 11）。
+    """把一个**成功完成**的任务结果**落回**调度状态（阶段 ③′ · TaskId 序）。"""
+    state.dynamic_edges[target] = outcome.gotos
+    state.node_versions[target] = state.node_versions.get(target, 0) + 1
+    if outcome.fanout:
+        tasks = tuple(outcome.fanout)
+        suppresses = all(task.suppresses_static for task in tasks)
+        state.fanout[task_id] = _FanOut(
+            producer=target,
+            tasks=tasks,
+            suppresses_static=suppresses,
+        )
+        if suppresses:
+            # 载体 B：把「产生者 → 目标」的单元素静态边版本消费掉
+            # ⇒ 下一轮不会再用标准入参补跑（Send 胜出）。
+            # ⚠️ 多源屏障组不抑制 ⇒ 存在屏障组时**不**消费（让屏障照常触发）。
+            barrier = any(
+                isinstance(source, tuple)
+                and target in source
+                and any(task.target in targets for task in tasks)
+                for source, targets in spec.edges.items()
+            )
+            if not barrier:
+                edge_targets = spec.edges.get(target)
+                if isinstance(edge_targets, tuple):
+                    for task in tasks:
+                        if task.target in edge_targets:
+                            state.versions_seen.setdefault(task.target, {})[
+                                (_EDGE_SOURCE, target)
+                            ] = state.node_versions.get(target, 0)
 
-    * ``state.node_versions[node_name]`` **+1**（边触发源的版本）；
-    * ``state.dynamic_edges[node_name]`` **整体替换**（含**空集** ⇒ 旧的 ``goto``
-      目标被清空 · FR-009）；
-    * ⚠️ **轮末**才落回 ⇒ 出错轮**一个都不落回** ⇒ 消除「值没合并、版本却推进了」的
-      **幽灵触发**（FR-010 · SC-008 · 裁定 11）。
-    """
-    state.dynamic_edges[node_name] = outcome.gotos
-    state.node_versions[node_name] = state.node_versions.get(node_name, 0) + 1
+
+def _ordered_writes(
+    succeeded: Sequence[tuple[TaskId, str, _TaskOutcome]],
+) -> list[tuple[TaskId, str, dict[str, tuple[Any, ...]]]]:
+    """按 **TaskId 序**产出 ``(task_id, target, writes)``（阶段 ④）。"""
+    return [(task_id, target, outcome.writes) for task_id, target, outcome in succeeded]
 
 
 def _collect_writes(
-    executed: list[str],
-    results: dict[str, dict[str, tuple[Any, ...]]],
+    ordered: Sequence[tuple[TaskId, str, dict[str, tuple[Any, ...]]]],
 ) -> dict[str, dict[str, tuple[Any, ...]]]:
-    """**收集待写入**（阶段 ④ · FR-006）。
-
-    * 产出**待写入**并**按节点分组**保留（节点名 → 通道 key → 值序列）
-      ⇒ B8F1 的 fresh 读复用前提；
-    * **``Command.update`` 的写入归到**返回该命令的那个节点**名下（裁定 16 ·
-      SC-022）⇒ **归一**已在**执行阶段**完成 ⇒ 本阶段**只收集**、**不**写入；
-    * 执行期间通道的**正式值 MUST NOT** 被改写 ⇒ 本阶段**只收集**、**不**写入。
-    """
+    """把有序写入聚合为 ``node_writes``（按目标节点名分组 · 值序 = TaskId 序）。"""
     pending: dict[str, dict[str, tuple[Any, ...]]] = {}
-    for node_name in executed:
-        writes = pending.setdefault(node_name, {})
-        for key, values in results[node_name].items():
-            writes[key] = writes.get(key, ()) + tuple(values)
+    for _task_id, target, writes in ordered:
+        bucket = pending.setdefault(target, {})
+        for key, values in writes.items():
+            bucket[key] = bucket.get(key, ()) + tuple(values)
     return pending
 
 
 def _group_writes(
-    spec: GraphSpec,
-    pending: dict[str, dict[str, tuple[Any, ...]]],
+    ordered: Sequence[tuple[TaskId, str, dict[str, tuple[Any, ...]]]],
 ) -> dict[str, list[Any]]:
-    """把待写入**按通道分组**（值按**节点名序**排列 · 契约 §5.1）。"""
+    """把有序写入**按通道分组**（值序 = TaskId 序 · 上游任务序）。"""
     grouped: dict[str, list[Any]] = {}
-    # ⚠️ **上游同款**（P2-c）：同通道的写入顺序 = **节点名序**（上游
-    # ``langgraph/pregel/_algo.py:256``）⇒ 合并顺序**可复现**且与上游**逐项相等**。
-    for node_name in sorted(spec.nodes):
-        writes = pending.get(node_name)
-        if not writes:
-            continue
+    for _task_id, _target, writes in ordered:
         for key, values in writes.items():
             grouped.setdefault(key, []).extend(values)
     return grouped
@@ -1102,7 +1066,7 @@ def _rollback(
 def _merge_writes(
     spec: GraphSpec,
     state: SchedulerState,
-    pending: dict[str, dict[str, tuple[Any, ...]]],
+    ordered: Sequence[tuple[TaskId, str, dict[str, tuple[Any, ...]]]],
 ) -> set[str]:
     """**写入合并**（阶段 ⑤ · FR-005 · FR-032 · 契约 §5）。
 
@@ -1113,7 +1077,7 @@ def _merge_writes(
       ⇒ **一个通道的版本都不推进**（与值的回滚**同进同退**）；
     * 返回「本轮写入了值」的通道集合（``update()`` 返回**真**）。
     """
-    grouped = _group_writes(spec, pending)
+    grouped = _group_writes(ordered)
     channels = _run_channels(spec, state)
     _reject_unknown_keys(grouped, channels)
     _reject_multi_writes(channels, grouped)
@@ -1173,134 +1137,141 @@ def _run_round(
     *,
     max_concurrency: int | None = None,
 ) -> tuple[list[str], dict[str, dict[str, tuple[Any, ...]]]]:
-    """跑**一轮** super-step 的**七个阶段**（契约 §3 · FR-001）。
+    """跑**一轮** super-step（阶段 ② · ②′ · ③ · ③′ · ④ · ⑤ · ⑥）。
 
-    ① **触发判定**已由调用方完成 ⇒ 本函数负责 ② 任务准备 · ③ **并发执行** ·
-    ③′ **判定与落回** · ④ 写入收集 · ⑤ 写入合并（含步末清空）· ⑥ **收尾**。
-
-    ⚠️ **阶段 ② MUST 在阶段 ③ 之前**完成（契约 §4 的顺序固定）⇒ 全部节点的
-    入参与「已消费版本」都在**任何节点执行之前**确定 ⇒ 一个节点的执行**不**
-    影响另一个节点的入参（FR-006 · C8 fresh 读的基础）。
-
-    ⚠️ **阶段 ⑥ 是唯一的「抛出」点**（真实异常与中断**都**在 ⑥ 抛）⇒
-    阶段 ③′ **只做判定与落回**、**不抛任何异常**（契约 §3）。
+    * **标准触发任务**：按**目标节点名序**分配 TaskId（0 起）；
+    * **fan-out 任务**：在全部标准任务之后，按**产生者 TaskId 序 + 载荷内
+      ``Send`` 序号**分配 TaskId；
+    * fan-out 载荷在**构造任务后清空**（一次性 · 上游 ``TASKS`` 每步清空）。
     """
-    # ── ② 任务准备（入参在**任何节点执行前**固定 · FR-011） ──
-    tasks: list[tuple[str, NodeSpec, dict[str, Any]]] = []
-    for node_name in triggered:
+    snapshot_fanout = dict(state.fanout)
+
+    # ── ② 标准触发任务准备 ──
+    standard: list[tuple[str, NodeSpec, dict[str, Any]]] = []
+    for node_name in sorted(triggered):
         node = spec.nodes[node_name]
         groups = _trigger_groups(spec, state, node_name, node)
         satisfied = _satisfied_groups(state, node_name, groups)
         node_input = _node_input(spec, state, node)
         _consume_versions(state, node_name, satisfied)
-        tasks.append((node_name, node, node_input))
+        standard.append((node_name, node, node_input))
 
-    # ── ③ 并发执行（线程池 · 每轮新建 + 关闭 ⇒ 零悬挂线程 · FR-018） ──
-    started: list[str] = []
+    # ── ②′ fan-out 任务准备（不消费触发源版本） ──
+    fanout_pending: list[tuple[str, Any]] = []
+    for producer_id in sorted(state.fanout):
+        payload = state.fanout[producer_id]
+        for task in payload.tasks:
+            fanout_pending.append((task.target, task.arg))
+    state.fanout.clear()
 
-    # ⚠️ **运行级**现场表 MUST 在**主线程**读出（**工作线程不继承**
-    # ``contextvars`` · **实测**）⇒ ⇒ 在**闭包外**取一次 ⇒ ⇒ 工作线程
-    # 显式拿到它（**B10F1** · 契约 §3 · 运行级行）。
+    records: list[tuple[TaskId, str, str, NodeSpec, Any]] = []
+    for node_name, node, node_input in standard:
+        records.append((len(records), node_name, node_name, node, node_input))
+    for target, arg in fanout_pending:
+        task_id = len(records)
+        records.append((task_id, f"{target}:{task_id}", target, spec.nodes[target], arg))
+
+    # ── ③ 并发执行（TaskId 为提交序 · 结果槽键 = TaskId） ──
+    started: list[TaskId] = []
     run_table = current_run_table()
 
     def _bind(
-        node_name: str, fn: Callable[[], dict[str, Any]]
+        task_id: TaskId,
+        task_key: str,
+        target: str,
+        fn: Callable[[], dict[str, Any]],
     ) -> Callable[[], dict[str, Any]]:
         def _inner() -> dict[str, Any]:
-            started.append(node_name)  # ⚠️ list.append 在 CPython 下是原子的
-            # ⚠️ **B10F1**：**任务级**现场（``interrupt()`` 的运行期上下文）
-            # MUST 在**节点执行**期间挂上 ⇒ ⇒ 复原用 ``reset(token)``
-            # ⇒ ⇒ 线程池**复用线程**时**零脏状态**（契约 §3 · 任务级行）。
-            with bind_task(node_name, run_table):
+            started.append(task_id)
+            with bind_task(task_key, run_table, node_name=target):
                 return fn()
 
         return _inner
 
-    cap = _resolve_cap(len(tasks), max_concurrency)
+    cap = _resolve_cap(len(records), max_concurrency)
     outcomes = run_tasks_concurrently(
         [
-            (node_name, _bind(node_name, partial(_execute_node_pure, spec, node, node_input)))
-            for node_name, node, node_input in tasks
+            (
+                task_id,
+                _bind(
+                    task_id,
+                    task_key,
+                    target,
+                    partial(_execute_node_pure, spec, target, node, node_input),
+                ),
+            )
+            for task_id, task_key, target, node, node_input in records
         ],
         cap=cap,
     )
-    # ⚠️ **被取消**的任务**从未被启动** ⇒ 不产出结果槽 ⇒ MUST NOT 出现在
-    # ``executed`` 里（FR-009 · 裁定 22）⇒ 用「实际启动过的节点名」对齐结果槽。
-    by_name: dict[str, _TaskOutcome] = dict(zip(sorted(started), outcomes))
+    target_by_id: dict[TaskId, str] = {
+        task_id: target for task_id, _key, target, _node, _input in records
+    }
+    by_id: dict[TaskId, _TaskOutcome] = dict(zip(sorted(started), outcomes))
 
-    # ── ③′ 判定与落回（**不抛任何异常** · 契约 §3 / §5） ──
-    error = _first_error(by_name)
-    interrupts = _collect_interrupts(by_name)
-    interrupted = {name for name, outcome in by_name.items() if outcome.interrupts}
+    # ── ③′ 判定与落回（TaskId 序） ──
+    error = _first_error(by_id)
+    interrupts = _collect_interrupts(by_id)
+    interrupted = {
+        task_id for task_id, outcome in by_id.items() if outcome.interrupts
+    }
     snapshot_versions = dict(state.node_versions)
     snapshot_edges = dict(state.dynamic_edges)
     if error is None:
-        # 成功节点**照常落回**（**节点名序**）· 被中断节点**不**落回（它**没完成**）
-        for node_name in sorted(by_name):
-            if node_name in interrupted:
+        for task_id in sorted(by_id):
+            if task_id in interrupted:
                 continue
-            _commit_outcome(state, node_name, by_name[node_name])
-    # ⚠️ **出错轮**：**不落回**任何调度状态（整轮原子 · FR-010 · SC-008）
+            _commit_outcome(
+                spec, state, task_id, target_by_id[task_id], by_id[task_id]
+            )
 
-    # ── ④ 写入收集（按节点分组 · 零改动） ──
+    # ── ④ 写入收集（TaskId 序） ──
     succeeded = [
-        name
-        for name in sorted(by_name)
-        if name not in interrupted and by_name[name].error is None
+        (task_id, target_by_id[task_id], by_id[task_id])
+        for task_id in sorted(by_id)
+        if task_id not in interrupted and by_id[task_id].error is None
     ]
-    pending = _collect_writes(succeeded, {name: by_name[name].writes for name in succeeded})
+    ordered = _ordered_writes(succeeded)
+    pending = _collect_writes(ordered)
 
-    # ── ⑤ 写入合并（**出错轮不进入**本阶段 ⇒ 一个都不合并 · X-3） ──
+    # ── ⑤ 写入合并（出错轮不进入本阶段） ──
     if error is None:
         try:
-            written = _merge_writes(spec, state, pending)
+            written = _merge_writes(spec, state, ordered)
         except BaseException:
-            # ⚠️ **合并阶段出错** ⇒ 调度状态也**不落回**（FR-010：任何环节出错 ⇒
-            # 执行版本与跳转目标都不推进 ⇒ 无「值没合并、版本却推进」的幽灵触发）
-            _restore_scheduler_versions(state, snapshot_versions, snapshot_edges)
+            _restore_scheduler_versions(
+                state, snapshot_versions, snapshot_edges, snapshot_fanout
+            )
             raise
         _clear_step_end(spec, state, written)
 
-    # ── ⑥ 收尾（**唯一的「抛出」点**） ──
-    executed = tuple(sorted(by_name))
+    # ── ⑥ 收尾（唯一抛出点） ──
+    executed = tuple(target_by_id[task_id] for task_id in sorted(by_id))
     if error is not None:
-        # ⚠️ **其余并发失败**以**附注**记录（固定格式 · 三样齐全 · V-15）
-        attach_failure_notes(error, [(name, by_name[name]) for name in sorted(by_name)])
-        # ⚠️ **真实异常优先** ⇒ 中断元组**随之丢弃**（上游同款 · FR-014 · X-4）
+        attach_failure_notes(
+            error,
+            [(target_by_id[task_id], by_id[task_id]) for task_id in sorted(by_id)],
+        )
         raise error
     if interrupts:
-        # ⚠️ **先合并、后抛** ⇒ 用户接住异常后从调度状态读到的**已是合并后**的值
         raise GraphInterrupt(interrupts)
     return list(executed), pending
 
 
-def _first_error(by_name: dict[str, _TaskOutcome]) -> BaseException | None:
-    """取「**节点名序**最靠前」的失败节点的异常（**原对象** · FR-003 · X-1）。
-
-    ⚠️ MUST **NOT** 依赖「谁先跑完」（完成时刻的竞态）⇒ **确定性** ⇒
-    ⚠️ **比上游更严**（上游从 ``done`` **集合** ``pop()`` ⇒ 竞态 · 实测 26/24）
-    ⇒ 偏离登记 **X-1**。
-    """
-    for node_name in sorted(by_name):
-        error = by_name[node_name].error
+def _first_error(by_id: dict[TaskId, _TaskOutcome]) -> BaseException | None:
+    """取 **TaskId 序最靠前**的失败任务的异常（原对象 · 确定性）。"""
+    for task_id in sorted(by_id):
+        error = by_id[task_id].error
         if error is not None:
             return error
     return None
 
 
-def _collect_interrupts(by_name: dict[str, _TaskOutcome]) -> tuple[Interrupt, ...]:
-    """收集本轮**全部**节点的 ``GraphInterrupt`` 载荷（**元素** · **节点名序**）。
-
-    * 元素 = 该节点 ``GraphInterrupt.args[0]``（≡ ``payload``）的**元素**
-      （``Interrupt`` 对象 · **原样**）⇒ ⚠️ MUST **NOT** 是 ``payload`` **本身**
-      （那是元组 ⇒ 嵌套元组 ⇒ 元素**没有** ``.value`` / ``.id``）（裁定 7）；
-    * 顺序 = **节点名序** ⇒ ⚠️ **比上游更严**（上游顺序**竞态** · 实测 199/1）
-      ⇒ 偏离登记 **X-7**；
-    * 一个节点**至多**贡献一个中断（上游同款）⇒ 元组长度 == 本轮中断的节点数。
-    """
+def _collect_interrupts(by_id: dict[TaskId, _TaskOutcome]) -> tuple[Interrupt, ...]:
+    """收集本轮全部中断（**TaskId 序** · 标准任务在前 · fan-out 任务在后）。"""
     collected: list[Interrupt] = []
-    for node_name in sorted(by_name):
-        collected.extend(by_name[node_name].interrupts)
+    for task_id in sorted(by_id):
+        collected.extend(by_id[task_id].interrupts)
     return tuple(collected)
 
 
@@ -1308,20 +1279,15 @@ def _restore_scheduler_versions(
     state: SchedulerState,
     snapshot_versions: dict[str, int],
     snapshot_edges: dict[str, tuple[str, ...]],
+    snapshot_fanout: dict[TaskId, _FanOut],
 ) -> None:
-    """把**本轮已落回**的调度状态**回退**（合并阶段出错时 · FR-010）。
-
-    * 恢复 ``node_versions`` 与 ``dynamic_edges`` 到**轮初**的快照
-      ⇒ 「值没合并、版本却推进了」的**幽灵触发**被消除；
-    * ⚠️ 「**已消费版本**」（``state.versions_seen``）**不回滚** ⇒
-      **上游同款**（上游的「已消费」记录同样**不**回滚）⇒ ⇒ MUST **NOT** 实现成
-      「自研的版本回滚」（那会落在宪法原则 XI 的「必须自研区」之外 · FR-010 的
-      「已消费版本不回滚」补记段）。
-    """
+    """把本轮已落回的调度状态回退（合并阶段出错时）。"""
     state.node_versions.clear()
     state.node_versions.update(snapshot_versions)
     state.dynamic_edges.clear()
     state.dynamic_edges.update(snapshot_edges)
+    state.fanout.clear()
+    state.fanout.update(snapshot_fanout)
 
 
 def _sparse_state(spec: GraphSpec, state: SchedulerState) -> dict[str, Any]:
@@ -1381,7 +1347,7 @@ def run_super_step(
     triggered = _determine_triggers(spec, state)
     executed: list[str] = []
     pending: dict[str, dict[str, tuple[Any, ...]]] = {}
-    if triggered:
+    if triggered or state.fanout:
         executed, pending = _run_round(
             spec, state, triggered, max_concurrency=max_concurrency
         )
@@ -1437,7 +1403,7 @@ def run_super_steps(
     while True:
         triggered = _determine_triggers(spec, scheduler_state)
         steps += 1
-        if not triggered:
+        if not triggered and not scheduler_state.fanout:
             break
         if scheduler_state.step >= max_steps:
             raise GraphRecursionError(
@@ -1673,7 +1639,7 @@ def _run_graph_loop(
         if triggered is None:
             triggered = _determine_triggers(spec, state)
         steps += 1
-        if not triggered:
+        if not triggered and not state.fanout:
             break
         if state.step >= max_steps:
             raise GraphRecursionError(

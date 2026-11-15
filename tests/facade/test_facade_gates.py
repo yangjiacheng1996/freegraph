@@ -475,6 +475,9 @@ class TestCompatMatrixCoversTheFacade:
     #: ⇒ **只放行这四行**；其余 **14** 行仍**逐字未改**（判据**只放宽四处**）。
     #: ⚠️ **等价程度（第三列）只允许**「部分等价 → 行为等价」这一**向好**的方向
     #: （本次四处**全部**向好）⇒ **MUST NOT** 变差。
+    #: **B11F1 经特批可更新**的行（`Send` 的运行期语义 + `Command.goto` 可装 `Send`）。
+    MATRIX_ROWS_UPDATABLE_BY_B11F1 = frozenset({"Send", "Command", "NodeFunc"})
+
     MATRIX_ROWS_UPDATABLE_BY_B12F1 = frozenset(
         {
             "Command",
@@ -525,6 +528,7 @@ class TestCompatMatrixCoversTheFacade:
             name
             for name in previous
             if name not in self.MATRIX_ROWS_UPDATABLE_BY_B9F1
+            and name not in self.MATRIX_ROWS_UPDATABLE_BY_B11F1
             and name not in self.MATRIX_ROWS_UPDATABLE_BY_B12F1
             and previous[name] != current.get(name)
         )
@@ -546,7 +550,9 @@ class TestCompatMatrixCoversTheFacade:
                     return rank
             raise AssertionError(f"未知的「等价程度」取值：{cell!r}")
         for name in (
-            self.MATRIX_ROWS_UPDATABLE_BY_B9F1 | self.MATRIX_ROWS_UPDATABLE_BY_B12F1
+            self.MATRIX_ROWS_UPDATABLE_BY_B9F1
+            | self.MATRIX_ROWS_UPDATABLE_BY_B11F1
+            | self.MATRIX_ROWS_UPDATABLE_BY_B12F1
         ):
             if name not in previous:
                 # 该行属**门面**面（不在「契约层」集合内）⇒ 不由本判据守

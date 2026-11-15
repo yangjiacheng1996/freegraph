@@ -119,4 +119,4 @@
 | `PregelScratchpad` | `langgraph/_internal/_scratchpad.py` | **不采用**该类 ⇒ freegraph 用**自研**的两级 `ContextVar`（research **DR-01 / DR-02**）⇒ ⇒ **必须自研区 ③**（上游的类与 freegraph 的层级结构不匹配）⇒ ⇒ **零**行为面偏离（语义**照抄**） |
 | `CONFIG_KEY_SEND` / `CONFIG_KEY_SCRATCHPAD` / `CONFIG_KEY_CHECKPOINT_NS` | `langgraph/_internal/_constants.py` | **不采用**（freegraph 的现场走**两级 ContextVar**）⇒ ⇒ 仅登记 |
 | `CONFIG_KEY_RESUME_MAP` | `langgraph/_internal/_constants.py:72` | **不采用** ⇒ freegraph 直接按 **id** 匹配（**X-3**） |
-| `NULL_TASK_ID` | `langgraph/_internal/_constants.py:93` | **不采用** ⇒ freegraph 的 `task_id` = **节点名**（checkpoint 契约 §5） |
+| `NULL_TASK_ID` | `langgraph/_internal/_constants.py:93` | **不采用** ⇒ freegraph 的 `task_id` = **标准任务节点名 / fan-out 任务 `f"{节点名}:{TaskId}"`**（checkpoint 契约 §5 · B11F1 F-13） |

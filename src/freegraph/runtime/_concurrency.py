@@ -79,7 +79,8 @@ class _TaskOutcome:
     * ``interrupts`` —— 该节点 ``GraphInterrupt.args[0]``（≡ ``payload``）的
       **元素**（``Interrupt`` 对象 · **原样** · 不包装）⇒
       ⚠️ MUST **NOT** 是 ``payload`` **本身**（那是元组 ⇒ 嵌套元组 ⇒ 元素**没有**
-      ``.value`` / ``.id`` ⇒ SC-010 不可判定）（spec FR-004 / FR-013 · 裁定 7）。
+      ``.value`` / ``.id`` ⇒ SC-010 不可判定）（spec FR-004 / FR-013 · 裁定 7）；
+    * ``fanout`` —— 该任务产生的 fan-out 任务（``_FanOutTask`` 元组 · B11F1）。
 
     ⚠️ **私有**（前导下划线）⇒ **不进** ``freegraph.runtime.__all__``（仍 20 个符号 ·
     裁定 13）⇒ **不进** API 兼容矩阵。
@@ -89,6 +90,7 @@ class _TaskOutcome:
     gotos: tuple[str, ...]
     error: BaseException | None
     interrupts: tuple[Interrupt, ...]
+    fanout: tuple[Any, ...] = ()
 
 
 def _resolve_cap(task_count: int, max_concurrency: int | None) -> int:
@@ -108,7 +110,7 @@ def _resolve_cap(task_count: int, max_concurrency: int | None) -> int:
     return min(task_count, ceiling)
 
 
-def _worker(node_name: str, fn: Callable[[], dict[str, Any]]) -> _TaskOutcome:
+def _worker(task_id: int, fn: Callable[[], dict[str, Any]]) -> _TaskOutcome:
     """工作线程：执行一个任务 ⇒ 产出一个**结果槽**。
 
     * ``fn`` —— 节点的**纯执行**（调 ``node.run`` + 归一）⇒ **零共享状态写**；
@@ -137,6 +139,7 @@ def _worker(node_name: str, fn: Callable[[], dict[str, Any]]) -> _TaskOutcome:
         gotos=tuple(normalized["gotos"]),
         error=None,
         interrupts=(),
+        fanout=tuple(normalized.get("fanout", ())),
     )
 
 
@@ -179,7 +182,7 @@ def attach_failure_notes(
 
 
 def run_tasks_concurrently(
-    tasks: Iterable[tuple[str, Callable[[], dict[str, Any]]]],
+    tasks: Iterable[tuple[int, Callable[[], dict[str, Any]]]],
     *,
     cap: int,
 ) -> list[_TaskOutcome]:
@@ -208,13 +211,13 @@ def run_tasks_concurrently(
     if not materialized:
         return []  # ⚠️ **零节点不建池** ⇒ 零线程（spec FR-001）
 
-    outcomes: dict[str, _TaskOutcome] = {}
+    outcomes: dict[int, _TaskOutcome] = {}
     with ThreadPoolExecutor(
         max_workers=max(1, cap), thread_name_prefix=_THREAD_NAME_PREFIX
     ) as executor:
-        futures: dict[Future[Any], str] = {}
-        for node_name, fn in materialized:
-            futures[executor.submit(_worker, node_name, fn)] = node_name
+        futures: dict[Future[Any], int] = {}
+        for task_id, fn in materialized:
+            futures[executor.submit(_worker, task_id, fn)] = task_id
 
         pending: set[Future[Any]] = set(futures)
         failed = False

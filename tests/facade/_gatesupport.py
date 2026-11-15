@@ -43,7 +43,6 @@ SIGNATURE_HEADER = (
 SIGNED_SOURCE_FILES = (
     "src/freegraph/graph.py",
     "src/freegraph/_stategraph.py",
-    "src/freegraph/_primitives.py",
     "tests/facade/__init__.py",
     "tests/facade/conftest.py",
     "tests/facade/_gatesupport.py",
@@ -57,7 +56,6 @@ SIGNED_SOURCE_FILES = (
 FACADE_MODULES = (
     "src/freegraph/graph.py",
     "src/freegraph/_stategraph.py",
-    "src/freegraph/_primitives.py",
 )
 
 #: **L4（持久化）/ L5（可观测）**的层段名——门禁 G17 内部档禁用的层。

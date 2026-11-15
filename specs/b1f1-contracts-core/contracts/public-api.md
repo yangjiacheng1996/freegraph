@@ -100,7 +100,7 @@ class Command:
 
 | 字段 | 类型 | 缺省 | 语义 |
 |---|---|---|---|
-| `goto` | `str \| Sequence[str] \| None` | `None` | 跳转目标。**单个** = 节点名字符串；**一组** = 任意序列（元组、列表都收）。目标**只能是节点名**（`Send` 归 B2F1） |
+| `goto` | `str \| Send \| Sequence[str \| Send] \| None` | `None` | 跳转目标。**单个** = 节点名或 `Send`；**一组** = 任意序列。`Send` 归 **L1**（B11F1 接线） |
 | `update` | `StateDict \| None` | `None` | 要写入图状态的部分更新 |
 | `resume` | `Any \| None` | `None` | 恢复值（配对 `interrupt`，后者归 B2F1） |
 | `graph` | `str \| None` | `None` | 目标图（**上游同款** · 上游 `langgraph/types.py:821`）⇒ `graph=Command.PARENT` = 「跳向最近的父图」；⚠️ freegraph v1 **无子图** ⇒ 其**运行期语义**归 **B10F1** |

@@ -203,3 +203,8 @@
 - 契约权威：`harness/reports/Q8-图运行时最小契约.md` §3.4（C19）。
 - 架构纪律：`harness/prompts/guide.md` §3.5（L4 只依赖 L1 · 持久化层不得 import
   可观测层）。
+
+## 下游承接（B11F1 · 2026-11-14 · 只接线 · 逐条最小改动）
+
+- **D-8（B11F1 → B15F1 · M3 · task_id / 中断现场）**：B11F1 允许同一节点在一轮内被 N 次调用 ⇒ `SqliteSaver` / 状态历史 MUST 接受 F-13 约定的持久化 `task_id`（标准任务 = 节点名；fan-out 任务 = `f"{节点名}:{TaskId}"`），且 `.pending_writes` MUST 能把 N 个同节点任务的中断记录区分开 ⇒ MUST NOT 继续假设"一轮一个节点一个任务"。
+

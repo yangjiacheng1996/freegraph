@@ -253,3 +253,8 @@
 - 契约权威：`harness/reports/Q8-图运行时最小契约.md` §3.4（C19）。
 - 验收脚本约定：`harness/demo/README.md`（M3 待锁定形态清单 + 软断言清单）。
 - 架构纪律：`harness/prompts/guide.md` §2.3 / §3.5（L4 只依赖 L1）。
+
+## 下游承接（B11F1 · 2026-11-14 · 只接线 · 逐条最小改动）
+
+- **D-3（B11F1 → B14F1 · M3 · pending writes）**：由 `Send` 产生的调用 MUST 与普通调用同款地进入 pending writes（标准任务 task_id = 节点名；fan-out 任务 = `f"{节点名}:{TaskId}"`）⇒ B14F1 MUST NOT 为 fan-out 另立载体，且 MUST 接受"一轮一个节点可有多个任务"。
+

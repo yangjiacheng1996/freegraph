@@ -1,10 +1,11 @@
 # Copyright (c) 2026 杨家成 · MIT License · https://github.com/yangjiacheng1996/freegraph
 
-"""freegraph 契约层的**四个核心类型**。
+"""freegraph 契约层的**五个核心类型**。
 
 本模块定义后续全部 feature 都会引用的类型地基：
 
 * :data:`StateDict` —— 状态字典（类型别名，与 ``dict[str, Any]`` 完全等价）；
+* :class:`Send` —— 动态 fan-out 载荷（目标节点 + 自定义入参）；
 * :class:`Command` —— 命令原语（跳转 / 写入 / 恢复三个语义位）；
 * :class:`StateSnapshot` —— 状态快照（某一时刻的完整定格）；
 * :class:`RunConfig` —— 运行配置（单次运行的配置载体）。
@@ -29,6 +30,24 @@ StateDict: TypeAlias = dict[str, Any]
 """
 
 
+@dataclass(frozen=True, slots=True)
+class Send:
+    """**动态 fan-out 的载荷** —— 把某个 ``arg`` 投递给目标节点 ``node``。
+
+    * ``node`` —— 目标节点名（**必须是图中存在的节点** · 运行期校验归 B11F1）；
+    * ``arg`` —— **逐字**传给目标节点的入参（**不校验** · 可为任意对象 / ``None``）。
+
+    形状与上游 ``langgraph.types.Send`` 的 ``node`` / ``arg`` 两字段一致；
+    freegraph 侧为 **frozen dataclass** 且**不可哈希**（``__hash__ = None``）——
+    与 ``Node`` / ``Edge`` / ``Graph`` / ``Span`` 同构。
+    """
+
+    node: str
+    arg: Any
+
+    __hash__ = None
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Command:
     """**命令原语** —— 节点返回的命令，承载三个语义位。
@@ -36,7 +55,7 @@ class Command:
     ============== ==================================== ==========
     字段            类型                                   缺省
     ============== ==================================== ==========
-    ``goto``       ``str | Sequence[str] | None``          ``None``
+    ``goto``       ``str | Send | Sequence[str | Send] | None``  ``None``
     ``update``     ``StateDict | None``                    ``None``
     ``resume``     ``Any | None``                          ``None``
     ``graph``      ``str | None``                          ``None``
@@ -59,7 +78,7 @@ class Command:
        ``str`` 本身也是 ``Sequence[str]``，顺序判断会把它拆成字符序列。
     """
 
-    goto: str | Sequence[str] | None = None
+    goto: str | Send | Sequence[str | Send] | None = None
     #: ⚠️ **2026-11-12 上游对齐 P3**：``update`` 放宽为 ``Any | None``（**上游同款** ·
     #: 上游 ``langgraph/types.py:822``）⇒ 运行期**接受**的形态随之放宽为
     #: **dict** · **list/tuple of 2-tuples**（上游 ``types.py:836-840``）· 其余形态

@@ -447,13 +447,13 @@ def parse_public_api_symbols(manifest: Path) -> tuple[list[str], list[str]]:
         bucket.append(name)
 
     symbols = existing + new + aligned
-    assert len(symbols) == 20, (
-        f"{manifest} §0 解析出的符号数 MUST 为 20，实得 {len(symbols)}：{symbols}"
+    assert len(symbols) == 21, (
+        f"{manifest} §0 解析出的符号数 MUST 为 21，实得 {len(symbols)}：{symbols}"
     )
     assert len(existing) == 8, (
         f"{manifest} §0 的「既有」段 MUST 恰为 8 个，实得 {len(existing)}"
     )
-    assert set(new) | set(aligned) == FR012_NEW_SYMBOLS | {"Interrupt", "PregelTask"}, (
+    assert set(new) | set(aligned) == FR012_NEW_SYMBOLS | {"Interrupt", "PregelTask", "Send"}, (
         f"{manifest} §0 的「新增 + 上游对齐」段 MUST 恰为 FR-012 所列的 10 个 + "
         f"上游对齐新增的 2 个，实得 {sorted((set(new) | set(aligned)) ^ (FR012_NEW_SYMBOLS | {'Interrupt', 'PregelTask'}))}（对称差）"
     )
@@ -739,7 +739,7 @@ class TestPublicSymbolSurface:
         """
         existing, new = parse_public_api_symbols(repo_root / PUBLIC_API_MANIFEST)
         assert len(existing) == 8
-        assert set(new) == FR012_NEW_SYMBOLS | {"Interrupt", "PregelTask"}
+        assert set(new) == FR012_NEW_SYMBOLS | {"Interrupt", "PregelTask", "Send"}
 
     def test_all_equals_public_symbols(self, repo_root: Path) -> None:
         """**集合相等段** —— ``__all__`` MUST **集合等于** §0 解析出的 20 个符号。
@@ -781,17 +781,14 @@ class TestPublicSymbolSurface:
             assert getattr(contracts, name, None) is not None, name
 
     def test_no_send_or_interrupt_public_symbol(self) -> None:
-        """契约层 MUST NOT 出现名为 ``Send`` / ``interrupt`` 的公开符号。
-
-        （归 **v2**：B11F1 / B10F1；本 feature **不导出**。）
-        """
+        """契约层导出 ``Send``（B11F1）但 MUST NOT 出现 ``interrupt``。"""
         import freegraph.contracts as contracts
 
-        assert not hasattr(contracts, "Send")
+        assert hasattr(contracts, "Send")
         assert not hasattr(contracts, "interrupt")
 
     def test_no_send_or_interrupt_defined_in_the_package(self) -> None:
-        """契约层**任何**模块内都不得定义 ``Send`` / ``interrupt``。"""
+        """契约层**不得**定义 ``interrupt``（``Send`` 由 B11F1 定义）。"""
         import freegraph.contracts as contracts
 
         package_dir = Path(contracts.__file__).parent
@@ -810,7 +807,7 @@ class TestPublicSymbolSurface:
                 ):
                     names.append(node.target.id)
                 for name in names:
-                    assert name not in {"Send", "interrupt"}, f"{path.name}: {name}"
+                    assert name != "interrupt", f"{path.name}: {name}"
 
 
 # ── G3 · 依赖闭包 + 许可证白名单 ───────────────────────────────────────
@@ -1508,7 +1505,7 @@ class TestPublicSymbolAnnotations:
 
         existing, new = parse_public_api_symbols(repo_root / PUBLIC_API_MANIFEST)
         symbols = existing + new
-        assert len(symbols) == 20
+        assert len(symbols) == 21
 
         for name in symbols:
             symbol = getattr(contracts, name)

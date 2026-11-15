@@ -5,11 +5,11 @@
 #
 [class] Command
     [attribute] PARENT: ClassVar[Literal['__parent__']] = '__parent__' (readonly)
-    [attribute] goto: str | Sequence[str] | None = None (readonly)
+    [attribute] goto: str | Send | Sequence[str | Send] | None = None (readonly)
     [attribute] graph: str | None = None (readonly)
     [attribute] resume: Any | None = None (readonly)
     [attribute] update: Any | None = None (readonly)
-    [method] __init__(self, *, goto: str | Sequence[str] | None = None, update: Any | None = None, resume: Any | None = None, graph: str | None = None) -> None
+    [method] __init__(self, *, goto: str | Send | Sequence[str | Send] | None = None, update: Any | None = None, resume: Any | None = None, graph: str | None = None) -> None
 [constant] END = '__end__'
 [class] RunConfig
     [attribute] configurable: Mapping[str, Any] = {} (readonly)

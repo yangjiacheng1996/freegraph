@@ -60,7 +60,7 @@ READ_CONTRACT_PATH = (
 EXPECTED_INVARIANTS = tuple(f"I-{index}" for index in range(1, 12))
 
 #: 契约层（``freegraph.contracts``）的**冻结符号数**。
-CONTRACT_SYMBOL_COUNT = 20
+CONTRACT_SYMBOL_COUNT = 21
 
 #: 门面（``freegraph.graph``）的**冻结符号数**。
 FACADE_SYMBOL_COUNT = 7
@@ -554,7 +554,7 @@ def test_the_runtime_export_surface_holds_the_expected_symbols() -> None:
 
 
 def test_the_contract_layer_and_the_facade_symbol_counts_are_unchanged() -> None:
-    """FR-026 · SC-011：契约层 **20** 个 · 门面 **7** 个符号**一字不动**。"""
+    """FR-026 · SC-011：契约层 **21** 个 · 门面 **7** 个符号**一字不动**（B11F1 经特批 +Send）。"""
     import freegraph.contracts as contracts
     import freegraph.graph as graph
 
