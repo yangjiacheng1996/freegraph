@@ -203,3 +203,7 @@
 
 - **D-1（B13F1 → B7F2 · M2 · 静态断点关键字）**：`compile(interrupt_before=..., interrupt_after=...)` MUST 被接受，并 MUST 原样填入 `GraphSpec.interrupt_before` / `interrupt_after`；接受形态与上游逐字一致：**裸 `"*"` 或 `list[str]`**，裸非 `"*"` 字符串 / 元组 / `["*"]` 失败，`None` 归一为 `()`。MUST NOT 另立第三套静态断点载体。
 - **D-2（B13F1 → B7F2 · M2 · 编译期可达性）**：不存在的断点节点名 MUST 在**编译期**失败（`ValueError`，消息点名该节点），不得推迟到 `invoke()`；`START` / `END` / 空串 / `["*"]` / 裸非 `"*"` 字符串 / 非 `str` 的失败信号与 `GraphSpec` 构造期逐字同款；裸 `"*"` = 全部可执行节点。
+
+## 下游承接（B6F1 · 2026-11-15 · 只接线 · 逐条最小改动）
+
+- **D-1（B6F1 → B7F2 · M2 · 构建器快照消费）**：`compile()` MUST 从 `StateGraph._build_spec()` 取得 `_BuilderSpec`；仅过滤**单源** `END` 目标，多源 **V-16 形态**与 `__parent__` 原样保留给 `GraphSpec` 最终失败；把 `_BuilderSpec.conditional_edges` 机械翻译为 plain mapping（内层 `"branch"` 取自 `_ConditionalEdgeSpec.branch`，MUST NOT 重新推断）并存放在 `CompiledGraph` 私有字段；同时保留完整 `_BuilderSpec`（至少 `node_records`）供 B8F3；B7F2 阶段 MUST NOT 填充 `GraphSpec.conditional_edges`。

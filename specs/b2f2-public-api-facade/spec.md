@@ -8,6 +8,8 @@
 
 **Input**: User description: "B2F2 · 公开 API 门面 `freegraph/graph.py` + API 快照测试" —— 完整提示词正文见 `harness/features/B2F2_公开API门面与快照测试.md`。要点：交付 freegraph 的**唯一公开 API 门面** `freegraph/graph.py`（导出 `StateGraph` / `START` / `END` / `Command` / `Send` / `interrupt` / `RunConfig` 共 **7** 个符号），用**签名快照测试**把对外形状钉死，并断言**顶层包惰性**（`import freegraph` 不连带加载门面与契约层）。本 feature 是 M0 地基的第 3 个 feature，**只有类型与形状、没有行为**——`StateGraph` 此刻是可构造但功能未接线的外壳。
 > **⚠️ 引文与本 spec 正文的差异**（引文为 `/speckit.specify` 的原始输入，正文以澄清裁定为准）：① 引文 §7 的导出面表把 `Command` / `Send` / `interrupt` / `RunConfig` 列为「类型（行为在 B9F1 / B11F1 / B10F1 / B8F3）」，但**未说明类型面的落点**——本 spec 裁定：`Send` / `interrupt` 的**外壳**在本 feature 就位（否则 `harness/demo/graph_core.py:48-56` 的 7 名字一次性 import 必然失败、整脚本以退出码 2 结束），而**契约层的 18 符号面不变**（见裁定 2）；② 引文 §7 的调用形态表把 `invoke(input, config)` 列入门面调用面，但 `invoke` 属**编译产物**（`CompiledGraph`）——该签名已由 B2F1 冻结，本 feature **只记录、不改、不进快照**（见裁定 7）。
+>
+> **⚠️ 2026-11-12 上游对齐 P3 回溯修订注记（只加注记 · 不改历史正文）**：当前**冻结面以 `contracts/public-api-snapshot.txt` 为准**——`StateGraph.__init__` 的参数名为 `state_schema` / `context_schema` / `input_schema` / `output_schema`（第二个位置参数可选，第三个位置参数失败）；`add_node(node, action, ...)`、`add_edge(start_key, end_key)`、`add_conditional_edges(source, path, path_map)`、`validate(interrupt=...)` 均已按上游对齐。下文 **裁定 4 / 6 / FR-007 / FR-008 / SC-010** 中旧的 `StateGraph(schema)` / `name, fn` / `src, dst` / `src, path_fn` / `compile(*, checkpointer=None, store=None)` 写法属于**历史记录**，不再作为当前冻结面；以快照与 `src/freegraph/_stategraph.py` 为准。
 
 ---
 

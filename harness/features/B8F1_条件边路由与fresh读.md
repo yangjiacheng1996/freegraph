@@ -187,3 +187,6 @@
 
 - **承接条款（B11F1 → B8F1 · M2）**：条件边函数返回 `Send` / `list[Send]` 时 MUST 产生**同款 fan-out 任务**（同一落点 · 同一入参形态 · 同一失败信号）⇒ MUST NOT 另写条件边专属 fan-out 路径。B11F1 只交付**节点返回**形态（`GraphSpec.conditional_edges` 恒空 · B7F1 的 V-8）。
 
+## 下游承接（B6F1 · 2026-11-15 · 只接线 · 逐条最小改动）
+
+- **D-2（B6F1 → B8F1 · M2 · 条件边载体）**：B8F1 MUST 只消费 B7F2 保留的 plain mapping，并把它填入 `GraphSpec.conditional_edges`、承接 V-8 放宽；MUST NOT import `freegraph._stategraph` / `_ConditionalEdgeSpec`；MUST NOT 重新归一化 `path_map`；路由通道 `branch:to:<target>` 已由构建器建好，MUST NOT 另起命名。

@@ -20,11 +20,13 @@ MUST NOT 硬编码，也 MUST NOT 从**生成的**快照解析（research D-07�
 from __future__ import annotations
 
 import dataclasses
+import inspect
 import os
 import re
 import subprocess
 import sys
 from pathlib import Path
+from typing import TypedDict
 
 import pytest
 
@@ -41,6 +43,10 @@ NOT_WIRED_PATTERN = re.compile(
 
 #: US1 阶段先交付的 **3 个**符号（US3 才补齐其余 4 个）。
 US1_SUBSET = {"StateGraph", "START", "END"}
+
+
+class _InterruptState(TypedDict):
+    count: int
 
 
 @pytest.fixture(scope="module")
@@ -138,10 +144,17 @@ class TestExportSurfaceSubset:
             facade.StateGraph({"count": 0}, {"user": "x"}, "extra")  # type: ignore[attr-defined]
 
     def test_constructor_has_no_side_effect(self, facade: object) -> None:
-        """构造**零副作用**——只存下私有的 ``schema``，不暴露任何公开属性。"""
+        """构造**零副作用**——只保存 schema 与空私有容器，不暴露公开属性。"""
         schema = {"count": 0}
         graph = facade.StateGraph(schema)  # type: ignore[attr-defined]
-        assert vars(graph) == {"_schema": schema}
+        assert set(vars(graph)) == {
+            "_schema",
+            "_nodes",
+            "_edges",
+            "_conditional_edges",
+            "_branch_names",
+        }
+        assert vars(graph)["_schema"] is schema
         assert not hasattr(graph, "schema")
         for name in vars(graph):
             assert name.startswith("_")
@@ -151,17 +164,12 @@ class TestExportSurfaceSubset:
 
 
 class TestNotWired:
-    """**未接线** —— 四个方法一律抛内置 ``NotImplementedError``。"""
+    """**未接线** —— ``compile()`` 仍抛内置 ``NotImplementedError``。"""
 
     @pytest.mark.parametrize(
         ("method_name", "args"),
-        [
-            ("add_node", ("a", lambda state: state)),
-            ("add_edge", ("a", "b")),
-            ("add_conditional_edges", ("a", lambda state: "b", ["b"])),
-            ("compile", ()),
-        ],
-        ids=["add_node", "add_edge", "add_conditional_edges", "compile"],
+        [("compile", ())],
+        ids=["compile"],
     )
     def test_not_wired_method_raises_not_implemented(
         self, facade: object, method_name: str, args: tuple[object, ...]
@@ -180,18 +188,17 @@ class TestNotWired:
         assert "compile 尚未接线（由 B7F2 交付）" in str(excinfo.value)
 
     def test_not_wired_methods_produce_no_real_semantics(self, facade: object) -> None:
-        """**未越界** —— 四个方法**不产生**任何节点 / 边 / 编译产物。"""
+        """**未越界** —— ``compile()`` 不产生编译产物。"""
         graph = facade.StateGraph({"a": 1})  # type: ignore[attr-defined]
-        calls = [
-            lambda: graph.add_node("n", lambda state: state),
-            lambda: graph.add_edge("a", "b"),
-            lambda: graph.add_conditional_edges("a", lambda s: "b", ["b"]),
-            lambda: graph.compile(),
-        ]
-        for call in calls:
-            with pytest.raises(NotImplementedError):
-                call()
-        assert vars(graph) == {"_schema": {"a": 1}}
+        with pytest.raises(NotImplementedError):
+            graph.compile()
+        assert set(vars(graph)) == {
+            "_schema",
+            "_nodes",
+            "_edges",
+            "_conditional_edges",
+            "_branch_names",
+        }
         for forbidden in ("nodes", "edges", "invoke", "stream", "compiled"):
             assert not hasattr(graph, forbidden), forbidden
 
@@ -201,6 +208,31 @@ class TestNotWired:
         with pytest.raises(NotImplementedError):
             graph.compile()
         assert not hasattr(graph, "invoke")
+
+
+# ── T032b · 静态断点透传（SC-013）──────────────────────────────────────
+
+
+class TestStaticInterruptPassthrough:
+    """构建器不拦截 / 不新增静态断点字段；compile 签名仍接收两个关键字。"""
+
+    def test_compile_signature_accepts_interrupt_keywords(self, facade: object) -> None:
+        parameters = inspect.signature(facade.StateGraph.compile).parameters  # type: ignore[attr-defined]
+        assert "interrupt_before" in parameters
+        assert "interrupt_after" in parameters
+
+    def test_builder_has_no_public_interrupt_fields(self, facade: object) -> None:
+        graph = facade.StateGraph(_InterruptState)  # type: ignore[attr-defined]
+        assert not hasattr(graph, "interrupt_before")
+        assert not hasattr(graph, "interrupt_after")
+
+    def test_validate_rejects_unknown_interrupt_node(self, facade: object) -> None:
+        graph = facade.StateGraph(_InterruptState)  # type: ignore[attr-defined]
+        graph.add_node("a", lambda state: {})
+        graph.add_edge(facade.START, "a")  # type: ignore[attr-defined]
+        graph.add_edge("a", facade.END)  # type: ignore[attr-defined]
+        with pytest.raises(ValueError, match="nope"):
+            graph.validate(interrupt=["nope"])
 
 
 # ── T026 · 导出面集合相等（SC-003）─────────────────────────────────────

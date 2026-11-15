@@ -61,6 +61,16 @@ def test_every_parity_scenario_meets_its_verdict(upstream_version: str) -> None:
     assert not failures, f"差分场景未达判词（{len(failures)}/{len(results)}）：\n{detail}"
 
 
+def test_builder_parity_scenarios_meet_their_verdicts(upstream_version: str) -> None:
+    """B6F1 builder-only 差分（D-50…D-74）MUST 符合各自判词。"""
+    results = parity_probe._run_builder_scenarios()
+    assert results, "builder 差分场景集为空"
+    failures = [result for result in results if not result.ok]
+    assert not failures, "\n".join(
+        f"  ✘ {result.name}: {result.detail}" for result in failures
+    )
+
+
 def test_the_verdict_vocabulary_is_closed(upstream_version: str) -> None:
     """**判词取值域 MUST 封闭** —— 只允许 ``SAME`` / ``STRICTER`` / ``DIFF``。
 
@@ -76,6 +86,10 @@ def test_the_verdict_vocabulary_is_closed(upstream_version: str) -> None:
             assert scenario.note, (
                 f"场景 {scenario.name!r} 的判词 {scenario.verdict!r} MUST 带理由（note）"
             )
+    for builder_scenario in parity_probe._builder_scenarios():
+        assert builder_scenario.verdict in allowed
+        if builder_scenario.verdict in {"STRICTER", "DIFF"}:
+            assert builder_scenario.note
 
 
 @pytest.mark.parametrize(

@@ -152,3 +152,7 @@
 - 契约权威：`harness/reports/Q8-图运行时最小契约.md` §3.4（C21 / C22 / C25）。
 - 验收脚本：`harness/demo/graph_core.py`（`case_run_config_and_context` /
   `case_node_alias`）、`harness/demo/README.md`（软断言清单）。
+
+## 下游承接（B6F1 · 2026-11-15 · 只接线 · 逐条最小改动）
+
+- **D-3（B6F1 → B8F3 · M2 · 别名载体）**：B8F3 MUST 从 B7F2 保留的完整 `_BuilderSpec`（至少 `node_records`）读取 `_NodeRecord.alias` 并实现别名语义；MUST NOT 要求用户重新声明别名。

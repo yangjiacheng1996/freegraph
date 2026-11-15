@@ -23,10 +23,11 @@
 故它是 ARCH-1 的**唯一例外**（可 import L1–L3，仍**不得** import L4 持久化 /
 L5 可观测 · 门禁 G17 / G18）。
 
-**当前行为**：``StateGraph`` 的四个方法仍抛内置 ``NotImplementedError``
-（消息点名归属 feature——行为归 B6F1 / B7F2）；``interrupt`` **已接线**
-（**B10F1**）⇒ 其实现体在 **L2** 的 ``freegraph.runtime._interrupt`` ⇒ ⇒
-门面**模块级** ``from .runtime._interrupt import interrupt``
+**当前行为**：``StateGraph`` 的**建图环节已由 B6F1 接线**
+（``add_node`` / ``add_edge`` / ``add_conditional_edges`` / ``validate``）；
+``compile()`` 仍抛内置 ``NotImplementedError``（归 **B7F2**）；``interrupt``
+**已接线**（**B10F1**）⇒ 其实现体在 **L2** 的 ``freegraph.runtime._interrupt``
+⇒ 门面**模块级** ``from .runtime._interrupt import interrupt``
 （**ARCH-1 的唯一例外** ``facade-L1-L3`` ⇒ 门面 → L2 **合法** · 门禁
 G17 / G18 恒绿）。
 

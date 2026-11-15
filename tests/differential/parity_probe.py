@@ -44,7 +44,7 @@ import sys
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any, Callable, Literal, TypedDict
 
 ROOT = str(pathlib.Path(__file__).resolve().parents[2])
 
@@ -2887,6 +2887,696 @@ def _scenarios() -> list[Scenario]:
     return out
 
 
+# ── B6F1 · 构建器差分（D-50…D-74 · **builder-only** 场景模型）──────────────
+
+
+class _B6State(TypedDict):
+    count: int
+
+
+def _b_node(state: dict[str, Any]) -> dict[str, Any]:
+    return {}
+
+
+def _b_router(state: dict[str, Any]) -> str:
+    return "a"
+
+
+def _b_router_literal(state: dict[str, Any]) -> Literal["a", "__end__"]:
+    return "a"
+
+
+class _B6NamedOnly:
+    name = "not-used"
+
+    def __call__(self, state: dict[str, Any]) -> dict[str, Any]:
+        return {}
+
+
+def _fg_edges(spec: Any) -> tuple[Any, ...]:
+    out: list[tuple[Any, str]] = []
+    for key, targets in spec.edges.items():
+        source = key if isinstance(key, str) else tuple(key)
+        for target in targets:
+            out.append((source, target))
+    return tuple(sorted(out, key=repr))
+
+
+def _up_edges(graph: Any) -> tuple[Any, ...]:
+    out: list[tuple[Any, str]] = []
+    for source, target in graph.edges:
+        out.append((source, target))
+    for sources, target in graph.waiting_edges:
+        out.append((tuple(sources), target))
+    return tuple(sorted(out, key=repr))
+
+
+def _fg_branches(spec: Any) -> tuple[Any, ...]:
+    out = []
+    for conditional in spec.conditional_edges:
+        items = tuple(
+            (repr(key), value)
+            for key, value in (conditional.path_map or {}).items()
+        )
+        out.append((conditional.source, conditional.branch, items))
+    return tuple(out)
+
+
+def _up_branches(graph: Any) -> tuple[Any, ...]:
+    out = []
+    for source, branches in graph.branches.items():
+        for name, branch in branches.items():
+            items = tuple(
+                (repr(key), value)
+                for key, value in (branch.ends or {}).items()
+            )
+            out.append((source, name, items))
+    return tuple(out)
+
+
+def _fg_summary(builder: Any) -> tuple[Any, ...]:
+    spec = builder._build_spec()
+    return (tuple(spec.nodes), _fg_edges(spec), _fg_branches(spec))
+
+
+def _up_summary(builder: Any) -> tuple[Any, ...]:
+    builder.validate()
+    return (tuple(builder.nodes), _up_edges(builder), _up_branches(builder))
+
+
+def _fg_target() -> tuple[Any, ...]:
+    import sys
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import END, START, StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("llm_call", _b_node)
+    builder.add_node("tool_node", _b_node)
+    builder.add_edge(START, "llm_call")
+    builder.add_conditional_edges("llm_call", _b_router, ["tool_node", END])
+    builder.add_edge("tool_node", "llm_call")
+    return _fg_summary(builder)
+
+
+def _up_target() -> tuple[Any, ...]:
+    from langgraph.graph import END, START, StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("llm_call", _b_node)
+    builder.add_node("tool_node", _b_node)
+    builder.add_edge(START, "llm_call")
+    builder.add_conditional_edges("llm_call", _b_router, ["tool_node", END])
+    builder.add_edge("tool_node", "llm_call")
+    return _up_summary(builder)
+
+
+def _fg_dict() -> tuple[Any, ...]:
+    import sys
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import END, START, StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("r", _b_node)
+    builder.add_node("hit", _b_node)
+    builder.add_node("miss", _b_node)
+    builder.add_edge(START, "r")
+    builder.add_conditional_edges("r", _b_router, {"hit": "hit", "miss": "miss"})
+    return _fg_summary(builder)
+
+
+def _up_dict() -> tuple[Any, ...]:
+    from langgraph.graph import END, START, StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("r", _b_node)
+    builder.add_node("hit", _b_node)
+    builder.add_node("miss", _b_node)
+    builder.add_edge(START, "r")
+    builder.add_conditional_edges("r", _b_router, {"hit": "hit", "miss": "miss"})
+    return _up_summary(builder)
+
+
+def _fg_literal() -> tuple[Any, ...]:
+    import sys
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import START, StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("r", _b_node)
+    builder.add_node("a", _b_node)
+    builder.add_edge(START, "r")
+    builder.add_conditional_edges("r", _b_router_literal)
+    return _fg_summary(builder)
+
+
+def _up_literal() -> tuple[Any, ...]:
+    from langgraph.graph import START, StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("r", _b_node)
+    builder.add_node("a", _b_node)
+    builder.add_edge(START, "r")
+    builder.add_conditional_edges("r", _b_router_literal)
+    return _up_summary(builder)
+
+
+def _fg_duplicate_node() -> Any:
+    import sys
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a", _b_node)
+    builder.add_node("a", _b_node)
+
+
+def _up_duplicate_node() -> Any:
+    from langgraph.graph import StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a", _b_node)
+    builder.add_node("a", _b_node)
+
+
+def _fg_unknown_target() -> Any:
+    import sys
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import START, StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a", _b_node)
+    builder.add_edge(START, "a")
+    builder.add_edge("a", "missing")
+    builder.validate()
+
+
+def _up_unknown_target() -> Any:
+    from langgraph.graph import START, StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a", _b_node)
+    builder.add_edge(START, "a")
+    builder.add_edge("a", "missing")
+    builder.validate()
+
+
+def _fg_missing_entry() -> Any:
+    import sys
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import END, StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a", _b_node)
+    builder.add_edge("a", END)
+    builder.validate()
+
+
+def _up_missing_entry() -> Any:
+    from langgraph.graph import END, StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a", _b_node)
+    builder.add_edge("a", END)
+    builder.validate()
+
+
+def _fg_chain() -> bool:
+    import sys
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import END, START, StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a", _b_node)
+    return builder.add_edge(START, "a").add_edge("a", END) is builder
+
+
+def _up_chain() -> bool:
+    from langgraph.graph import END, START, StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a", _b_node)
+    return builder.add_edge(START, "a").add_edge("a", END) is builder
+
+
+def _fg_tuple_path_map() -> Any:
+    import sys
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import START, StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("r", _b_node)
+    builder.add_node("a", _b_node)
+    builder.add_edge(START, "r")
+    builder.add_conditional_edges("r", _b_router, ("a",))
+    builder.validate()
+
+
+def _up_tuple_path_map() -> Any:
+    from langgraph.graph import START, StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("r", _b_node)
+    builder.add_node("a", _b_node)
+    builder.add_edge(START, "r")
+    builder.add_conditional_edges("r", _b_router, ("a",))
+    builder.validate()
+
+
+def _fg_multi_source() -> tuple[Any, ...]:
+    import sys
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import START, StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a", _b_node)
+    builder.add_node("b", _b_node)
+    builder.add_node("c", _b_node)
+    builder.add_edge(START, "a")
+    builder.add_edge(["a", "b"], "c")
+    return _fg_summary(builder)
+
+
+def _up_multi_source() -> tuple[Any, ...]:
+    from langgraph.graph import START, StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a", _b_node)
+    builder.add_node("b", _b_node)
+    builder.add_node("c", _b_node)
+    builder.add_edge(START, "a")
+    builder.add_edge(["a", "b"], "c")
+    return _up_summary(builder)
+
+
+def _fg_missing_action() -> Any:
+    import sys
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a")
+
+
+def _up_missing_action() -> Any:
+    from langgraph.graph import StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a")
+
+
+def _fg_empty_source() -> Any:
+    import sys
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import START, StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a", _b_node)
+    builder.add_edge(START, "a")
+    builder.add_edge([], "a")
+    builder.validate()
+
+
+def _up_empty_source() -> Any:
+    from langgraph.graph import START, StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a", _b_node)
+    builder.add_edge(START, "a")
+    builder.add_edge([], "a")
+    builder.validate()
+
+
+def _fg_interrupt_unknown() -> Any:
+    import sys
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import END, START, StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a", _b_node)
+    builder.add_edge(START, "a")
+    builder.add_edge("a", END)
+    builder.validate(interrupt=["nope"])
+
+
+def _up_interrupt_unknown() -> Any:
+    from langgraph.graph import END, START, StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a", _b_node)
+    builder.add_edge(START, "a")
+    builder.add_edge("a", END)
+    builder.validate(interrupt=["nope"])
+
+
+def _fg_bad_end_key() -> Any:
+    import sys
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a", _b_node)
+    builder.add_edge("a", 123)
+
+
+def _up_bad_end_key() -> Any:
+    from langgraph.graph import StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a", _b_node)
+    builder.add_edge("a", 123)
+
+
+def _fg_bad_source() -> Any:
+    import sys
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a", _b_node)
+    builder.add_conditional_edges(123, _b_router, ["a"])
+
+
+def _up_bad_source() -> Any:
+    from langgraph.graph import StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a", _b_node)
+    builder.add_conditional_edges(123, _b_router, ["a"])
+    builder.validate()
+
+
+def _fg_bad_path_map() -> Any:
+    import sys
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a", _b_node)
+    builder.add_conditional_edges("a", _b_router, ["a", 3])
+
+
+def _up_bad_path_map() -> Any:
+    from langgraph.graph import StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a", _b_node)
+    builder.add_conditional_edges("a", _b_router, ["a", 3])
+
+
+def _fg_multi_source_end() -> tuple[Any, ...]:
+    import sys
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import END, START, StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a", _b_node)
+    builder.add_node("b", _b_node)
+    builder.add_edge(START, "a")
+    builder.add_edge("a", END)
+    builder.add_edge(["a", "b"], END)
+    return _fg_summary(builder)
+
+
+def _up_multi_source_end() -> tuple[Any, ...]:
+    from langgraph.graph import END, START, StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a", _b_node)
+    builder.add_node("b", _b_node)
+    builder.add_edge(START, "a")
+    builder.add_edge("a", END)
+    builder.add_edge(["a", "b"], END)
+    return _up_summary(builder)
+
+
+def _fg_callable_action() -> Any:
+    import sys
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node(_b_node, _b_node)
+
+
+def _up_callable_action() -> Any:
+    from langgraph.graph import StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node(_b_node, _b_node)
+
+
+def _fg_reserved_node() -> Any:
+    import sys
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import START, StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node(START, _b_node)
+
+
+def _up_reserved_node() -> Any:
+    from langgraph.graph import START, StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node(START, _b_node)
+
+
+def _fg_bad_edge_sentinel() -> Any:
+    import sys
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import END, START, StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a", _b_node)
+    builder.add_edge(END, "a")
+
+
+def _up_bad_edge_sentinel() -> Any:
+    from langgraph.graph import END, StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a", _b_node)
+    builder.add_edge(END, "a")
+
+
+def _fg_bad_start_key() -> Any:
+    import sys
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a", _b_node)
+    builder.add_edge(123, "a")
+
+
+def _up_bad_start_key() -> Any:
+    from langgraph.graph import StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a", _b_node)
+    builder.add_edge(123, "a")
+
+
+def _fg_named_only() -> tuple[Any, ...]:
+    import sys
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import START, StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node(_B6NamedOnly())
+    builder.add_edge(START, "_B6NamedOnly")
+    builder.add_conditional_edges("_B6NamedOnly", _B6NamedOnly(), ["_B6NamedOnly"])
+    return _fg_summary(builder)
+
+
+def _up_named_only() -> tuple[Any, ...]:
+    from langgraph.graph import START, StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node(_B6NamedOnly())
+    builder.add_edge(START, "_B6NamedOnly")
+    builder.add_conditional_edges("_B6NamedOnly", _B6NamedOnly(), ["_B6NamedOnly"])
+    return _up_summary(builder)
+
+
+def _fg_entry_vs_target() -> Any:
+    import sys
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a", _b_node)
+    builder.add_edge("a", "missing")
+    builder.validate()
+
+
+def _up_entry_vs_target() -> Any:
+    from langgraph.graph import StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a", _b_node)
+    builder.add_edge("a", "missing")
+    builder.validate()
+
+
+def _fg_empty_graph() -> Any:
+    import sys
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import END, START, StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_edge(START, END)
+    builder.validate()
+
+
+def _up_empty_graph() -> Any:
+    from langgraph.graph import END, START, StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_edge(START, END)
+    builder.validate()
+
+
+def _fg_runnable_path() -> tuple[Any, ...]:
+    import sys
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import END, START, StateGraph
+    from langchain_core.runnables import RunnableLambda
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a", _b_node)
+    builder.add_edge(START, "a")
+    builder.add_conditional_edges("a", RunnableLambda(_b_router), ["a", END])
+    return _fg_summary(builder)
+
+
+def _up_runnable_path() -> tuple[Any, ...]:
+    from langchain_core.runnables import RunnableLambda
+    from langgraph.graph import END, START, StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a", _b_node)
+    builder.add_edge(START, "a")
+    builder.add_conditional_edges("a", RunnableLambda(_b_router), ["a", END])
+    return _up_summary(builder)
+
+
+def _fg_alias() -> Any:
+    import sys
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import StateGraph
+
+    from freegraph.graph import END, START
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a", _b_node, alias="model")
+    builder.add_edge(START, "a")
+    builder.add_edge("a", END)
+    return builder._build_spec().node_records["a"].alias
+
+
+def _up_alias() -> Any:
+    from langgraph.graph import StateGraph
+
+    from langgraph.graph import END, START
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a", _b_node, alias="model")
+    builder.add_edge(START, "a")
+    builder.add_edge("a", END)
+    builder.validate()
+    return None
+
+
+@dataclass
+class BuilderScenario:
+    name: str
+    verdict: str
+    note: str
+    fg: Callable[[], Any]
+    up: Callable[[], Any]
+
+
+@dataclass
+class _BuilderRun:
+    kind: str
+    value: Any = None
+    exc_type: str = ""
+
+
+def _run_builder(call: Callable[[], Any]) -> _BuilderRun:
+    try:
+        return _BuilderRun("OK", call())
+    except Exception as exc:  # noqa: BLE001 - 差分探针只关心成功 / 失败
+        return _BuilderRun("ERROR", exc_type=type(exc).__name__)
+
+
+def _builder_scenarios() -> list[BuilderScenario]:
+    """B6F1 构建器差分场景（上游缺席 ⇒ 返回空列表）。"""
+    try:
+        import langgraph  # noqa: F401
+    except Exception:
+        return []
+    return [
+        BuilderScenario("builder D-50 target-style", "SAME", "", _fg_target, _up_target),
+        BuilderScenario("builder D-51 dict path_map", "SAME", "", _fg_dict, _up_dict),
+        BuilderScenario("builder D-52 duplicate node", "SAME", "", _fg_duplicate_node, _up_duplicate_node),
+        BuilderScenario("builder D-53 unknown target", "SAME", "", _fg_unknown_target, _up_unknown_target),
+        BuilderScenario("builder D-54 missing entrypoint", "SAME", "", _fg_missing_entry, _up_missing_entry),
+        BuilderScenario("builder D-55 chain", "SAME", "", _fg_chain, _up_chain),
+        BuilderScenario("builder D-56 tuple path_map", "STRICTER", "freegraph 立即 TypeError；上游静默保持 ends=None", _fg_tuple_path_map, _up_tuple_path_map),
+        BuilderScenario("builder D-57 multi-source", "SAME", "", _fg_multi_source, _up_multi_source),
+        BuilderScenario("builder D-58 missing action", "STRICTER", "freegraph TypeError；上游 RuntimeError", _fg_missing_action, _up_missing_action),
+        BuilderScenario("builder D-59 empty multi-source", "STRICTER", "freegraph 立即 ValueError；上游静默登记无效汇合", _fg_empty_source, _up_empty_source),
+        BuilderScenario("builder D-60 literal path_map", "SAME", "", _fg_literal, _up_literal),
+        BuilderScenario("builder D-61 interrupt unknown", "SAME", "", _fg_interrupt_unknown, _up_interrupt_unknown),
+        BuilderScenario("builder D-62 non-str end_key", "STRICTER", "freegraph 立即 TypeError；上游接受并推迟", _fg_bad_end_key, _up_bad_end_key),
+        BuilderScenario("builder D-63 non-str source", "STRICTER", "freegraph 立即 TypeError；上游推迟到 validate", _fg_bad_source, _up_bad_source),
+        BuilderScenario("builder D-64 bad path_map element", "STRICTER", "freegraph 立即 TypeError；上游接受并推迟", _fg_bad_path_map, _up_bad_path_map),
+        BuilderScenario("builder D-65 multi-source END", "SAME", "", _fg_multi_source_end, _up_multi_source_end),
+        BuilderScenario("builder D-66 callable plus action", "STRICTER", "freegraph TypeError；上游静默忽略 action", _fg_callable_action, _up_callable_action),
+        BuilderScenario("builder D-67 reserved node", "SAME", "", _fg_reserved_node, _up_reserved_node),
+        BuilderScenario("builder D-68 sentinel edge", "SAME", "", _fg_bad_edge_sentinel, _up_bad_edge_sentinel),
+        BuilderScenario("builder D-69 bad start_key", "SAME", "", _fg_bad_start_key, _up_bad_start_key),
+        BuilderScenario("builder D-70 name only", "SAME", "", _fg_named_only, _up_named_only),
+        BuilderScenario("builder D-71 entrypoint before target", "SAME", "", _fg_entry_vs_target, _up_entry_vs_target),
+        BuilderScenario("builder D-72 empty graph", "STRICTER", "freegraph 空节点表 ValueError；上游接受 START->END", _fg_empty_graph, _up_empty_graph),
+        BuilderScenario("builder D-73 runnable path", "DIFF", "零 langchain 依赖边界：freegraph 只承载普通 callable", _fg_runnable_path, _up_runnable_path),
+        BuilderScenario("builder D-74 alias", "DIFF", "freegraph 记录 alias；上游静默忽略", _fg_alias, _up_alias),
+    ]
+
+
+def _run_builder_scenarios(keyword: str = "") -> list[ProbeResult]:
+    results: list[ProbeResult] = []
+    for scenario in _builder_scenarios():
+        if keyword and keyword not in scenario.name:
+            continue
+        fg = _run_builder(scenario.fg)
+        up = _run_builder(scenario.up)
+        if scenario.verdict == "SAME":
+            ok = fg.kind == up.kind and (fg.kind == "ERROR" or fg.value == up.value)
+        elif scenario.verdict == "STRICTER":
+            ok = scenario.note != "" and (
+                fg.kind == up.kind or (fg.kind == "ERROR" and up.kind == "OK")
+            )
+        else:
+            ok = bool(scenario.note)
+        results.append(
+            ProbeResult(
+                name=scenario.name,
+                verdict=scenario.verdict,
+                ok=ok,
+                freegraph_kind=fg.kind,
+                upstream_kind=up.kind,
+                detail=(
+                    f"freegraph={fg.kind} {fg.value!r} {fg.exc_type} | "
+                    f"upstream={up.kind} {up.value!r} {up.exc_type}"
+                ),
+            )
+        )
+    return results
+
+
 # ── 公开 API（供 pytest / CLI 复用）─────────────────────────────────────────
 
 
@@ -3037,4 +3727,5 @@ def run_all(keyword: str = "") -> list[ProbeResult]:
                 detail=detail,
             )
         )
+    results.extend(_run_builder_scenarios(keyword))
     return results

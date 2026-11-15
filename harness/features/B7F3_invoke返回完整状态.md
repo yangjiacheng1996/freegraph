@@ -249,3 +249,7 @@
 
 - **D-3（B13F1 → B7F3 · M2 · `recursion_limit` 透传）**：`invoke(input, config)` MUST 接受普通 dict 形态的 `config` 并把 `"recursion_limit"` 原样交给 L2；MUST NOT 丢弃 / 改名 / 另写解析路径；MUST NOT 把 `GraphRecursionError` 包装成别的类型；`harness/demo/graph_core.py` 的硬断言 MUST 在此棒真跑通过。
 - **D-4（B13F1 → B7F3 · M2 · 静态挂起结果）**：`invoke` 在静态挂起时 MUST 返回 `InterruptResult.as_result_dict()`（含 `"__interrupt__": ()`）；MUST NOT 另写「静态中断 → 结果键」的转成路径；恢复时 MUST 接受 `input=None`（规范形态）与 `Command(resume=...)`（值不投递给任何节点）。
+
+## 下游承接（B6F1 · 2026-11-15 · 只接线 · 逐条最小改动）
+
+- **H-7（B6F1 → B7F3 · M2 · G22 场景② 最小图运行期断言）**：B7F3 MUST 点亮 G22「场景②」的最小图**运行期**断言（建图 → compile → invoke）；B6F1 只交付「建图」环节，本 feature MUST NOT 新增门禁编号。
