@@ -262,3 +262,7 @@
 
 - **D-5（B13F1 → B14F1 · M3 · 静态挂起持久化）**：`MemorySaver` MUST 能原样存取**静态挂起**的快照 + 调度账本（`interrupts = ()` · `suspension_kind` · `static_ack` · `next` 可为空）⇒ MUST NOT 要求「静态挂起也必须有一条动态中断载荷」才能恢复；fan-out 载荷（目标 + 原样入参 + TaskId）MUST 随调度账本一起保存 / 还原；**F-10 的完成快照由 B13F1 写一次**，B14F1 的每轮末快照 MUST NOT 与之重复 / 冲突。
 
+## 下游承接（B7F2 · 2026-11-16 · 只接线 · 逐条最小改动）
+
+- **D-4（B7F2 → B14F1 · M3 · checkpointer 的编译期校验补齐）**：B7F2 在编译期**接受并记录** `checkpointer=`，但**不做类型校验**（v1 的 checkpointer 实现归 B14F1 ⇒ 「尚未就绪」不应被误报为用户错误）。B14F1 MUST 补上上游同款的**编译期类型校验**（上游 `ensure_valid_checkpointer` ⇒ `TypeError` · 实测 E-29）；校验口径由 B14F1 冻结；`CompiledGraph.checkpointer` 是只读交接面，B14F1 MUST NOT 要求 B7F2 改写其记录方式。
+

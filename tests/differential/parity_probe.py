@@ -43,6 +43,7 @@ import re
 import sys
 import threading
 import time
+import warnings
 from dataclasses import dataclass, field
 from typing import Any, Callable, Literal, TypedDict
 
@@ -3577,6 +3578,356 @@ def _run_builder_scenarios(keyword: str = "") -> list[ProbeResult]:
     return results
 
 
+# ── B7F2 · 编译差分（D-75…D-91 · **compile-only** 场景模型）──────────────
+
+_COMPILE_CAPABILITY_METHODS = (
+    "invoke",
+    "stream",
+    "get_graph",
+    "get_state",
+    "get_state_history",
+    "update_state",
+)
+_COMPILE_STORE_SENTINEL: Any = object()
+
+
+@dataclass
+class CompileScenario:
+    """一个**编译期**同场景对跑用例（不执行任何节点）。"""
+
+    name: str
+    verdict: str
+    note: str
+    fg: Callable[[], Any]
+    up: Callable[[], Any]
+
+
+@dataclass
+class _CompileRun:
+    kind: str
+    exc_type: str = ""
+    value: Any = None
+
+
+def _compile_summary(compiled: Any, warning_count: int = 0) -> dict[str, Any]:
+    return {
+        "has_6_methods": all(
+            hasattr(compiled, name) for name in _COMPILE_CAPABILITY_METHODS
+        ),
+        "store_warning_count": warning_count,
+        "interrupt_before": tuple(
+            getattr(compiled, "interrupt_before_nodes", ()) or ()
+        ),
+        "store_identity_kept": getattr(compiled, "store", None)
+        is _COMPILE_STORE_SENTINEL,
+    }
+
+
+def _fg_minimal_builder() -> Any:
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import END, START, StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a", _b_node)
+    builder.add_node("b", _b_node)
+    builder.add_edge(START, "a")
+    builder.add_edge("a", "b")
+    builder.add_edge("b", END)
+    return builder
+
+
+def _up_minimal_builder() -> Any:
+    from langgraph.graph import END, START, StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a", _b_node)
+    builder.add_node("b", _b_node)
+    builder.add_edge(START, "a")
+    builder.add_edge("a", "b")
+    builder.add_edge("b", END)
+    return builder
+
+
+def _fg_compile(**kwargs: Any) -> dict[str, Any]:
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        compiled = _fg_minimal_builder().compile(**kwargs)
+    return _compile_summary(compiled, warning_count=len(caught))
+
+
+def _up_compile(**kwargs: Any) -> dict[str, Any]:
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        compiled = _up_minimal_builder().compile(**kwargs)
+    return _compile_summary(compiled, warning_count=len(caught))
+
+
+def _fg_unknown_target() -> dict[str, Any]:
+    builder = _fg_minimal_builder()
+    builder.add_edge("a", "ghost")
+    return _compile_summary(builder.compile())
+
+
+def _up_unknown_target() -> dict[str, Any]:
+    builder = _up_minimal_builder()
+    builder.add_edge("a", "ghost")
+    return _compile_summary(builder.compile())
+
+
+def _fg_missing_entry() -> dict[str, Any]:
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a", _b_node)
+    return _compile_summary(builder.compile())
+
+
+def _up_missing_entry() -> dict[str, Any]:
+    from langgraph.graph import StateGraph
+
+    builder = StateGraph(_B6State)
+    builder.add_node("a", _b_node)
+    return _compile_summary(builder.compile())
+
+
+def _fg_unknown_conditional_source() -> dict[str, Any]:
+    builder = _fg_minimal_builder()
+    builder.add_conditional_edges("ghost", _b_router, ["a"])
+    return _compile_summary(builder.compile())
+
+
+def _up_unknown_conditional_source() -> dict[str, Any]:
+    builder = _up_minimal_builder()
+    builder.add_conditional_edges("ghost", _b_router, ["a"])
+    return _compile_summary(builder.compile())
+
+
+def _fg_unknown_path_map_target() -> dict[str, Any]:
+    builder = _fg_minimal_builder()
+    builder.add_conditional_edges("a", _b_router, {"x": "ghost"})
+    return _compile_summary(builder.compile())
+
+
+def _up_unknown_path_map_target() -> dict[str, Any]:
+    builder = _up_minimal_builder()
+    builder.add_conditional_edges("a", _b_router, {"x": "ghost"})
+    return _compile_summary(builder.compile())
+
+
+def _fg_dynamic_path_map() -> dict[str, Any]:
+    builder = _fg_minimal_builder()
+    builder.add_conditional_edges("a", _b_router, None)
+    return _compile_summary(builder.compile())
+
+
+def _up_dynamic_path_map() -> dict[str, Any]:
+    builder = _up_minimal_builder()
+    builder.add_conditional_edges("a", _b_router, None)
+    return _compile_summary(builder.compile())
+
+
+def _fg_compile_then_add_node() -> dict[str, Any]:
+    builder = _fg_minimal_builder()
+    builder.compile()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        builder.add_node("late", _b_node)
+    return {"store_warning_count": len(caught)}
+
+
+def _up_compile_then_add_node() -> dict[str, Any]:
+    builder = _up_minimal_builder()
+    builder.compile()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        builder.add_node("late", _b_node)
+    return {"store_warning_count": len(caught)}
+
+
+def _fg_two_compiles() -> dict[str, Any]:
+    builder = _fg_minimal_builder()
+    first = builder.compile()
+    second = builder.compile()
+    return {"distinct_products": first is not second}
+
+
+def _up_two_compiles() -> dict[str, Any]:
+    builder = _up_minimal_builder()
+    first = builder.compile()
+    second = builder.compile()
+    return {"distinct_products": first is not second}
+
+
+def _compile_scenarios() -> list[CompileScenario]:
+    """B7F2 编译差分场景（上游缺席 ⇒ 返回空列表）。"""
+    try:
+        import langgraph  # noqa: F401
+    except Exception:
+        return []
+    return [
+        CompileScenario(
+            "compile D-75 minimal no-arg", "SAME", "", _fg_compile, _up_compile
+        ),
+        CompileScenario(
+            "compile D-76 checkpointer/store None",
+            "SAME",
+            "",
+            lambda: _fg_compile(checkpointer=None, store=None),
+            lambda: _up_compile(checkpointer=None, store=None),
+        ),
+        CompileScenario(
+            "compile D-77 non-saver checkpointer",
+            "DIFF",
+            "freegraph 接受并记录；上游编译期抛 TypeError（X-4）",
+            lambda: _fg_compile(checkpointer=object()),
+            lambda: _up_compile(checkpointer=object()),
+        ),
+        CompileScenario(
+            "compile D-78 store object",
+            "DIFF",
+            "freegraph v1 无实现且发 1 条 warning；上游 store 可生效、不发 warning（X-3）",
+            lambda: _fg_compile(store=_COMPILE_STORE_SENTINEL),
+            lambda: _up_compile(store=_COMPILE_STORE_SENTINEL),
+        ),
+        CompileScenario(
+            "compile D-79 unknown interrupt node",
+            "SAME",
+            "",
+            lambda: _fg_compile(interrupt_before=["nope"]),
+            lambda: _up_compile(interrupt_before=["nope"]),
+        ),
+        CompileScenario(
+            "compile D-80 interrupt star",
+            "SAME",
+            "",
+            lambda: _fg_compile(interrupt_before="*"),
+            lambda: _up_compile(interrupt_before="*"),
+        ),
+        CompileScenario(
+            "compile D-81 interrupt tuple",
+            "SAME",
+            "",
+            lambda: _fg_compile(interrupt_before=("a",)),
+            lambda: _up_compile(interrupt_before=("a",)),
+        ),
+        CompileScenario(
+            "compile D-82 interrupt bare empty",
+            "STRICTER",
+            "freegraph TypeError；上游静默接受（X-2）",
+            lambda: _fg_compile(interrupt_before=""),
+            lambda: _up_compile(interrupt_before=""),
+        ),
+        CompileScenario(
+            "compile D-83 interrupt bare non-star",
+            "SAME",
+            "",
+            lambda: _fg_compile(interrupt_before="a"),
+            lambda: _up_compile(interrupt_before="a"),
+        ),
+        CompileScenario(
+            "compile D-84 interrupt star element",
+            "SAME",
+            "",
+            lambda: _fg_compile(interrupt_before=["*"]),
+            lambda: _up_compile(interrupt_before=["*"]),
+        ),
+        CompileScenario(
+            "compile D-85 unknown edge target",
+            "SAME",
+            "",
+            _fg_unknown_target,
+            _up_unknown_target,
+        ),
+        CompileScenario(
+            "compile D-86 missing START entry",
+            "SAME",
+            "",
+            _fg_missing_entry,
+            _up_missing_entry,
+        ),
+        CompileScenario(
+            "compile D-87 unknown conditional source",
+            "SAME",
+            "",
+            _fg_unknown_conditional_source,
+            _up_unknown_conditional_source,
+        ),
+        CompileScenario(
+            "compile D-88 unknown path_map target",
+            "SAME",
+            "",
+            _fg_unknown_path_map_target,
+            _up_unknown_path_map_target,
+        ),
+        CompileScenario(
+            "compile D-89 dynamic path_map None",
+            "SAME",
+            "",
+            _fg_dynamic_path_map,
+            _up_dynamic_path_map,
+        ),
+        CompileScenario(
+            "compile D-90 post-compile add_node",
+            "DIFF",
+            "freegraph 不发提示；上游用 logging.warning（X-5）",
+            _fg_compile_then_add_node,
+            _up_compile_then_add_node,
+        ),
+        CompileScenario(
+            "compile D-91 two compiles",
+            "SAME",
+            "",
+            _fg_two_compiles,
+            _up_two_compiles,
+        ),
+    ]
+
+
+def _run_compile(call: Callable[[], Any]) -> _CompileRun:
+    try:
+        return _CompileRun("OK", value=call())
+    except Exception as exc:  # noqa: BLE001 - 差分只关心成功 / 失败
+        return _CompileRun("ERROR", exc_type=type(exc).__name__)
+
+
+def _run_compile_scenarios(keyword: str = "") -> list["ProbeResult"]:
+    results: list[ProbeResult] = []
+    for scenario in _compile_scenarios():
+        if keyword and keyword not in scenario.name:
+            continue
+        fg = _run_compile(scenario.fg)
+        up = _run_compile(scenario.up)
+        if scenario.verdict == "SAME":
+            ok = fg.kind == up.kind
+            if fg.kind == "ERROR":
+                ok = ok and fg.exc_type == up.exc_type
+            else:
+                ok = (
+                    ok
+                    and fg.value.get("has_6_methods")
+                    == up.value.get("has_6_methods")
+                )
+        elif scenario.verdict == "STRICTER":
+            ok = scenario.note != "" and fg.kind == "ERROR" and up.kind == "OK"
+        else:
+            ok = bool(scenario.note)
+        results.append(
+            ProbeResult(
+                name=scenario.name,
+                verdict=scenario.verdict,
+                ok=ok,
+                freegraph_kind=fg.kind,
+                upstream_kind=up.kind,
+                detail=(
+                    f"freegraph={fg.kind} {fg.value!r} {fg.exc_type} | "
+                    f"upstream={up.kind} {up.value!r} {up.exc_type}"
+                ),
+            )
+        )
+    return results
+
+
 # ── 公开 API（供 pytest / CLI 复用）─────────────────────────────────────────
 
 
@@ -3727,5 +4078,6 @@ def run_all(keyword: str = "") -> list[ProbeResult]:
                 detail=detail,
             )
         )
+    results.extend(_run_compile_scenarios(keyword))
     results.extend(_run_builder_scenarios(keyword))
     return results

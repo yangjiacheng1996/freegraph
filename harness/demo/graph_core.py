@@ -552,29 +552,53 @@ def case_node_alias() -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-def _facade_ready() -> bool:
-    """M1 门面未就绪守卫（compile / invoke 仍为桩）⇒ 环境未就绪。"""
+def _invoke_ready() -> bool:
+    """探测 ``invoke()`` 是否已就绪（B7F3）；MUST NOT 用「6 方法能力面」当判据。"""
+
+    def node(state: State) -> dict:
+        return {}
+
+    graph = StateGraph(State)
+    graph.add_node("n", node)
+    graph.add_edge(START, "n")
+    graph.add_edge("n", END)
     try:
-        compiled = StateGraph(dict).compile()
+        graph.compile().invoke({"messages": [], "llm_calls": 0})
     except NotImplementedError:
         return False
-    except Exception:  # noqa: BLE001 - 空图编译失败 ≠ 门面未就绪
+    except Exception:  # noqa: BLE001 - 其它失败交给正常用例报告
         return True
-    return hasattr(compiled, "invoke")
+    return True
 
 
 def main() -> int:
     print("══ graph_core · freegraph 图运行时内核验收（前置用例）══")
     print(f"Python {sys.version.split()[0]} · 只依赖 freegraph + 标准库")
 
-    if not _facade_ready():
-        print("[环境未就绪] compile() / invoke() 仍为桩（构建器 / 编译属 M2）")
+    # ⚠️ 先跑 A3（compile 已交付时真跑通过），再探 invoke（B7F3）：
+    #    - compile 仍不可用 ⇒ 退出码 2；
+    #    - compile 可用、invoke 未就绪 ⇒ **A3 通过之后**打印 [环境未就绪] 并退出码 2；
+    #    - 两者都就绪 ⇒ 正常跑全部用例。
+    try:
+        case_build_and_compile()
+    except NotImplementedError:
+        print("[环境未就绪] compile() 仍为桩（编译属 M2）")
+        return 2
+    except Exception as exc:  # noqa: BLE001 - A3 自身失败 ⇒ 正常报告
+        check(
+            False,
+            "A3 图构建与编译未抛异常即完成",
+            f"{type(exc).__name__}: {exc}",
+        )
+        return finish("graph_core")
+
+    if not _invoke_ready():
+        print("[环境未就绪] invoke() 仍为桩（执行属 B7F3）")
         return 2
 
     for case in (
         case_state_model,
         case_sparse_state,
-        case_build_and_compile,
         case_invoke_returns_full_state,
         case_conditional_edges,
         case_command_and_send,

@@ -1,33 +1,45 @@
 # Copyright (c) 2026 杨家成 · MIT License · https://github.com/yangjiacheng1996/freegraph
 
-"""``StateGraph`` 的构建器实现（B6F1 · L3 图定义层）。
+"""``StateGraph`` 的构建器实现 + ``compile()`` 产物（B6F1 / B7F2 · L3 图定义层）。
 
-本模块是门面 ``freegraph.graph.StateGraph`` 的实现体。B6F1 交付**声明式建图**：
+本模块是门面 ``freegraph.graph.StateGraph`` 的实现体。
+
+**B6F1 交付声明式建图**：
 
 * 构造期只保存 ``state_schema`` 并初始化空私有容器（零 schema 解析 / 零校验 / 零 I/O）；
 * :meth:`StateGraph.add_node` / :meth:`StateGraph.add_edge` /
   :meth:`StateGraph.add_conditional_edges` 只**登记并立即校验**；
 * :meth:`StateGraph.validate` / :meth:`StateGraph._build_spec` 在**构建期末**执行
-  完整校验并产出冻结的 :class:`_BuilderSpec`，供 B7F2 ``compile()`` 消费。
+  完整校验并产出冻结的 :class:`_BuilderSpec`，供 ``compile()`` 消费。
 
-本 feature **不执行**任何节点 / 路由函数 / 归约器，也**不实现**
-``compile()`` / ``invoke()`` / ``stream()`` / ``get_graph()``。
+**B7F2 交付 ``compile()``**：
+
+* 把 :class:`_BuilderSpec` **适配**为 L2 的 :class:`GraphSpec`（单源 ``END`` 过滤 ·
+  新 channels 映射 · ``conditional_edges`` 恒空）；
+* 条件边 plain mapping 与注入项挂到 :class:`CompiledGraph` 上；
+* 未就绪的 6 个能力面方法抛内置 ``NotImplementedError``（点名归属 feature）。
+
+本模块 **不执行**任何节点 / 路由函数 / 归约器，也**不实现** ``invoke()`` /
+``stream()`` / ``get_graph()`` / 条件边求值 / checkpointer / store 的**行为**。
 
 **上游对齐**（``langgraph 1.2.11`` · 原则 XI）：``StateGraph.__init__`` /
-``add_node`` / ``add_edge`` / ``add_conditional_edges`` / ``validate`` 的方法名与必填位置参数
-与上游同款；更严失败信号与 defer 差异见 spec 的偏离登记 X-1…X-7。
+``add_node`` / ``add_edge`` / ``add_conditional_edges`` / ``validate`` / ``compile``
+的方法名与必填位置参数与上游同款；更严失败信号与 defer 差异见 spec 的偏离登记
+X-1…X-12。
 """
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Callable, Hashable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal, Self, get_args, get_origin, get_type_hints
 
-from .contracts import Checkpointer, CompiledGraph, Store
+from .contracts import Checkpointer, CompiledGraph as CompiledGraphProtocol, Store
 from .runtime import (
     Channel,
     EphemeralValue,
+    GraphSpec,
     NodeSpec,
     build_channels,
     parse_state_schema,
@@ -36,6 +48,9 @@ from .runtime import (
 _START = "__start__"
 _END = "__end__"
 _RESERVED_CHARS = ("|", ":")
+
+#: L1 协议别名（仅用于静态检查 / 文档；实现体类同名但**不继承**它 ⇒ 结构化子类型）。
+_COMPILED_GRAPH_PROTOCOL = CompiledGraphProtocol
 
 
 @dataclass(frozen=True)
@@ -126,11 +141,157 @@ def _normalize_path_map(
     return {name: name for name in names}
 
 
+def _static_points(value: Any, field_name: str) -> Any:
+    """静态断点入口层**容器形态门**（B7F2 · CV-11 · DR-5）。
+
+    * ``None`` ⇒ ``()``（关闭）；
+    * ``str`` / ``list`` ⇒ **原样透传**（元素级与裸字符串失败信号由
+      :class:`GraphSpec` 的归一函数产出 ⇒ B13F1 D-2 的「逐字同款」）；
+    * 其它容器（``tuple`` / ``set`` / ``dict`` / 数值 …）⇒ 内置 ``TypeError``。
+
+    这是 ``compile()`` 内**唯一**自写的图结构判定；其余校验全部委托
+    ``_build_spec()`` / ``GraphSpec.__post_init__``（单一真源）。
+    """
+    if value is None:
+        return ()
+    if isinstance(value, (str, list)):
+        return value
+    raise TypeError(
+        f"{field_name} must be '*' or a list of node names, "
+        f"got {type(value).__name__} (V-22)"
+    )
+
+
+def _graph_spec_from(
+    builder_spec: _BuilderSpec,
+    interrupt_before: Any,
+    interrupt_after: Any,
+) -> GraphSpec:
+    """把 :class:`_BuilderSpec` 适配为 L2 的 :class:`GraphSpec`（B7F2 · DD-04/05）。
+
+    * ``channels`` 用**新映射**（同一批模板对象 ⇒ 运行期增补不污染构建器快照）；
+    * ``nodes`` 原样搬运（``NodeSpec`` 同构）；
+    * ``edges`` **仅**对 ``str``（单源）键过滤 ``END`` 目标；过滤后目标元组为空
+      的源键**整体移除**；``tuple``（多源）键**原样透传**（交 V-16 显式失败）；
+    * ``conditional_edges`` **不传**（恒空 ⇒ 不触发 V-8）。
+    """
+    edges: dict[str | tuple[str, ...], tuple[str, ...]] = {}
+    for key, targets in builder_spec.edges.items():
+        if isinstance(key, str):
+            kept = tuple(target for target in targets if target != _END)
+            if kept:
+                edges[key] = kept
+            continue
+        edges[key] = targets
+    return GraphSpec(
+        channels=dict(builder_spec.channels),
+        nodes=dict(builder_spec.nodes),
+        edges=edges,
+        interrupt_before=interrupt_before,
+        interrupt_after=interrupt_after,
+    )
+
+
+def _conditional_mapping(
+    builder_spec: _BuilderSpec,
+) -> dict[str, tuple[dict[str, Any], ...]]:
+    """把条件边机械翻译为 plain mapping（B7F2 · B6F1 D-2 形状逐字）。
+
+    外层 key = 源节点名（首次出现顺序）；内层每项**恰 5 键**、顺序 = 登记顺序；
+    ``branch`` 取自 :attr:`_ConditionalEdgeSpec.branch`（**MUST NOT** 重新推断）；
+    ``path_map`` / ``targets`` / ``route_channels`` 原样搬运（零归一化、零过滤）。
+    """
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for spec in builder_spec.conditional_edges:
+        grouped.setdefault(spec.source, []).append(
+            {
+                "branch": spec.branch,
+                "path": spec.path,
+                "path_map": spec.path_map,
+                "targets": spec.targets,
+                "route_channels": spec.route_channels,
+            }
+        )
+    return {source: tuple(items) for source, items in grouped.items()}
+
+
+class CompiledGraph:
+    """``compile()`` 的编译产物（B7F2 · L3 私有实现体 · **不进**门面导出面）。
+
+    **持有面**（冻结 · DD-13）：
+
+    * 私有：``_spec``（L2 ``GraphSpec``）/ ``_builder_spec``（完整
+      ``_BuilderSpec``，含 ``node_records``）/ ``_conditional_edges``（plain
+      mapping）；
+    * 公开：6 个注入项 + 2 个归一后的断点元组（上游 ``Pregel`` 同款；
+      ``transformers`` 命名差异见 X-12）。
+
+    6 个能力面方法在本 feature **全部未就绪** ⇒ 抛内置
+    ``NotImplementedError``（点名归属 feature）；MUST NOT 抛 ``AttributeError``。
+    """
+
+    def __init__(
+        self,
+        spec: GraphSpec,
+        builder_spec: _BuilderSpec,
+        conditional_edges: dict[str, tuple[dict[str, Any], ...]],
+        checkpointer: Checkpointer | None,
+        store: Store | None,
+        cache: Any,
+        debug: bool,
+        name: str | None,
+        transformers: Any,
+        interrupt_before_nodes: tuple[str, ...],
+        interrupt_after_nodes: tuple[str, ...],
+    ) -> None:
+        self._spec = spec
+        self._builder_spec = builder_spec
+        self._conditional_edges = conditional_edges
+        self.checkpointer = checkpointer
+        self.store = store
+        self.cache = cache
+        self.debug = debug
+        self.name = name
+        self.transformers = transformers
+        self.interrupt_before_nodes = interrupt_before_nodes
+        self.interrupt_after_nodes = interrupt_after_nodes
+
+    def invoke(self, input: Any, config: Any = None) -> Any:  # noqa: A002
+        """执行图——**未就绪**（由 **B7F3** 交付）。"""
+        raise NotImplementedError("invoke 由 B7F3 交付")
+
+    def stream(
+        self,
+        input: Any,  # noqa: A002
+        config: Any = None,
+        *,
+        stream_mode: Any = "values",
+    ) -> Any:
+        """流式执行——**未就绪**（由 **B8F2** 交付）。"""
+        raise NotImplementedError("stream 由 B8F2 交付")
+
+    def get_graph(self, *, xray: bool = False) -> Any:
+        """图结构导出——**未就绪**（由 **B22F1** 交付）。"""
+        raise NotImplementedError("get_graph 由 B22F1 交付")
+
+    def get_state(self, config: Any) -> Any:
+        """状态查询——**未就绪**（由 **B15F1** 交付）。"""
+        raise NotImplementedError("get_state 由 B15F1 交付")
+
+    def get_state_history(self, config: Any) -> Any:
+        """状态历史——**未就绪**（由 **B15F1** 交付）。"""
+        raise NotImplementedError("get_state_history 由 B15F1 交付")
+
+    def update_state(self, config: Any, values: Any, as_node: str | None = None) -> Any:
+        """状态更新——**未就绪**（由 **B16F1** 交付）。"""
+        raise NotImplementedError("update_state 由 B16F1 交付")
+
+
 class StateGraph:
     """**图构建器**——用户从门面取到的建图入口（B6F1 已接线建图环节）。
 
     构造只保存 ``state_schema`` 并初始化空私有登记容器；**不解析 schema、不校验、
-    不调用用户函数、不做 I/O**。``compile()`` 仍归 **B7F2**。
+    不调用用户函数、不做 I/O**。``compile()`` 由 **B7F2** 交付。
     """
 
     def __init__(
@@ -428,5 +589,39 @@ class StateGraph:
         name: str | None = None,
         transformers: Any = None,
     ) -> CompiledGraph:
-        """编译成可执行产物——**未接线**（由 **B7F2** 交付）。"""
-        raise NotImplementedError("compile 尚未接线（由 B7F2 交付）")
+        """编译成可执行产物（B7F2）。
+
+        **顺序**：入口容器门（CV-11）→ ``_build_spec()``（构建期末校验）→
+        ``GraphSpec`` 适配（构造期校验）→ 条件边 plain mapping → 注入项记录/
+        ``store`` 告警 → 返回**新** :class:`CompiledGraph`。
+
+        本方法**不执行**任何节点 / 路由 / 归约器，不读环境变量，不做 I/O，
+        每次调用取**独立快照**（可重复编译；不设 ``compiled`` 标志）。
+        """
+        before = _static_points(interrupt_before, "interrupt_before")
+        after = _static_points(interrupt_after, "interrupt_after")
+
+        builder_spec = self._build_spec()
+        spec = _graph_spec_from(builder_spec, before, after)
+        conditional_edges = _conditional_mapping(builder_spec)
+
+        if store is not None:
+            warnings.warn(
+                "compile(store=...) 已接受并记录，但 v1 不支持 Store："
+                "该参数不会生效（v1 的 Store 行为归 v2）",
+                stacklevel=2,
+            )
+
+        return CompiledGraph(
+            spec=spec,
+            builder_spec=builder_spec,
+            conditional_edges=conditional_edges,
+            checkpointer=checkpointer,
+            store=store,
+            cache=cache,
+            debug=debug,
+            name=name,
+            transformers=transformers,
+            interrupt_before_nodes=spec.interrupt_before,
+            interrupt_after_nodes=spec.interrupt_after,
+        )

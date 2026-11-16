@@ -36,9 +36,10 @@ from ._gatesupport import (
     parse_manifest_symbols,
 )
 
-#: 未接线异常的消息正则（``data-model.md`` §4 · FR-009）。
-NOT_WIRED_PATTERN = re.compile(
-    r"(?:add_node|add_edge|add_conditional_edges|compile) 尚未接线（由 B\dF\d 交付）"
+#: B7F2 后仍未交付的 **5 个构建方法**的消息正则（``compile()`` 已接线）。
+NOT_DELIVERED_PATTERN = re.compile(
+    r"(?:add_sequence|set_entry_point|set_conditional_entry_point|"
+    r"set_finish_point|set_node_defaults) 本版本不交付"
 )
 
 #: US1 阶段先交付的 **3 个**符号（US3 才补齐其余 4 个）。
@@ -160,54 +161,106 @@ class TestExportSurfaceSubset:
             assert name.startswith("_")
 
 
-# ── T015 · 未接线语义 + 「未越界」（SC-011 / SC-016）───────────────────
+# ── T015 · compile 已接线 + 其余构建方法未交付（SC-004 / SC-011 / SC-016）──
 
 
-class TestNotWired:
-    """**未接线** —— ``compile()`` 仍抛内置 ``NotImplementedError``。"""
+def _valid_graph(facade: object) -> object:
+    """构造一张最小合法图（``START → a → END``）。"""
+    graph = facade.StateGraph(_InterruptState)  # type: ignore[attr-defined]
+    graph.add_node("a", lambda state: {})
+    graph.add_edge(facade.START, "a")  # type: ignore[attr-defined]
+    graph.add_edge("a", facade.END)  # type: ignore[attr-defined]
+    return graph
 
-    @pytest.mark.parametrize(
-        ("method_name", "args"),
-        [("compile", ())],
-        ids=["compile"],
-    )
-    def test_not_wired_method_raises_not_implemented(
-        self, facade: object, method_name: str, args: tuple[object, ...]
+
+class TestCompileIsWired:
+    """**compile 已接线**（B7F2）—— 返回产物；能力面仍未就绪。"""
+
+    def test_compile_returns_a_non_null_product_with_capability_surface(
+        self, facade: object
     ) -> None:
-        """每个方法 MUST 抛 ``NotImplementedError``，消息**点名归属 feature**。"""
-        graph = facade.StateGraph({})  # type: ignore[attr-defined]
-        with pytest.raises(NotImplementedError) as excinfo:
-            getattr(graph, method_name)(*args)
-        assert NOT_WIRED_PATTERN.search(str(excinfo.value)), str(excinfo.value)
+        """``compile()`` 返回非空产物，6 个能力面方法**全部存在**。"""
+        compiled = _valid_graph(facade).compile()  # type: ignore[attr-defined]
+        assert compiled is not None
+        for name in (
+            "invoke",
+            "stream",
+            "get_graph",
+            "get_state",
+            "get_state_history",
+            "update_state",
+        ):
+            assert hasattr(compiled, name), name
 
-    def test_not_wired_compile_reports_b7f2(self, facade: object) -> None:
-        """``compile`` 的消息 MUST 点名 **B7F2**（其余三个点名 B6F1）。"""
-        graph = facade.StateGraph({})  # type: ignore[attr-defined]
+    def test_compile_reports_invoke_b7f3(self, facade: object) -> None:
+        """``compile()`` 返回产物的 ``invoke()`` MUST 点名 **B7F3**。"""
+        compiled = _valid_graph(facade).compile()  # type: ignore[attr-defined]
         with pytest.raises(NotImplementedError) as excinfo:
-            graph.compile()
-        assert "compile 尚未接线（由 B7F2 交付）" in str(excinfo.value)
+            compiled.invoke({})
+        assert "B7F3" in str(excinfo.value)
 
-    def test_not_wired_methods_produce_no_real_semantics(self, facade: object) -> None:
-        """**未越界** —— ``compile()`` 不产生编译产物。"""
-        graph = facade.StateGraph({"a": 1})  # type: ignore[attr-defined]
-        with pytest.raises(NotImplementedError):
-            graph.compile()
-        assert set(vars(graph)) == {
+    def test_compile_does_not_mutate_the_builder(self, facade: object) -> None:
+        """``compile()`` MUST NOT 改变构建器状态（可重复调用）。"""
+        graph = _valid_graph(facade)
+        before = set(vars(graph))
+        assert before == {
             "_schema",
             "_nodes",
             "_edges",
             "_conditional_edges",
             "_branch_names",
         }
-        for forbidden in ("nodes", "edges", "invoke", "stream", "compiled"):
-            assert not hasattr(graph, forbidden), forbidden
+        graph.compile()  # type: ignore[attr-defined]
+        graph.compile()  # type: ignore[attr-defined]
+        assert set(vars(graph)) == before
 
-    def test_not_wired_compile_does_not_return_an_executable(self, facade: object) -> None:
-        """``compile()`` MUST **不返回**任何可执行产物。"""
-        graph = facade.StateGraph({})  # type: ignore[attr-defined]
-        with pytest.raises(NotImplementedError):
-            graph.compile()
+    def test_compile_returns_a_product_but_capability_methods_are_not_implemented(
+        self, facade: object
+    ) -> None:
+        """产物返回后，6 个能力面方法仍抛 ``NotImplementedError``（未越界）。"""
+        graph = _valid_graph(facade)
+        compiled = graph.compile()  # type: ignore[attr-defined]
         assert not hasattr(graph, "invoke")
+        calls = (
+            ("invoke", ({},)),
+            ("stream", ({},)),
+            ("get_graph", ()),
+            ("get_state", ({},)),
+            ("get_state_history", ({},)),
+            ("update_state", ({}, {})),
+        )
+        for name, args in calls:
+            with pytest.raises(NotImplementedError):
+                getattr(compiled, name)(*args)
+
+
+class TestRemainingBuilderMethodsNotWired:
+    """其余 **5 个**构建方法仍抛 ``NotImplementedError``（消息「本版本不交付」）。"""
+
+    @pytest.mark.parametrize(
+        ("method_name", "args"),
+        [
+            ("add_sequence", ([],)),
+            ("set_entry_point", ("a",)),
+            ("set_conditional_entry_point", (lambda state: "a",)),
+            ("set_finish_point", ("a",)),
+            ("set_node_defaults", ()),
+        ],
+        ids=[
+            "add_sequence",
+            "set_entry_point",
+            "set_conditional_entry_point",
+            "set_finish_point",
+            "set_node_defaults",
+        ],
+    )
+    def test_remaining_builder_methods_raise_not_implemented(
+        self, facade: object, method_name: str, args: tuple[object, ...]
+    ) -> None:
+        graph = facade.StateGraph(_InterruptState)  # type: ignore[attr-defined]
+        with pytest.raises(NotImplementedError) as excinfo:
+            getattr(graph, method_name)(*args)
+        assert NOT_DELIVERED_PATTERN.search(str(excinfo.value)), str(excinfo.value)
 
 
 # ── T032b · 静态断点透传（SC-013）──────────────────────────────────────

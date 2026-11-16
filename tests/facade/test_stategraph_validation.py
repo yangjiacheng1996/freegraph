@@ -245,7 +245,6 @@ def test_not_delivered_methods_raise_not_implemented() -> None:
         ("set_conditional_entry_point", (router, ["a"])),
         ("set_finish_point", ("a",)),
         ("set_node_defaults", ()),
-        ("compile", ()),
     ):
         with pytest.raises(NotImplementedError):
             getattr(builder, method)(*args)

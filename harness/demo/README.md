@@ -71,6 +71,11 @@ python harness/demo/acceptance.py --record harness/verification/freegraph/manual
 
   **形态一旦拍板，这里的软断言就该升级为硬断言。**
 
+* ✅ **B7F2 已交付 `compile()`（2026-11-16）**：A3 组（`compile()` 无参可调用 /
+  `checkpointer=`/`store=` 关键字）现在**真跑通过**；`invoke()` / `stream()` 仍归
+  **B7F3 / B8F2** ⇒ `graph_core.py` 在 A3 通过之后、探测到 `invoke()` 未就绪时
+  仍以**退出码 2** 结束（`[环境未就绪]` · 不是 FAIL）。
+
 * ✅ **已拍板（2026-11-05）——第三处软断言已关闭**：`interrupt` 恢复**必须依赖
   checkpointer**（内存态恢复不可靠；`interrupt` 的主场景是 time travel，须跨长时间 /
   跨重启可恢复；SQLite 是智能体开发的事实标准，故必须采用 checkpointer）。

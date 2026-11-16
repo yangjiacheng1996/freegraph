@@ -190,3 +190,7 @@
 ## 下游承接（B6F1 · 2026-11-15 · 只接线 · 逐条最小改动）
 
 - **D-2（B6F1 → B8F1 · M2 · 条件边载体）**：B8F1 MUST 只消费 B7F2 保留的 plain mapping，并把它填入 `GraphSpec.conditional_edges`、承接 V-8 放宽；MUST NOT import `freegraph._stategraph` / `_ConditionalEdgeSpec`；MUST NOT 重新归一化 `path_map`；路由通道 `branch:to:<target>` 已由构建器建好，MUST NOT 另起命名。
+
+## 下游承接（B7F2 · 2026-11-16 · 只接线 · 逐条最小改动）
+
+- **D-2（B7F2 → B8F1 · M2 · 条件边交接载体）**：`CompiledGraph._conditional_edges` 已持有 plain mapping（外层 key = 源节点名；内层 5 键 = `branch` / `path` / `path_map` / `targets` / `route_channels`；顺序 = 登记顺序；`branch` 取自 `_ConditionalEdgeSpec.branch`）。B8F1 MUST **从该私有字段读取**并填入 `GraphSpec.conditional_edges`（落地时承接 V-8 放宽）；**路由求值 MUST 只消费 L2 的 `GraphSpec.conditional_edges`**；MUST NOT import `freegraph._stategraph` / `_ConditionalEdgeSpec`；MUST NOT 重新归一化 `path_map`；MUST NOT 另起路由通道命名（沿用 `branch:to:<target>`）。B7F2 阶段 `GraphSpec.conditional_edges` **恒空**。

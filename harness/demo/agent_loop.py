@@ -303,9 +303,32 @@ def case_command_update_from_tool() -> None:
     )
 
 
+def _invoke_ready() -> bool:
+    """探 ``invoke()`` 是否已就绪（B7F3）；未就绪 ⇒ 本脚本属**环境未就绪**。"""
+
+    def node(state: AgentState) -> dict:
+        return {}
+
+    graph = StateGraph(AgentState)
+    graph.add_node("n", node)
+    graph.add_edge(START, "n")
+    graph.add_edge("n", END)
+    try:
+        graph.compile().invoke({"messages": [], "llm_calls": 0})
+    except NotImplementedError:
+        return False
+    except Exception:  # noqa: BLE001 - 其它失败交给正常用例报告
+        return True
+    return True
+
+
 def main() -> int:
     print("══ agent_loop · freegraph Agent 工具循环验收（零依赖等价物）══")
     print(f"Python {sys.version.split()[0]} · 只依赖 freegraph + 标准库")
+
+    if not _invoke_ready():
+        print("[环境未就绪] invoke() 仍为桩（执行属 B7F3）")
+        return 2
 
     for case in (
         case_tool_loop,

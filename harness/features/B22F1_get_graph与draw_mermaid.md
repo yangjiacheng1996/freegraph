@@ -165,3 +165,7 @@
 - 验收脚本：`harness/demo/visualization.py`（`case_get_graph` / `case_xray_signature` /
   `case_draw_mermaid`）、`harness/demo/target.py:163`。
 - 宪法 `.specify/memory/constitution.md`：原则 I（零出站）、原则 III（PNG 硬约束）。
+
+## 下游承接（B7F2 · 2026-11-16 · 只接线 · 逐条最小改动）
+
+- **D-5（B7F2 → B22F1 · M2 · 图结构导出的数据来源）**：B7F2 已在 `CompiledGraph` 上交付 `_spec`（`GraphSpec`：节点表 / 边表 / 通道表）与 `_conditional_edges`（plain mapping）。B22F1 的 `get_graph(*, xray=False)` MUST 从这两个**私有快照**导出结构；MUST NOT 重新解析构建器状态 / 重跑 `_build_spec()`。`draw_mermaid` / `draw_mermaid_png` 归 B23F1；产物公开属性面**不包含** `nodes` / `channels` / `builder`（X-10）。

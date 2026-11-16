@@ -253,3 +253,7 @@
 ## 下游承接（B6F1 · 2026-11-15 · 只接线 · 逐条最小改动）
 
 - **H-7（B6F1 → B7F3 · M2 · G22 场景② 最小图运行期断言）**：B7F3 MUST 点亮 G22「场景②」的最小图**运行期**断言（建图 → compile → invoke）；B6F1 只交付「建图」环节，本 feature MUST NOT 新增门禁编号。
+
+## 下游承接（B7F2 · 2026-11-16 · 只接线 · 逐条最小改动）
+
+- **D-1（B7F2 → B7F3 · M2 · `invoke()` 执行语义）**：B7F3 的 `CompiledGraph.invoke(input, config=None)` MUST 驱动 L2 的 `run_graph(spec, input, *, checkpointer=..., config=..., ...)` 并把 `SuperStepResult` / `InterruptResult` 归一成**完整状态字典**；**每次 `invoke` MUST 新建通道实例**（多会话隔离的另一半）；MUST NOT 另写一条「编译 → 执行」的路径；**MUST NOT** 复用「编译期已写入值的通道实例」（B7F2 只交付通道**规格**）。

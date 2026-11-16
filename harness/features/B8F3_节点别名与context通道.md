@@ -156,3 +156,7 @@
 ## 下游承接（B6F1 · 2026-11-15 · 只接线 · 逐条最小改动）
 
 - **D-3（B6F1 → B8F3 · M2 · 别名载体）**：B8F3 MUST 从 B7F2 保留的完整 `_BuilderSpec`（至少 `node_records`）读取 `_NodeRecord.alias` 并实现别名语义；MUST NOT 要求用户重新声明别名。
+
+## 下游承接（B7F2 · 2026-11-16 · 只接线 · 逐条最小改动）
+
+- **D-3（B7F2 → B8F3 · M2 · 别名交接载体）**：B7F2 已在 `CompiledGraph` 的私有字段 `_builder_spec` 保留**完整 `_BuilderSpec`**（含 `node_records`）；B8F3 MUST 从该保留读取 `_NodeRecord.alias` 实现别名寻址语义；MUST NOT 要求用户重新声明别名；MUST NOT 要求 B7F2 改写快照内容（快照是**只读**交接面）。
