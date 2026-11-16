@@ -120,6 +120,11 @@ rc=2
 | G29 契约门禁载体（`target.py` diff / C4·C8 挂载点 / 验收脚本退出码） | ✅ PASS |
 | G30 全仓署名头 + 第三方品牌资产 | ⚠️ **8 条违规，均为 B7F2 之前已存在的 tracked 文件**（`harness/demo/target.py` 的具名例外逻辑、`harness/reports/Q7-*.md` 与 `specs/b3f1-*/architecture-gates.md` 中的上游 Approved copy 指纹）；**B7F2 未新增违规**，详见 §5 |
 
+**CI 实跑**（GitHub Actions）：run **43810829179** · **7/7 作业全绿** ——
+`ubuntu-24.04`（3.11 / 3.14）· `ubuntu-24.04-arm`（3.11）· `windows-2025`（3.11 / 3.14）·
+`macos-15`（3.11 / 3.14）⇒
+<https://github.com/yangjiacheng1996/freegraph/actions/runs/43810829179>
+
 ---
 
 ## 4. 结论（逐条对照验收判据）
