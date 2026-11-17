@@ -177,3 +177,14 @@
 ## 下游承接（B7F2 · 2026-11-16 · 只接线 · 逐条最小改动）
 
 - **D-5（B7F2 → B22F1 · M2 · 图结构导出的数据来源）**：B7F2 已在 `CompiledGraph` 上交付 `_spec`（`GraphSpec`：节点表 / 边表 / 通道表）与 `_conditional_edges`（plain mapping）。B22F1 的 `get_graph(*, xray=False)` MUST 从这两个**私有快照**导出结构；MUST NOT 重新解析构建器状态 / 重跑 `_build_spec()`。`draw_mermaid` / `draw_mermaid_png` 归 B23F1；产物公开属性面**不包含** `nodes` / `channels` / `builder`（X-10）。
+
+## 下游承接（B8F1 · 2026-11-18 · **只接线 · 逐条最小改动**）
+
+- **D-4（B8F1 → B22F1 / B23F1 · M2 · 图导出里的条件边）**：`get_graph()` /
+  `draw_mermaid_png()` MUST 能表达**条件边**（源节点 → 可能的多个目标）⇒ ⇒ ⇒ MUST **复用**
+  B8F1 的 `targets` / `route_channels` 口径（条件边载荷的**恰 5 键**）⇒ ⇒ ⇒ **MUST NOT**
+  另算一份目标集合 ⇒ ⇒ ⇒ 条件边的**路由通道**（`branch:to:<target>`）**只作声明载体**
+  （**从不被写入**）⇒ ⇒ ⇒ 图导出**MUST NOT** 把它当成「已写入的通道」。
+  ⇒ 落点：`specs/b8f1-conditional-edges-fresh-read/spec.md` 的**下游承接 D-4** ·
+  契约 `conditional-edge-contract.md` §2.1。
+

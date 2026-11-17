@@ -274,25 +274,27 @@ def case_conditional_edges() -> None:
     g.add_edge(START, "writer")
     g.add_conditional_edges("writer", router, ["after", END])  # C7：list 形态
     g.add_edge("after", END)
-    # ⚠️ **自 B7F3 起降级为软断言**（T040 · **实测依据 = T011 的首次执行红点**）——
-    # **条件边路由求值**归 **B8F1**（M2）⇒ ⇒ 本组**整组**不判失败（缺口**具名**承接）。
-    _B8F1_NOTE = "条件边路由求值未交付 —— 归 B8F1"
+    # ⚠️ **2026-11-18 · B8F1**：**条件边路由求值已交付**（M2）⇒ ⇒ ⇒ 本组
+    # **整组**由**软断言**升级为**硬断言**（破冻结面 **T-6** · 宪法 v1.8.0
+    # 「破冻结面的三条」① 的「**拆分而不删**」+ v1.14.0「**替换 MUST NOT 弱于
+    # 原断言**」）⇒ ⇒ ⇒ **判据只可更严**（软 ⇒ 硬）⇒ ⇒ ⇒ **三条断言的语义
+    # 逐字留存**（「fresh 读」「reducer 合并」「dict 形态路由」）。
 
     try:
         g.compile().invoke({"messages": [], "llm_calls": 0})
     except Exception as exc:  # noqa: BLE001
-        soft(False, "A5 条件边与 fresh 读 · C7 / C8", f"{type(exc).__name__}: {exc} —— {_B8F1_NOTE}")
+        check(False, "A5 条件边与 fresh 读 · C7 / C8", f"{type(exc).__name__}: {exc}")
         return
 
-    soft(
-        observed.get("llm_calls") == 7,
+    eq(
+        observed.get("llm_calls"),
+        7,
         "C8 路由函数看到本节点刚写入的值（fresh 读）",
-        f"路由实际读到 llm_calls={observed.get('llm_calls')!r} —— {_B8F1_NOTE}",
     )
-    soft(
-        observed.get("messages") == ["fresh"],
+    eq(
+        observed.get("messages"),
+        ["fresh"],
         "C8 路由函数看到 reducer 合并后的最新 messages",
-        f"实际 {observed.get('messages')!r} —— {_B8F1_NOTE}",
     )
 
     # C7：dict 形态的 path_map
@@ -305,8 +307,14 @@ def case_conditional_edges() -> None:
     def hit(state: State) -> dict:
         return {"messages": ["hit"]}
 
+    def r_node(state: State) -> dict:
+        # ⚠️ **2026-11-18 · B8F1**：源节点**必须**返回 dict（节点返回值口径）
+        # ⇒ ⇒ ⇒ 路由函数**另立**（``router2``）⇒ ⇒ ⇒ **断言的语义留存**
+        # （「dict 形态的 path_map 正确路由」）⇒ ⇒ ⇒ **判据只可更严**。
+        return {}
+
     g2 = StateGraph(State)
-    g2.add_node("r", router2)
+    g2.add_node("r", r_node)
     g2.add_node("hit", hit)
     g2.add_node("miss", miss)
     g2.add_edge(START, "r")
@@ -316,9 +324,9 @@ def case_conditional_edges() -> None:
     try:
         out2 = g2.compile().invoke({"messages": [], "llm_calls": 0})
     except Exception as exc:  # noqa: BLE001
-        soft(False, "C7 dict 形态 path_map 正确路由", f"{type(exc).__name__}: {exc} —— {_B8F1_NOTE}")
+        check(False, "C7 dict 形态 path_map 正确路由", f"{type(exc).__name__}: {exc}")
         return
-    soft(out2.get("messages") == ["hit"], "C7 dict 形态 path_map 正确路由", _B8F1_NOTE)
+    eq(out2.get("messages"), ["hit"], "C7 dict 形态 path_map 正确路由")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -334,24 +342,33 @@ def case_command_and_send() -> None:
     def cmd_node(state: State) -> Command:
         return Command(goto=END, update={"messages": ["via-command"]})
 
+    def r_node(state: State) -> dict:
+        # ⚠️ **2026-11-18 · B8F1**：源节点**必须**返回 dict（节点返回值口径）
+        # ⇒ ⇒ ⇒ 路由函数**另立**（``router``）⇒ ⇒ ⇒ **断言的语义留存**
+        # （「Command(update=) **经条件边**到达」）。
+        return {}
+
     g = StateGraph(State)
-    g.add_node("r", router)
+    g.add_node("r", r_node)
     g.add_node("cmd", cmd_node)
     g.add_edge(START, "r")
     g.add_conditional_edges("r", router, ["cmd", END])
     g.add_edge("cmd", END)
-    # ⚠️ **C16 段降级为软断言**（T040 · **实测依据 = T011 的首次执行红点**）——
-    # 「Command(update=) **经条件边**到达」依赖**条件边路由求值** ⇒ 归 **B8F1**（M2）。
-    _B8F1_NOTE = "条件边路由求值未交付 —— 归 B8F1"
+    # ⚠️ **2026-11-18 · B8F1**（破冻结面 **T-6** · 宪法 v1.8.0「破冻结面的
+    # 三条」① 的「**拆分而不删**」+ v1.14.0「**替换 MUST NOT 弱于原断言**」）：
+    # 「Command(update=) **经条件边**到达」依赖**条件边路由求值** ⇒ ⇒ ⇒ 该依赖
+    # **已交付**（**B8F1** · M2）⇒ ⇒ ⇒ **降级理由失效** ⇒ ⇒ ⇒ 本段由**软断言**
+    # 恢复为**硬断言** ⇒ ⇒ ⇒ **判据只可更严**（软 ⇒ 硬）⇒ ⇒ ⇒ **断言的语义
+    # 逐字留存**（「C16 Command(update=) 的状态更新生效」）。
     try:
         out = g.compile().invoke({"messages": [], "llm_calls": 0})
     except Exception as exc:  # noqa: BLE001
-        soft(False, "C16 Command(update=) 的状态更新生效", f"{type(exc).__name__}: {exc} —— {_B8F1_NOTE}")
+        check(False, "C16 Command(update=) 的状态更新生效", f"{type(exc).__name__}: {exc}")
     else:
-        soft(
+        check(
             "via-command" in (out.get("messages") or []),
             "C16 Command(update=) 的状态更新生效",
-            f"实际 messages={out.get('messages')!r} —— {_B8F1_NOTE}",
+            f"实际 messages={out.get('messages')!r}",
         )
 
     # C18：Send(node, arg) —— 以自定义入参调用目标节点

@@ -551,11 +551,51 @@ def test_a_node_exception_propagates_as_the_very_same_object() -> None:
     assert excinfo.value is boom
 
 
-# ── T060 · 条件边字段恒空（SC-025）──────────────────────────────────────
+# ── T060 · 条件边字段（SC-025（B7F1 编号域））──────────────────────────
+#
+# ⚠️ **2026-11-18 · B8F1 回溯修订**（**破冻结面 T-1** · 宪法 v1.8.0
+# 「破冻结面的三条」① 的「**拆分而不删**」+ v1.14.0「**替换 MUST NOT 弱于
+# 原断言**」）：
+#
+# * **原断言**：「非空 ⇒ **显式失败**」⇒ ⇒ ⇒ **自 B8F1 起放宽**（**V-8 已
+#   放宽** · 裁定 14）⇒ ⇒ ⇒ 该字段**非空**⇒ **构造成功**且**原样承载**；
+# * **原断言**：「交付的规格里该字段**恒空**」⇒ ⇒ ⇒ **拆分**为「**恒空**构造
+#   成功」与「**填值**构造成功且原样承载」**两条**（语义**留存**）；
+# * **判据只可更严** ⇒ ⇒ ⇒ 「构造期**其它**失败路径**逐条唯一**」的断言
+#   **保留**（**一条不删**）。
+# ⚠️ **SC-025 属 B7F1 的编号域**（B7F1 语义 = 「条件边」字段恒空）⇒ ⇒ ⇒
+# **MUST** 带 feature 限定语，**MUST NOT** 与 B8F1 的 SC-025 混为一谈。
 
 
-def test_a_non_empty_conditional_edges_field_fails_explicitly() -> None:
-    """**SC-025**：「条件边」字段**非空** ⇒ **显式失败**（内置 ``ValueError``）。"""
+def test_a_non_empty_conditional_edges_field_is_accepted_and_carried_verbatim() -> None:
+    """「条件边」字段**非空** ⇒ **构造成功**且**原样承载**（**V-8 已放宽**）。"""
+    payload = {
+        "reader": (
+            {
+                "branch": "condition",
+                "path": lambda state: "a",
+                "path_map": {"a": "a"},
+                "targets": ("a",),
+                "route_channels": ("branch:to:a",),
+            },
+        )
+    }
+
+    spec = GraphSpec(
+        channels=_plain_channels(),
+        nodes={"reader": NodeSpec(subscribes=(), run=lambda state: {})},
+        edges={},
+        conditional_edges=payload,
+    )
+
+    assert spec.conditional_edges == payload
+
+
+def test_a_malformed_conditional_edges_field_fails_explicitly() -> None:
+    """「条件边」字段的**五键**形态不符 ⇒ **显式失败**（内置 ``ValueError`` · **V-27**）。
+
+    ⚠️ 这是**构造期其它失败路径**的**逐条唯一**断言（**拆分而不删** · 判据**只收紧**）。
+    """
     with pytest.raises(ValueError):
         GraphSpec(
             channels=_plain_channels(),
@@ -566,7 +606,7 @@ def test_a_non_empty_conditional_edges_field_fails_explicitly() -> None:
 
 
 def test_the_delivered_specs_keep_the_conditional_edges_field_empty() -> None:
-    """**SC-025**：本 feature 交付的规格中该字段**恒空**（非空的用例数 == 0）。"""
+    """**恒空**的「条件边」字段 ⇒ 构造**成功**且**仍为**空映射（语义**留存**）。"""
     spec = GraphSpec(
         channels=_plain_channels(),
         nodes={"reader": NodeSpec(subscribes=(), run=lambda state: {})},

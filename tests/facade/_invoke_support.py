@@ -127,13 +127,22 @@ def build_conditional_graph() -> StateGraph:
     可排除** ⇒ ⇒ 「``branch:to:* not in out``」那条断言**恒真** ⇒ ⇒ **空洞**。
 
     ⚠️ 本图**只**用于断言「路由通道**不进**返回键集」⇒ ⇒ **MUST NOT** 断言
-    「路由求值生效」（路由求值归 **B8F1** · spec FR-026）。
+    「路由求值**的语义面**」（路由语义归 **B8F1** 的**契约**用例）。
+
+    ⚠️ **2026-11-18 · B8F1 实施期修订**（**拆分而不删** · 判据**只收紧**）：
+    条件边路由求值**已交付**（**B8F1**）⇒ ⇒ ⇒ 本图的路由函数**会被求值**
+    ⇒ ⇒ ⇒ 它的返回值**必须**是 ``path_map`` 的**合法 key** ⇒ ⇒ ⇒ 否则查表失败
+    ⇒ ⇒ ⇒ 抛内置 ``KeyError``（**X-1**）⇒ ⇒ ⇒ 图**跑不起来** ⇒ ⇒ ⇒
+    **原断言**（「路由通道**不进**返回键集」）**逐字保留** ⇒ ⇒ ⇒ **判据只收紧**
+    （路由通道**真的被用过** ⇒ 该断言**不再空洞**）。
+    ⇒ ⇒ ⇒ 路由函数返回 ``"a"`` ⇒ ``path_map`` 把 ``"a"`` 映射到 ``"b"``
+    ⇒ ⇒ ⇒ 图的流程 = ``START→a→b``（``b`` 无出边 ⇒ 收敛）⇒ ⇒ ⇒ **不构成自环**。
     """
     builder = StateGraph(State)
     builder.add_node("a", append_a)
     builder.add_node("b", append_b)
     builder.add_edge(START, "a")
-    builder.add_conditional_edges("a", always_a, ["b", END])
+    builder.add_conditional_edges("a", always_a, {"a": "b"})
     builder.add_edge("b", END)
     return builder
 

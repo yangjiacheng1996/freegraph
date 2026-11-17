@@ -150,6 +150,17 @@ class Scenario:
     #: 强制走**图级入口** ``run_graph``（静态断点 / 递归上限场景）。
     use_graph_entry: bool = False
 
+    # ── B8F1 扩展（全部可选 · 缺省 ⇒ 既有场景逐字不变）──
+
+    #: **freegraph 侧**的**条件边载荷**（外层 key = 源节点名 · 内层 = **tuple**
+    #: of **恰 5 键** dict · 顺序 = 登记顺序）⇒ ⇒ ⇒ 传入
+    #: ``GraphSpec.conditional_edges``（**L3 产物的原样搬运** · FR-032）。
+    #:
+    #: ⚠️ **派生口径 MUST 与 L3 的 ``_build_spec()`` 逐字一致**（``targets`` /
+    #: ``route_channels``）⇒ ⇒ ⇒ 「**差分侧载荷 == L3 载荷**」由
+    #: ``tests/differential/test_parity_probe.py`` 的**一条断言**锁住（FR-032）。
+    conditional_edges: dict[str, tuple[dict[str, Any], ...]] | None = None
+
     def clear(self) -> None:
         self.calls.clear()
         self.windows.clear()
@@ -415,6 +426,10 @@ def run_freegraph(
             channels=channels,
             nodes=nodes,
             edges=edges,
+            # ⚠️ **B8F1**：条件边载荷**原样**传入（**L3 产物的搬运** · FR-032）
+            # ⇒ ⇒ ⇒ **零归一化**（``path_map`` 的归一化归 L3）⇒ ⇒ ⇒ 缺省 ⇒
+            # ``{}`` ⇒ **既有场景逐字不变**。
+            conditional_edges=dict(scenario.conditional_edges or {}),
             interrupt_before=scenario.interrupt_before,
             interrupt_after=scenario.interrupt_after,
         )
@@ -731,6 +746,64 @@ def run_upstream(scenario: Scenario) -> tuple[str, Any, str, dict[str, Any]]:
         },
     )
 
+
+
+# ── B8F1 · 条件边载荷的**差分侧**构造（**派生口径 == L3**）────────────────────
+
+
+def _branch_name(path: Callable[..., Any]) -> str:
+    """取分支名（**与 L3 的 ``_branch_name`` 同款**）。
+
+    ⚠️ L3 取 ``path.__name__``（缺省 / ``<lambda>`` ⇒ ``"condition"``）⇒ ⇒ ⇒
+    本函数 MUST **同款** ⇒ ⇒ ⇒ 「差分侧载荷 == L3 载荷」的断言才可能成立。
+    """
+    name = getattr(path, "__name__", None)
+    if not isinstance(name, str) or not name or name == "<lambda>":
+        return "condition"
+    return name
+
+
+def _conditional_payload(
+    source: str,
+    path: Callable[..., Any],
+    path_map: list[str] | dict[str, str] | None,
+) -> dict[str, tuple[dict[str, Any], ...]]:
+    """构造 **freegraph 侧**的**条件边载荷**（**恰 5 键**）。
+
+    ⚠️ **派生口径 MUST 与 L3 的 ``_build_spec()`` 逐字一致**
+    （``src/freegraph/_stategraph.py:641-647`` 的 ``branch`` / ``path_map`` /
+    ``targets`` / ``route_channels``）⇒ ⇒ ⇒ 「**差分侧载荷 == L3 载荷**」由
+    ``tests/differential/test_parity_probe.py`` 的**一条断言**锁住（FR-032）。
+
+    ⚠️ **零归一化的边界**：``path_map`` 的 **list → ``{name: name}``** 归一化归
+    **L3** ⇒ ⇒ ⇒ 本函数**模拟**该归一化（否则 L2 会拿到未经归一化的载荷）⇒ ⇒ ⇒
+    但**MUST NOT** 在差分侧**另写一套**目标解析逻辑（那归 L2 · 裁定 4）。
+    """
+    if isinstance(path_map, list):
+        normalized: dict[str, str] | None = {name: name for name in path_map}
+    elif isinstance(path_map, dict):
+        normalized = dict(path_map)
+    else:
+        normalized = None
+    if normalized is None:
+        targets: tuple[str, ...] = ()
+        route_channels: tuple[str, ...] = ()
+    else:
+        targets = tuple(dict.fromkeys(normalized.values()))
+        route_channels = tuple(
+            f"branch:to:{target}" for target in targets if target != "__end__"
+        )
+    return {
+        source: (
+            {
+                "branch": _branch_name(path),
+                "path": path,
+                "path_map": normalized,
+                "targets": targets,
+                "route_channels": route_channels,
+            },
+        )
+    }
 
 
 # ── 场景集 ──────────────────────────────────────────────────────────────────
@@ -2882,6 +2955,604 @@ def _scenarios() -> list[Scenario]:
             use_graph_entry=True,
             calls=d49_calls,
             verdict="SAME",
+        )
+    )
+
+    # ── B8F1 · D-103…D-120（条件边路由求值）──────────────────────────────
+    #
+    # ⚠️ **落点 = 既有 `_scenarios()` 组** ⇒ ⇒ ⇒
+    # `tests/differential/test_parity_probe.py` 的
+    # `test_the_verdict_vocabulary_is_closed`（判词取值域 + **非空 `note`** 守卫）
+    # **自动覆盖**本组 ⇒ ⇒ ⇒ **MUST NOT** 新建第 5 个场景组函数而**不**同步
+    # 扩展该守卫（FR-032 · 裁定 15 · tasks T022）。
+
+    def _b8_extra(
+        source: str, path: Callable[..., Any], path_map: list[str] | dict[str, str] | None
+    ) -> Callable[[Any], None]:
+        """构造**上游侧**的条件边登记（``upstream_extra``）。"""
+
+        def _extra(graph: Any) -> None:
+            graph.add_conditional_edges(source, path, path_map)
+
+        return _extra
+
+    def _b8_node(calls: list[str], name: str, writes: dict[str, Any]):
+        def _run(state: dict[str, Any]) -> dict[str, Any]:
+            calls.append(name)
+            return dict(writes)
+
+        return _run
+
+    # D-103 · list 形态 path_map · 路由返回 'a'（SAME）
+    d103_calls: list[str] = []
+
+    def _d103_router(state: dict[str, Any]) -> str:
+        return "a"
+
+    out.append(
+        Scenario(
+            name="D-103 · list 形态 path_map · 路由返回 'a'（SAME）",
+            channels={"messages": "binop"},
+            initial={"messages": []},
+            nodes={
+                "r": (
+                    ("messages",),
+                    _b8_node(d103_calls, "r", {"messages": ["r"]}),
+                ),
+                "a": (
+                    ("messages",),
+                    _b8_node(d103_calls, "a", {"messages": ["a"]}),
+                ),
+            },
+            edges={"__start__": ("r",)},
+            conditional_edges=_conditional_payload("r", _d103_router, ["a", "__end__"]),
+            upstream_extra=_b8_extra("r", _d103_router, ["a", "__end__"]),
+            calls=d103_calls,
+            verdict="SAME",
+        )
+    )
+
+    # D-104 · dict 形态 path_map · 路由返回 'hit'（SAME）
+    d104_calls: list[str] = []
+
+    def _d104_router(state: dict[str, Any]) -> str:
+        return "hit"
+
+    out.append(
+        Scenario(
+            name="D-104 · dict 形态 path_map · 路由返回 'hit'（SAME）",
+            channels={"messages": "binop"},
+            initial={"messages": []},
+            nodes={
+                "r": (
+                    ("messages",),
+                    _b8_node(d104_calls, "r", {"messages": ["r"]}),
+                ),
+                "a": (
+                    ("messages",),
+                    _b8_node(d104_calls, "a", {"messages": ["a"]}),
+                ),
+                "b": (
+                    ("messages",),
+                    _b8_node(d104_calls, "b", {"messages": ["b"]}),
+                ),
+            },
+            edges={"__start__": ("r",)},
+            conditional_edges=_conditional_payload(
+                "r", _d104_router, {"hit": "a", "miss": "b"}
+            ),
+            upstream_extra=_b8_extra("r", _d104_router, {"hit": "a", "miss": "b"}),
+            calls=d104_calls,
+            verdict="SAME",
+        )
+    )
+
+    # D-105 · fresh 读：路由函数看到本节点刚写入的值（SAME）
+    d105_calls: list[str] = []
+
+    def _d105_router(state: dict[str, Any]) -> str:
+        return "a" if list(state.get("messages") or []) == ["fresh"] else "b"
+
+    out.append(
+        Scenario(
+            name="D-105 · fresh 读 · 路由函数看到本节点刚写入的值（SAME）",
+            channels={"messages": "binop"},
+            initial={"messages": []},
+            nodes={
+                "r": (
+                    ("messages",),
+                    _b8_node(d105_calls, "r", {"messages": ["fresh"]}),
+                ),
+                "a": (
+                    ("messages",),
+                    _b8_node(d105_calls, "a", {"messages": ["a"]}),
+                ),
+                "b": (
+                    ("messages",),
+                    _b8_node(d105_calls, "b", {"messages": ["b"]}),
+                ),
+            },
+            edges={"__start__": ("r",)},
+            conditional_edges=_conditional_payload("r", _d105_router, ["a", "b"]),
+            upstream_extra=_b8_extra("r", _d105_router, ["a", "b"]),
+            calls=d105_calls,
+            verdict="SAME",
+        )
+    )
+
+    # D-106 · 路由返回 END（path_map = {END: END}）⇒ 两侧都终止（SAME）
+    d106_calls: list[str] = []
+
+    def _d106_router(state: dict[str, Any]) -> str:
+        return "__end__"
+
+    out.append(
+        Scenario(
+            name="D-106 · 路由返回 END（path_map = {END: END}）⇒ 两侧都终止（SAME）",
+            channels={"messages": "binop"},
+            initial={"messages": []},
+            nodes={
+                "r": (
+                    ("messages",),
+                    _b8_node(d106_calls, "r", {"messages": ["r"]}),
+                ),
+                "a": (
+                    ("messages",),
+                    _b8_node(d106_calls, "a", {"messages": ["a"]}),
+                ),
+            },
+            edges={"__start__": ("r",)},
+            conditional_edges=_conditional_payload("r", _d106_router, {"__end__": "__end__"}),
+            upstream_extra=_b8_extra("r", _d106_router, {"__end__": "__end__"}),
+            calls=d106_calls,
+            verdict="SAME",
+        )
+    )
+
+    # D-107 · 路由返回非法值（不在 path_map 内）⇒ 两侧都抛 KeyError（SAME）
+    d107_calls: list[str] = []
+
+    def _d107_router(state: dict[str, Any]) -> str:
+        return "nope"
+
+    out.append(
+        Scenario(
+            name="D-107 · 路由返回非法值（不在 path_map 内）⇒ 两侧都失败（SAME）",
+            channels={"messages": "binop"},
+            initial={"messages": []},
+            nodes={
+                "r": (
+                    ("messages",),
+                    _b8_node(d107_calls, "r", {"messages": ["r"]}),
+                ),
+                "a": (
+                    ("messages",),
+                    _b8_node(d107_calls, "a", {"messages": ["a"]}),
+                ),
+            },
+            edges={"__start__": ("r",)},
+            conditional_edges=_conditional_payload("r", _d107_router, {"hit": "a"}),
+            upstream_extra=_b8_extra("r", _d107_router, {"hit": "a"}),
+            calls=d107_calls,
+            verdict="SAME",
+        )
+    )
+
+    # D-108 · 路由返回序列 ⇒ 多目标同轮并行（SAME）
+    d108_calls: list[str] = []
+
+    def _d108_router(state: dict[str, Any]) -> list[str]:
+        return ["b", "c"]
+
+    out.append(
+        Scenario(
+            name="D-108 · 路由返回序列 ⇒ 多目标同轮并行（SAME）",
+            channels={"messages": "binop"},
+            initial={"messages": []},
+            nodes={
+                "r": (
+                    ("messages",),
+                    _b8_node(d108_calls, "r", {"messages": ["r"]}),
+                ),
+                "b": (
+                    ("messages",),
+                    _b8_node(d108_calls, "b", {"messages": ["b"]}),
+                ),
+                "c": (
+                    ("messages",),
+                    _b8_node(d108_calls, "c", {"messages": ["c"]}),
+                ),
+            },
+            edges={"__start__": ("r",)},
+            conditional_edges=_conditional_payload("r", _d108_router, ["b", "c"]),
+            upstream_extra=_b8_extra("r", _d108_router, ["b", "c"]),
+            calls=d108_calls,
+            verdict="SAME",
+        )
+    )
+
+    # D-109 · 无 path_map 的动态目标（返回已注册节点名）（SAME）
+    d109_calls: list[str] = []
+
+    def _d109_router(state: dict[str, Any]) -> str:
+        return "a"
+
+    out.append(
+        Scenario(
+            name="D-109 · 无 path_map 的动态目标（返回已注册节点名）（SAME）",
+            channels={"messages": "binop"},
+            initial={"messages": []},
+            nodes={
+                "r": (
+                    ("messages",),
+                    _b8_node(d109_calls, "r", {"messages": ["r"]}),
+                ),
+                "a": (
+                    ("messages",),
+                    _b8_node(d109_calls, "a", {"messages": ["a"]}),
+                ),
+            },
+            edges={"__start__": ("r",)},
+            conditional_edges=_conditional_payload("r", _d109_router, None),
+            upstream_extra=_b8_extra("r", _d109_router, None),
+            calls=d109_calls,
+            verdict="SAME",
+        )
+    )
+
+    # D-110 · 路由返回 END 而 path_map 不含 END 键 ⇒ 上游 KeyError · freegraph 终止（DIFF）
+    d110_calls: list[str] = []
+
+    def _d110_router(state: dict[str, Any]) -> str:
+        return "__end__"
+
+    out.append(
+        Scenario(
+            name="D-110 · 路由返回 END 而 path_map 不含 END 键（DIFF · X-2）",
+            channels={"messages": "binop"},
+            initial={"messages": []},
+            nodes={
+                "r": (
+                    ("messages",),
+                    _b8_node(d110_calls, "r", {"messages": ["r"]}),
+                ),
+                "a": (
+                    ("messages",),
+                    _b8_node(d110_calls, "a", {"messages": ["a"]}),
+                ),
+            },
+            edges={"__start__": ("r",)},
+            conditional_edges=_conditional_payload("r", _d110_router, {"go": "a"}),
+            upstream_extra=_b8_extra("r", _d110_router, {"go": "a"}),
+            calls=d110_calls,
+            verdict="DIFF",
+            note=(
+                "X-2 · 上游**不**在 `_branch.py` 里过滤 `END` ⇒ 终止条件 = "
+                "**解析后目的地** == '__end__' ⇒ 上游查表失败（`KeyError`）· "
+                "freegraph 取「**单独返回** `END` ⇒ **无条件终止**」"
+                "（上游 docstring 口径 · 原则 XI ② 类 · **非更严**）"
+            ),
+        )
+    )
+
+    # D-111 · 无 path_map 且返回未注册节点名 ⇒ 上游静默忽略 · freegraph 显式失败（STRICTER）
+    d111_calls: list[str] = []
+
+    def _d111_router(state: dict[str, Any]) -> str:
+        return "ghost"
+
+    out.append(
+        Scenario(
+            name="D-111 · 无 path_map 且返回未注册节点名（STRICTER · X-3）",
+            channels={"messages": "binop"},
+            initial={"messages": []},
+            nodes={
+                "r": (
+                    ("messages",),
+                    _b8_node(d111_calls, "r", {"messages": ["r"]}),
+                ),
+            },
+            edges={"__start__": ("r",)},
+            conditional_edges=_conditional_payload("r", _d111_router, None),
+            upstream_extra=_b8_extra("r", _d111_router, None),
+            calls=d111_calls,
+            verdict="STRICTER",
+            note=(
+                "X-3 · 原则 XI ② 类（上游的**静默忽略**）+ 与 B7F3 的 **X-2** 同类 ⇒ "
+                "「拼错的节点名无声地少跑一条分支」会让图「看起来成功」却结果不对 ⇒ "
+                "freegraph **显式失败**（内置 `ValueError`）⇒ ⇒ ⇒ **更确定** ⇒ STRICTER"
+            ),
+        )
+    )
+
+    # D-112 · 路由函数抛异常 ⇒ 两侧都原样传播（SAME）
+    d112_calls: list[str] = []
+
+    def _d112_router(state: dict[str, Any]) -> str:
+        raise RuntimeError("boom")
+
+    out.append(
+        Scenario(
+            name="D-112 · 路由函数抛异常 ⇒ 两侧都原样传播（SAME）",
+            channels={"messages": "binop"},
+            initial={"messages": []},
+            nodes={
+                "r": (
+                    ("messages",),
+                    _b8_node(d112_calls, "r", {"messages": ["r"]}),
+                ),
+                "a": (
+                    ("messages",),
+                    _b8_node(d112_calls, "a", {"messages": ["a"]}),
+                ),
+            },
+            edges={"__start__": ("r",)},
+            conditional_edges=_conditional_payload("r", _d112_router, ["a"]),
+            upstream_extra=_b8_extra("r", _d112_router, ["a"]),
+            calls=d112_calls,
+            verdict="SAME",
+        )
+    )
+
+    # D-113 · 无 path_map 且路由返回 None ⇒ 两侧都抛内置 ValueError（SAME）
+    d113_calls: list[str] = []
+
+    def _d113_router(state: dict[str, Any]) -> Any:
+        return None
+
+    out.append(
+        Scenario(
+            name="D-113 · 无 path_map 且路由返回 None ⇒ 两侧都抛内置 ValueError（SAME）",
+            channels={"messages": "binop"},
+            initial={"messages": []},
+            nodes={
+                "r": (
+                    ("messages",),
+                    _b8_node(d113_calls, "r", {"messages": ["r"]}),
+                ),
+            },
+            edges={"__start__": ("r",)},
+            conditional_edges=_conditional_payload("r", _d113_router, None),
+            upstream_extra=_b8_extra("r", _d113_router, None),
+            calls=d113_calls,
+            verdict="SAME",
+        )
+    )
+
+    # D-114 · 双参形态（f(state, config)）⇒ 两侧的调用形态均成功（DIFF · X-5）
+    d114_calls: list[str] = []
+
+    def _d114_router(state: dict[str, Any], config=None) -> str:  # type: ignore[no-untyped-def]
+        # ⚠️ **无注解** ⇒ 上游的 ``RunnableCallable`` 与 freegraph 的判别器
+        # **都**判定「匹配集内」⇒ ⇒ ⇒ **两侧都注入** ⇒ ⇒ ⇒ 调用**形态**同款
+        # ⇒ ⇒ ⇒ 而**内容**不同（上游 = `RunnableConfig` dict · freegraph =
+        # **原始 `config`` · L2 层为 `None`）⇒ ⇒ ⇒ 本路由函数按「**是不是
+        # `None`**」分流 ⇒ ⇒ ⇒ **形态差异可观察**（⇒ 两侧的最终状态不同）。
+        return "a" if config is None else "b"
+
+    out.append(
+        Scenario(
+            name="D-114 · 双参形态（f(state, config)）⇒ 调用形态均成功（DIFF · X-5）",
+            channels={"messages": "binop"},
+            initial={"messages": []},
+            nodes={
+                "r": (
+                    ("messages",),
+                    _b8_node(d114_calls, "r", {"messages": ["r"]}),
+                ),
+                "a": (
+                    ("messages",),
+                    _b8_node(d114_calls, "a", {"messages": ["a"]}),
+                ),
+                "b": (
+                    ("messages",),
+                    _b8_node(d114_calls, "b", {"messages": ["b"]}),
+                ),
+            },
+            edges={"__start__": ("r",)},
+            conditional_edges=_conditional_payload("r", _d114_router, ["a", "b"]),
+            upstream_extra=_b8_extra("r", _d114_router, ["a", "b"]),
+            calls=d114_calls,
+            verdict="DIFF",
+            note=(
+                "X-5 · **载体形态差异**（上游传 `RunnableConfig` dict · freegraph 传"
+                "用户交给 `invoke` 的**原始 `config`` · 此处为 `None`）⇒ ⇒ ⇒ "
+                "**失败信号无差异**（两侧均成功）⇒ ⇒ ⇒ 比对**形态**而非**内容** ⇒ "
+                "⇒ ⇒ **非更严**（上游更宽）"
+            ),
+        )
+    )
+
+    # D-115 · 双参形态的判别规则（第二参名字不叫 config）⇒ 两侧都 TypeError（SAME）
+    d115_calls: list[str] = []
+
+    def _d115_router(state: dict[str, Any], cfg: Any) -> str:
+        return "a"
+
+    out.append(
+        Scenario(
+            name="D-115 · 第二参名字不叫 config ⇒ 两侧都 TypeError（SAME）",
+            channels={"messages": "binop"},
+            initial={"messages": []},
+            nodes={
+                "r": (
+                    ("messages",),
+                    _b8_node(d115_calls, "r", {"messages": ["r"]}),
+                ),
+                "a": (
+                    ("messages",),
+                    _b8_node(d115_calls, "a", {"messages": ["a"]}),
+                ),
+            },
+            edges={"__start__": ("r",)},
+            conditional_edges=_conditional_payload("r", _d115_router, ["a"]),
+            upstream_extra=_b8_extra("r", _d115_router, ["a"]),
+            calls=d115_calls,
+            verdict="SAME",
+        )
+    )
+
+    # D-116 · 条件边挂在 __start__ 上（静态入口并存）⇒ 两侧同轮并行（SAME）
+    d116_calls: list[str] = []
+
+    def _d116_router(state: dict[str, Any]) -> str:
+        return "b"
+
+    out.append(
+        Scenario(
+            name="D-116 · 条件边挂在 __start__ 上（与静态入口并存）（SAME）",
+            channels={"messages": "binop"},
+            initial={"messages": []},
+            nodes={
+                "x": (
+                    ("messages",),
+                    _b8_node(d116_calls, "x", {"messages": ["x"]}),
+                ),
+                "b": (
+                    ("messages",),
+                    _b8_node(d116_calls, "b", {"messages": ["b"]}),
+                ),
+            },
+            edges={"__start__": ("x",)},
+            conditional_edges=_conditional_payload("__start__", _d116_router, ["b"]),
+            upstream_extra=_b8_extra("__start__", _d116_router, ["b"]),
+            calls=d116_calls,
+            verdict="SAME",
+        )
+    )
+
+    # D-117 · 纯条件边入口（无静态入口点）（SAME）
+    d117_calls: list[str] = []
+
+    def _d117_router(state: dict[str, Any]) -> str:
+        return "a"
+
+    out.append(
+        Scenario(
+            name="D-117 · 纯条件边入口（无静态入口点）（SAME）",
+            channels={"messages": "binop"},
+            initial={"messages": []},
+            nodes={
+                "a": (
+                    ("messages",),
+                    _b8_node(d117_calls, "a", {"messages": ["a"]}),
+                ),
+            },
+            edges={},
+            conditional_edges=_conditional_payload("__start__", _d117_router, ["a"]),
+            upstream_extra=_b8_extra("__start__", _d117_router, ["a"]),
+            calls=d117_calls,
+            verdict="SAME",
+        )
+    )
+
+    # D-118 · 路由返回 END 而 path_map 把 END 映射到别的节点（DIFF · X-2）
+    d118_calls: list[str] = []
+
+    def _d118_router(state: dict[str, Any]) -> str:
+        return "__end__"
+
+    out.append(
+        Scenario(
+            name="D-118 · 路由返回 END 而 path_map 把 END 映射到别的节点（DIFF · X-2）",
+            channels={"messages": "binop"},
+            initial={"messages": []},
+            nodes={
+                "r": (
+                    ("messages",),
+                    _b8_node(d118_calls, "r", {"messages": ["r"]}),
+                ),
+                "b": (
+                    ("messages",),
+                    _b8_node(d118_calls, "b", {"messages": ["b"]}),
+                ),
+            },
+            edges={"__start__": ("r",)},
+            conditional_edges=_conditional_payload("r", _d118_router, {"__end__": "b"}),
+            upstream_extra=_b8_extra("r", _d118_router, {"__end__": "b"}),
+            calls=d118_calls,
+            verdict="DIFF",
+            note=(
+                "X-2 · 与 **D-110** 同一分叉的**另一半**（「`END` 是 `path_map` 的 "
+                "**key** **不等于**终止」）⇒ 上游**解析后目的地**为「b」⇒ "
+                "**不终止** ⇒ freegraph **无条件终止** ⇒ ⇒ ⇒ **非更严**（上游更宽）"
+            ),
+        )
+    )
+
+    # D-119 · 路由返回 Send（未注册节点）⇒ 上游静默忽略 · freegraph 显式失败（STRICTER）
+    d119_calls: list[str] = []
+
+    def _d119_fg_router(state: dict[str, Any]) -> Any:
+        sys.path.insert(0, f"{ROOT}/src")
+        from freegraph.graph import Send as FgSend
+
+        return FgSend("ghost", {"n": 1})
+
+    def _d119_up_router(state: dict[str, Any]) -> Any:
+        from langgraph.types import Send as UpSend
+
+        return UpSend("ghost", {"n": 1})
+
+    out.append(
+        Scenario(
+            name="D-119 · 路由返回 Send（未注册节点）（STRICTER · X-6）",
+            channels={"messages": "binop"},
+            initial={"messages": []},
+            nodes={
+                "r": (
+                    ("messages",),
+                    _b8_node(d119_calls, "r", {"messages": ["r"]}),
+                ),
+            },
+            edges={"__start__": ("r",)},
+            conditional_edges=_conditional_payload("r", _d119_fg_router, None),
+            upstream_extra=_b8_extra("r", _d119_up_router, None),
+            calls=d119_calls,
+            verdict="STRICTER",
+            note=(
+                "X-6 · 原则 XI ② 类（上游的**静默忽略**）+ 与 B7F3 的 **X-2** 同类 ⇒ "
+                "freegraph **显式失败**（内置 `ValueError` · B11F1 的 **V-19**）⇒ ⇒ ⇒ "
+                "MUST **NOT** 改 B11F1 的冻结面 ⇒ ⇒ ⇒ **更确定** ⇒ STRICTER"
+            ),
+        )
+    )
+
+    # D-120 · 路由返回 Send(END, payload) ⇒ 异常类型不同型（DIFF · X-7）
+    d120_calls: list[str] = []
+
+    def _d120_fg_router(state: dict[str, Any]) -> Any:
+        sys.path.insert(0, f"{ROOT}/src")
+        from freegraph.graph import Send as FgSend
+
+        return FgSend("__end__", {"n": 1})
+
+    def _d120_up_router(state: dict[str, Any]) -> Any:
+        from langgraph.types import Send as UpSend
+
+        return UpSend("__end__", {"n": 1})
+
+    out.append(
+        Scenario(
+            name="D-120 · 路由返回 Send(END, payload) ⇒ 异常类型不同型（DIFF · X-7）",
+            channels={"messages": "binop"},
+            initial={"messages": []},
+            nodes={
+                "r": (
+                    ("messages",),
+                    _b8_node(d120_calls, "r", {"messages": ["r"]}),
+                ),
+            },
+            edges={"__start__": ("r",)},
+            conditional_edges=_conditional_payload("r", _d120_fg_router, None),
+            upstream_extra=_b8_extra("r", _d120_up_router, None),
+            calls=d120_calls,
+            verdict="DIFF",
+            note=(
+                "X-7 · 上游抛 **`InvalidUpdateError`** · freegraph 抛**内置 "
+                "`ValueError`**（B11F1 的 **V-21**）⇒ ⇒ ⇒ **异常类型不同型** ⇒ ⇒ ⇒ "
+                "freegraph **零新增错误类型** ⇒ ⇒ ⇒ **非更严**（上游更宽）"
+            ),
         )
     )
 

@@ -165,6 +165,16 @@
   ⇒ ⚠️ **状态更新（2026-11-17）**：**B7F3 已交付**（`invoke()` 已接线）⇒ ⇒ 本 feature 与 **B23F1** 现在是**固定脚本（`target.py`）端到端轮**（登记项 **EV-4**）的**剩余前置** ⇒ ⇒ MUST 先于该轮落地。
   ⇒ 落点：`specs/b7f3-invoke-full-state/spec.md` 的**下游承接 D-3** · 契约 **CF-03**。
 
+## 下游承接（B8F1 · 2026-11-18 · **只接线 · 逐条最小改动**）
+
+- **D-4（B8F1 → B22F1 / B23F1 · M2 · 图导出里的条件边）**：`get_graph()` /
+  `draw_mermaid_png()` MUST 能表达**条件边**（源节点 → 可能的多个目标）⇒ ⇒ ⇒ MUST **复用**
+  B8F1 的 `targets` / `route_channels` 口径（条件边载荷的**恰 5 键**）⇒ ⇒ ⇒ **MUST NOT**
+  另算一份目标集合 ⇒ ⇒ ⇒ 条件边的**路由通道**（`branch:to:<target>`）**只作声明载体**
+  （**从不被写入**）⇒ ⇒ ⇒ 图导出**MUST NOT** 把它当成「已写入的通道」。
+  ⇒ 落点：`specs/b8f1-conditional-edges-fresh-read/spec.md` 的**下游承接 D-4** ·
+  契约 `conditional-edge-contract.md` §2.1。
+
 ## 依据
 
 - 立项书 §4.3（第 13 / 14 项）、§5.2（B23F1 行）、§5.3（C15）、§5.5（PNG 渲染的

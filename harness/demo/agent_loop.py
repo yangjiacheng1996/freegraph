@@ -210,31 +210,33 @@ def case_tool_loop() -> None:
     tools = {"add": make_tool("add", lambda a, b: a + b)}
 
     g = build_agent_graph(model, tools)
-    # ⚠️ **降级为软断言**（T042 · **实测依据 = T011 的首次执行红点**）—— 工具循环
-    # **经条件边**在「模型 ⇄ 工具」之间跳转 ⇒ ⇒ **条件边路由求值**归 **B8F1**（M2）
-    # ⇒ ⇒ 本组**整组**不判失败（缺口**具名**承接）。
-    _B8F1_NOTE = "条件边路由求值未交付 —— 归 B8F1"
+    # ⚠️ **2026-11-18 · B8F1**（破冻结面 **T-7** · 宪法 v1.8.0「破冻结面的
+    # 三条」① 的「**拆分而不删**」+ v1.14.0「**替换 MUST NOT 弱于原断言**」）：
+    # 工具循环**经条件边**在「模型 ⇄ 工具」之间跳转 ⇒ ⇒ ⇒ **条件边路由求值**
+    # **已交付**（**B8F1** · M2）⇒ ⇒ ⇒ 降级理由失效 ⇒ ⇒ ⇒ 本组**整组**由
+    # **软断言**升级为**硬断言** ⇒ ⇒ ⇒ **判据只可更严**（软 ⇒ 硬）⇒ ⇒ ⇒
+    # **五条断言的语义逐字留存**（「模型被调用 2 次」「``llm_calls == 2``」
+    # 「``messages`` 长度 == 4」「最终答案是 '7'」「``tool_calls`` 结构」）。
     try:
         out = g.compile().invoke({"messages": [FakeMessage("Add 3 and 4.")], "llm_calls": 0})
     except Exception as exc:  # noqa: BLE001
-        soft(False, "B1 工具循环 · C4 / C7 / C8 / C11", f"{type(exc).__name__}: {exc} —— {_B8F1_NOTE}")
+        check(False, "B1 工具循环 · C4 / C7 / C8 / C11", f"{type(exc).__name__}: {exc}")
         return
 
     msgs = out.get("messages", [])
-    soft(model.calls == 2, "模型被调用 2 次（工具循环走了一轮）", _B8F1_NOTE)
-    soft(out.get("llm_calls") == 2, "C3/C11 llm_calls 覆盖语义：最终为 2", _B8F1_NOTE)
+    check(model.calls == 2, "模型被调用 2 次（工具循环走了一轮）")
+    check(out.get("llm_calls") == 2, "C3/C11 llm_calls 覆盖语义：最终为 2")
     # messages：入参 1 条 + AIMessage(tool_call) 1 条 + ToolMessage 1 条 + AIMessage 1 条
-    soft(len(msgs) == 4, "messages 长度 = 4（入参 + 助手 + 工具结果 + 助手）", _B8F1_NOTE)
+    check(len(msgs) == 4, "messages 长度 = 4（入参 + 助手 + 工具结果 + 助手）")
     if len(msgs) >= 3:
-        soft(msgs[-1].content == "7", "最终答案是 '7'", _B8F1_NOTE)
-        soft(msgs[2].content == "7", "工具结果为 7（add(3,4)）", _B8F1_NOTE)
-        soft(
+        check(msgs[-1].content == "7", "最终答案是 '7'")
+        check(msgs[2].content == "7", "工具结果为 7（add(3,4)）")
+        check(
             getattr(msgs[1], "tool_calls", None) == [call],
             "工具调用请求原样保留在 messages 中",
-            _B8F1_NOTE,
         )
     else:
-        soft(False, "最终答案是 '7'", f"messages 长度 = {len(msgs)} —— {_B8F1_NOTE}")
+        check(False, "最终答案是 '7'", f"messages 长度 = {len(msgs)}")
 
 
 def case_tool_call_shape() -> None:
@@ -244,21 +246,30 @@ def case_tool_call_shape() -> None:
     model = FakeModel([FakeMessage("", tool_calls=[call]), FakeMessage("done")])
     tools = {"add": make_tool("add", lambda a, b: a + b)}
     g = build_agent_graph(model, tools)
-    out = g.compile().invoke({"messages": [], "llm_calls": 0})
+    # ⚠️ **2026-11-18 · B8F1**（破冻结面 **T-7**）：本组直接取 ``msgs[1]``
+    # ⇒ ⇒ ⇒ ``msgs[1]`` MUST 是**助手消息**（带 ``tool_calls`` 的那条）⇒ ⇒ ⇒
+    # 入参 MUST **带一条消息**（与 B1 的布局**一致**：``[入参, 助手, 工具结果,
+    # 助手]``）⇒ ⇒ ⇒ **断言的语义留存**（读的是**助手消息**的 ``tool_calls``）
+    # ⇒ ⇒ ⇒ **判据只可更严**（此前该组在「长度不足」处**软失败** ⇒ 形状断言
+    # **从未真正被检查** ⇒ 现在**真的**被检查）。
+    out = g.compile().invoke(
+        {"messages": [FakeMessage("Add 3 and 4.")], "llm_calls": 0}
+    )
 
     msgs = out.get("messages", [])
-    # ⚠️ **降级为软断言**（T042 · **实测依据 = T011 的首次执行红点**）—— 本组直接取
-    # ``msgs[1]`` ⇒ ⇒ 需**条件边路由**产出第二条消息 ⇒ ⇒ 归 **B8F1**（M2）。
-    _B8F1_NOTE = "条件边路由求值未交付 —— 归 B8F1"
+    # ⚠️ **2026-11-18 · B8F1**（破冻结面 **T-7**）：本组直接取 ``msgs[1]``
+    # ⇒ ⇒ ⇒ 需**条件边路由**产出第二条消息 ⇒ ⇒ ⇒ **已交付** ⇒ ⇒ ⇒ 降级理由
+    # 失效 ⇒ ⇒ ⇒ 本组**整组**由**软断言**升级为**硬断言** ⇒ ⇒ ⇒ **判据只可
+    # 更严**（软 ⇒ 硬）⇒ ⇒ ⇒ **三条断言的语义逐字留存**。
     if len(msgs) < 2:
-        soft(False, "tool_calls 为非空 list", f"messages 长度 = {len(msgs)} —— {_B8F1_NOTE}")
+        check(False, "tool_calls 为非空 list", f"messages 长度 = {len(msgs)}")
         return
     tc = getattr(msgs[1], "tool_calls", None)
-    soft(bool(tc), "tool_calls 为非空 list", _B8F1_NOTE)
+    check(bool(tc), "tool_calls 为非空 list")
     if tc:
-        soft(sorted(tc[0].keys()) == ["args", "id", "name", "type"], "tool_call 结构为 name/args/id/type", _B8F1_NOTE)
-        soft(tc[0]["name"] == "add", "tool_call.name 可读", _B8F1_NOTE)
-        soft(tc[0]["args"] == {"a": 3, "b": 4}, "tool_call.args 可读", _B8F1_NOTE)
+        check(sorted(tc[0].keys()) == ["args", "id", "name", "type"], "tool_call 结构为 name/args/id/type")
+        check(tc[0]["name"] == "add", "tool_call.name 可读")
+        check(tc[0]["args"] == {"a": 3, "b": 4}, "tool_call.args 可读")
 
 
 def case_interrupt_in_loop() -> None:
@@ -280,12 +291,15 @@ def case_interrupt_in_loop() -> None:
         result = app.invoke({"messages": [], "llm_calls": 0})
     except Exception as exc:  # noqa: BLE001
         result = {"__interrupt__": (exc,)}
-    # ⚠️ **降级为软断言**（T042 · **实测依据 = T011 的首次执行红点**）—— 工具节点
-    # **经条件边**才可达 ⇒ ⇒ **条件边路由求值**归 **B8F1**（M2）。
-    soft(
+    # ⚠️ **2026-11-18 · B8F1**（破冻结面 **T-7** · 宪法 v1.8.0「破冻结面的
+    # 三条」① 的「**拆分而不删**」+ v1.14.0「**替换 MUST NOT 弱于原断言**」）：
+    # 工具节点**经条件边**才可达 ⇒ ⇒ ⇒ **条件边路由求值已交付**（**B8F1** · M2）
+    # ⇒ ⇒ ⇒ 降级理由失效 ⇒ ⇒ ⇒ 本条由**软断言**恢复为**硬断言** ⇒ ⇒ ⇒
+    # **判据只可更严**（软 ⇒ 硬）⇒ ⇒ ⇒ **断言的语义逐字留存**（且
+    # ``_B8F1_NOTE`` 的「未交付」措辞**已删除** ⇒ T-7 的处置**逐字落地**）。
+    check(
         result.get("__interrupt__") is not None,
         "工具执行前触发中断",
-        "条件边路由求值未交付 —— 归 B8F1",
     )
     if result.get("__interrupt__") is not None:
         itr = result["__interrupt__"]

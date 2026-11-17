@@ -161,3 +161,38 @@ def test_d24_parameterized_barrier_scenarios_match_the_upstream(
             f"D-24 参数化场景 {label} 的最终状态不一致："
             f"freegraph={fg_state} · upstream={up_state}"
         )
+
+
+# ── B8F1 · T022 · 差分侧载荷 == L3 载荷 ──────────────────────────────────
+
+
+def test_the_differential_payload_matches_the_l3_product() -> None:
+    """差分侧的**条件边载荷** MUST 与 **L3 的产物**逐字一致（FR-032 · C2）。
+
+    ⚠️ 差分探针**自己**派生 ``targets`` / ``route_channels`` ⇒ ⇒ ⇒ 若与 L3
+    漂移 ⇒ 差分测到的**不是**生产路径 ⇒ ⇒ ⇒ 本断言把它**锁住**。
+
+    ⇒ ⇒ ⇒ **派生口径 = L3 的 ``_build_spec()``**（``branch`` / ``path_map`` /
+    ``targets`` / ``route_channels``）⇒ ⇒ ⇒ 载荷**逐字相等**。
+    """
+    from typing import TypedDict
+
+    from freegraph.graph import END, START, StateGraph
+
+    class _Schema(TypedDict):
+        messages: list
+
+    def _router(state: dict) -> str:
+        return "a"
+
+    builder = StateGraph(_Schema)
+    builder.add_node("r", lambda state: {"messages": ["r"]})
+    builder.add_node("a", lambda state: {"messages": ["a"]})
+    builder.add_edge(START, "r")
+    builder.add_conditional_edges("r", _router, ["a", END])
+
+    compiled = builder.compile()
+    expected = parity_probe._conditional_payload("r", _router, ["a", END])
+
+    assert expected == compiled._spec.conditional_edges
+    assert expected == compiled._conditional_edges

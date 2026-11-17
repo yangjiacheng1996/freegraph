@@ -74,7 +74,7 @@ INVARIANT_TESTS: dict[str, str] = {
     "I-11": "test_i11_repeating_the_same_spec_yields_equal_results",
     "I-12": "test_i12_the_report_order_follows_the_node_name_order",
     "I-13": "test_i13_two_independent_scheduler_states_give_equal_results",
-    "I-14": "test_i14_a_non_empty_conditional_edges_field_fails_explicitly",
+    "I-14": "test_i14_a_filled_conditional_edges_field_is_accepted_and_carried_verbatim",
     "I-15": "test_i15_a_node_exception_propagates_as_the_very_same_object",
     "I-16": "test_i16_the_same_spec_runs_concurrently_without_interference",
 }
@@ -603,11 +603,47 @@ def test_i13_two_independent_scheduler_states_give_equal_results() -> None:
     assert build().executed == build().executed
 
 
-# ── I-14 · 「条件边」字段恒空；非空即失败 ──────────────────────────────
+# ── I-14 · 「条件边」字段；**填值即被路由求值消费** ─────────────────────
+#
+# ⚠️ **2026-11-18 · B8F1 回溯修订**（**破冻结面 T-1** · 宪法 v1.8.0
+# 「破冻结面的三条」① 的「**拆分而不删**」+ v1.14.0「**替换 MUST NOT 弱于
+# 原断言**」）：
+#
+# * **原断言**：「非空 ⇒ **显式失败**」⇒ ⇒ ⇒ **自 B8F1 起放宽**（**V-8 已
+#   放宽** · 裁定 14）⇒ ⇒ ⇒ 语义由「**恒空即失败**」改为「**填值即被路由
+#   求值消费**」；
+# * **编号与槽位不变**（**I-14**）⇒ ⇒ ⇒ 契约守卫的**解析范围零改动**；
+# * **判据只可更严** ⇒ ⇒ ⇒ 原用例体**拆分**为「**填值 ⇒ 构造成功且原样
+#   承载**」与「**形态不符 ⇒ 显式失败**（**V-27**）」**两条**（语义**留存**）。
+# ⚠️ **I-1…I-16 属 B7F1 的编号域** ⇒ ⇒ ⇒ 引用时 MUST 写全文件前缀。
 
 
-def test_i14_a_non_empty_conditional_edges_field_fails_explicitly() -> None:
-    """**I-14**：「条件边」字段 MUST **恒为空**；非空 ⇒ **显式失败**。"""
+def test_i14_a_filled_conditional_edges_field_is_accepted_and_carried_verbatim() -> None:
+    """**I-14**：「条件边」字段**填值** ⇒ 构造**成功**且该值**原样**承载。"""
+    payload = {
+        "reader": (
+            {
+                "branch": "condition",
+                "path": lambda state: "a",
+                "path_map": {"a": "a"},
+                "targets": ("a",),
+                "route_channels": ("branch:to:a",),
+            },
+        )
+    }
+
+    spec = GraphSpec(
+        channels=_channels(),
+        nodes={"reader": NodeSpec(subscribes=(), run=lambda state: {})},
+        edges={},
+        conditional_edges=payload,
+    )
+
+    assert spec.conditional_edges == payload
+
+
+def test_i14_a_malformed_conditional_edges_field_fails_explicitly() -> None:
+    """**I-14**：「条件边」字段的**五键**形态不符 ⇒ **显式失败**（**V-27**）。"""
     with pytest.raises(ValueError):
         GraphSpec(
             channels=_channels(),

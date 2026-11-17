@@ -77,6 +77,7 @@ from ._fanout import (
     make_fanout,
 )
 from ._recursion import resolve_config, resolve_limit
+from ._routing import evaluate_routes, validate_conditional_payload
 from ._static import (
     STATIC_AFTER,
     STATIC_BEFORE,
@@ -109,6 +110,12 @@ __all__ = [
 #: 「节点订阅的通道」**不再**是触发源（``subscribes`` 只决定「读哪些通道」· 上游
 #: ``langgraph/graph/state.py:1534``）⇒ **消除**「节点写自己订阅的通道 ⇒ 自触发循环」。
 _EDGE_SOURCE = "e"
+
+#: **入口哨兵**的 fan-out 载荷在 ``SchedulerState.fanout`` 里的键（**B8F1**）。
+#:
+#: ⚠️ **TaskId 从 0 起** ⇒ ⇒ ⇒ ``-1`` **不与**任何真实 TaskId 冲突 ⇒ ⇒ ⇒
+#: 它排在 fan-out 任务序的**最前**（``sorted(state.fanout)``）⇒ ⇒ ⇒ 确定性。
+_START_FANOUT_ID = -1
 
 #: **终止标记**（契约 §3 · 裁定 6）—— 字符串字面量。
 #:
@@ -457,6 +464,13 @@ def _validate_graph_spec(spec: GraphSpec) -> None:
                 raise ValueError(
                     f"Node {name!r} subscribes to unknown channel {key!r} (V-1)"
                 )
+    # ⚠️ **V-27**（**B8F1** · 契约 §6.2 · data-model §5）：条件边载荷的**五键**
+    # 形态 ⇒ **构造期**逐项核对 ⇒ 缺键 / 多键 / 键名不符 ⇒ 内置 ``ValueError``
+    # ⇒ ⇒ ⇒ **MUST NOT** 因形态不符而**静默跳过**该条件边。
+    # ⚠️ **V-8 已放宽**（**B8F1** · 裁定 14 · 破冻结面 **T-1**）⇒ 该字段**非空**
+    # **不再**是构造期失败 ⇒ 本校验只管**形态**，不管**空与非空**。
+    if spec.conditional_edges:
+        validate_conditional_payload(spec.conditional_edges)
     for source, targets in spec.edges.items():
         # ⚠️ **边键分流**（**B7F4** · 契约 §2.2）：``str`` ⇒ 单源边（既有语义
         # **逐字不变**）· ``tuple`` ⇒ **多源边**（AND / 屏障）· 其它类型 ⇒
@@ -480,10 +494,6 @@ def _validate_graph_spec(spec: GraphSpec) -> None:
         raise TypeError(
             f"GraphSpec edge key must be a str or a tuple of str, "
             f"got {type(source).__name__}"
-        )
-    if spec.conditional_edges:
-        raise ValueError(
-            "GraphSpec.conditional_edges must stay empty in this feature (V-8)"
         )
     # ── B13F1 · 静态断点字段归一 / 校验（V-22…V-25 · 单一入口）──
     # ⚠️ 先完成节点表 / 边表校验，再展开 ``"*"`` 与做 V-25（未知节点）。
@@ -982,12 +992,21 @@ def _commit_outcome(
     task_id: TaskId,
     target: str,
     outcome: _TaskOutcome,
+    *,
+    extra_gotos: tuple[str, ...] = (),
+    extra_fanout: tuple[Any, ...] = (),
 ) -> None:
-    """把一个**成功完成**的任务结果**落回**调度状态（阶段 ③′ · TaskId 序）。"""
-    state.dynamic_edges[target] = outcome.gotos
+    """把一个**成功完成**的任务结果**落回**调度状态（阶段 ③′ · TaskId 序）。
+
+    ⚠️ **条件边目标与同轮 ``Command.goto`` 目标取并集**（**去重保序** · 裁定 13
+    · FR-031）⇒ ⇒ ⇒ ``extra_gotos`` 是**路由**求值出的目标 ⇒ ⇒ ⇒ 顺序
+    **不可观察**（同轮执行顺序 = **节点名序**）⇒ ⇒ ⇒ 只需**确定性**即可。
+    """
+    gotos = _merge_gotos(outcome.gotos, extra_gotos)
+    state.dynamic_edges[target] = gotos
     state.node_versions[target] = state.node_versions.get(target, 0) + 1
-    if outcome.fanout:
-        tasks = tuple(outcome.fanout)
+    if outcome.fanout or extra_fanout:
+        tasks = tuple(outcome.fanout) + tuple(extra_fanout)
         suppresses = all(task.suppresses_static for task in tasks)
         state.fanout[task_id] = _FanOut(
             producer=target,
@@ -1012,6 +1031,26 @@ def _commit_outcome(
                             state.versions_seen.setdefault(task.target, {})[
                                 (_EDGE_SOURCE, target)
                             ] = state.node_versions.get(target, 0)
+
+
+def _merge_gotos(
+    gotos: tuple[str, ...], extra: tuple[str, ...]
+) -> tuple[str, ...]:
+    """把 ``Command.goto`` 目标与**条件边**目标取**并集**（**去重保序** · 裁定 13）。
+
+    ⚠️ **顺序不可观察**（同轮执行顺序 = **节点名序** · B7F1 §4）⇒ ⇒ ⇒
+    这里只需**确定性** ⇒ ⇒ ⇒ 「既有目标在前 · 路由目标在后」即可。
+    """
+    if not extra:
+        return gotos
+    merged = list(gotos)
+    seen = set(merged)
+    for target in extra:
+        if target in seen:
+            continue
+        seen.add(target)
+        merged.append(target)
+    return tuple(merged)
 
 
 def _ordered_writes(
@@ -1171,19 +1210,91 @@ def _clear_step_end(
         channel.update([])
 
 
+def _evaluate_source_routes(
+    spec: GraphSpec,
+    state: SchedulerState,
+    source: str,
+    writes: Mapping[str, Sequence[Any]],
+    *,
+    channels: Mapping[str, Channel],
+    route_config: Any,
+) -> tuple[tuple[str, ...], tuple[Any, ...]]:
+    """求值某个源节点名下的**全部**条件边 ⇒ ``(动态边目标, fan-out 任务)``。
+
+    ⚠️ **无**条件边的源节点 ⇒ **零开销**返回（``()`` / ``()``）⇒ ⇒ ⇒
+    「**没有**条件边的图」的行为面**逐字不变**。
+    """
+    entries = spec.conditional_edges.get(source)
+    if not entries:
+        return (), ()
+    return evaluate_routes(
+        channels,
+        entries,
+        writes,
+        producer=source,
+        node_names=spec.nodes,
+        config=route_config,
+    )
+
+
+def _evaluate_start_routes(
+    spec: GraphSpec,
+    state: SchedulerState,
+    *,
+    route_config: Any,
+) -> None:
+    """条件边挂在**入口哨兵** ``__start__`` 上 ⇒ **求值一次**（**幂等**）。
+
+    ⚠️ **「已求值」的判据 = 键存在性**（``"__start__" in state.dynamic_edges``）
+    ⇒ ⇒ ⇒ **MUST NOT** 用「值非空」当判据（返回 ``END`` ⇒ 空 tuple ⇒ **同样**
+    表示已求值）⇒ ⇒ ⇒ **MUST NOT** 给 ``SchedulerState`` 新增字段（其「构造
+    签名与名字逐字不变」是 B7F1 / B9F1 / **B8F1** 的冻结面）⇒ ⇒ ⇒
+    **MUST NOT** 用 ``state.step == 0``（``step`` 是「执行轮计数（不含空轮）」）。
+
+    ⚠️ **求值落点 = 阶段 ① 之前**（**仅在第 1 轮**）⇒ ⇒ ⇒ 结果写进
+    ``state.dynamic_edges["__start__"]`` ⇒ ⇒ ⇒ 目标在**第 1 轮**被触发
+    ⇒ ⇒ ⇒ 与静态入口边**同轮并行**（两者编出的触发组都是 ``("e", "__start__")``
+    · 版本恒为 1）。
+    """
+    entries = spec.conditional_edges.get(_START_MARKER)
+    if not entries:
+        return
+    if _START_MARKER in state.dynamic_edges:
+        return  # ⚠️ **幂等**（后续轮次 MUST NOT 再求值）
+    channels = _run_channels(spec, state)
+    targets, fanout = evaluate_routes(
+        channels,
+        entries,
+        {},
+        producer=_START_MARKER,
+        node_names=spec.nodes,
+        config=route_config,
+    )
+    state.dynamic_edges[_START_MARKER] = targets
+    if fanout:
+        state.fanout[_START_FANOUT_ID] = _FanOut(
+            producer=_START_MARKER,
+            tasks=fanout,
+            suppresses_static=all(task.suppresses_static for task in fanout),
+        )
+
+
 def _run_round(
     spec: GraphSpec,
     state: SchedulerState,
     triggered: list[str],
     *,
     max_concurrency: int | None = None,
+    route_config: Any = None,
 ) -> tuple[list[str], dict[str, dict[str, tuple[Any, ...]]]]:
     """跑**一轮** super-step（阶段 ② · ②′ · ③ · ③′ · ④ · ⑤ · ⑥）。
 
     * **标准触发任务**：按**目标节点名序**分配 TaskId（0 起）；
     * **fan-out 任务**：在全部标准任务之后，按**产生者 TaskId 序 + 载荷内
       ``Send`` 序号**分配 TaskId；
-    * fan-out 载荷在**构造任务后清空**（一次性 · 上游 ``TASKS`` 每步清空）。
+    * fan-out 载荷在**构造任务后清空**（一次性 · 上游 ``TASKS`` 每步清空）；
+    * ``route_config`` —— 用户交给 ``invoke`` 的**原始** ``config``
+      （**B8F1** · 双参路由函数的第二参 · **逐字** ⇒ **MUST NOT** 归一化）。
     """
     snapshot_fanout = dict(state.fanout)
 
@@ -1258,12 +1369,46 @@ def _run_round(
     }
     snapshot_versions = dict(state.node_versions)
     snapshot_edges = dict(state.dynamic_edges)
+    # ── ③′ 条件边求值（**B8F1** · 与「判定与落回」同一条执行路径）──
+    # ⚠️ **求值时机** = 源节点任务**成功落回**之后（阶段 ③′）· 写入合并
+    # （阶段 ⑤）**之前** ⇒ ⇒ ⇒ 路由函数读到的是「轮次开始前的通道值 +
+    # 本节点本次写入」（**fresh 读** · C8）。
+    # ⚠️ **节点挂起**（``interrupt()``）⇒ 该任务**不成功落回** ⇒ ⇒ ⇒ 路由函数
+    # **不被求值**（承接条款 **H-10** · 中断路径与路由路径**互斥**）。
+    route_results: dict[TaskId, tuple[tuple[str, ...], tuple[Any, ...]]] = {}
+    if error is None:
+        channels = _run_channels(spec, state)
+        for task_id in sorted(by_id):
+            if task_id in interrupted:
+                continue
+            source = target_by_id[task_id]
+            try:
+                route_results[task_id] = _evaluate_source_routes(
+                    spec,
+                    state,
+                    source,
+                    by_id[task_id].writes,
+                    channels=channels,
+                    route_config=route_config,
+                )
+            except BaseException as exc:  # noqa: BLE001 —— 原对象传播（不包装）
+                # ⚠️ **整轮原子**（B7F1 裁定 22 · 裁定 29）⇒ 路由失败 ⇒ 本轮
+                # **一个目标都不落回** ⇒ ⇒ ⇒ 与「节点失败」**同款**处置。
+                error = exc
+                break
     if error is None:
         for task_id in sorted(by_id):
             if task_id in interrupted:
                 continue
+            gotos, fanout = route_results.get(task_id, ((), ()))
             _commit_outcome(
-                spec, state, task_id, target_by_id[task_id], by_id[task_id]
+                spec,
+                state,
+                task_id,
+                target_by_id[task_id],
+                by_id[task_id],
+                extra_gotos=gotos,
+                extra_fanout=fanout,
             )
 
     # ── ④ 写入收集（TaskId 序） ──
@@ -1386,6 +1531,9 @@ def run_super_step(
     """
     _validate_max_concurrency(max_concurrency)
     _reject_static_points_for_low_level(spec)
+    # ⚠️ **B8F1**：条件边挂在 ``__start__`` 上 ⇒ **阶段 ① 之前**求值一次
+    # （**幂等**）⇒ ⇒ ⇒ 目标在**第 1 轮**被触发。
+    _evaluate_start_routes(spec, state, route_config=None)
     triggered = _determine_triggers(spec, state)
     executed: list[str] = []
     pending: dict[str, dict[str, tuple[Any, ...]]] = {}
@@ -1444,6 +1592,9 @@ def run_super_steps(
     pending: dict[str, dict[str, tuple[Any, ...]]] = {}
     steps = 0
     while True:
+        # ⚠️ **B8F1**：入口哨兵上的条件边 ⇒ **每轮之前**求值（**幂等** ⇒ 只有
+        # 第 1 轮真正求值）⇒ ⇒ ⇒ 后续轮次 MUST NOT 再求值（裁定 17）。
+        _evaluate_start_routes(spec, scheduler_state, route_config=None)
         triggered = _determine_triggers(spec, scheduler_state)
         steps += 1
         if not triggered and not scheduler_state.fanout:
@@ -1681,6 +1832,7 @@ def _run_graph_loop(
     first_round: Sequence[str] | None,
     max_steps: int,
     max_concurrency: int | None,
+    route_config: Any = None,
     static_ack: Mapping[str, Any] | None = None,
     static_resume: bool = False,
 ) -> SuperStepResult | InterruptResult:
@@ -1697,6 +1849,8 @@ def _run_graph_loop(
     steps = 0
     triggered: list[str] | None = list(first_round) if first_round is not None else None
     while True:
+        # ⚠️ **B8F1**：入口哨兵上的条件边 ⇒ **每轮之前**求值（**幂等**）。
+        _evaluate_start_routes(spec, state, route_config=route_config)
         if triggered is None:
             triggered = _determine_triggers(spec, state)
         steps += 1
@@ -1734,7 +1888,11 @@ def _run_graph_loop(
             return result
         try:
             round_executed, round_pending = _run_round(
-                spec, state, triggered, max_concurrency=max_concurrency
+                spec,
+                state,
+                triggered,
+                max_concurrency=max_concurrency,
+                route_config=route_config,
             )
         except GraphInterrupt as exc:
             result = _suspend(spec, state, table, exc, steps=steps)
@@ -1964,6 +2122,10 @@ def run_graph(
     # ⚠️ **关键字形态**的失败顺序**逐字不变**（既有顺序 · B12F1 FR-017 / V-18）。
     _validate_max_concurrency(max_concurrency)
     scheduler_state = state if state is not None else SchedulerState()
+    # ⚠️ **B8F1**（FR-003）：双参路由函数的第二参 = 用户交给 ``invoke`` 的
+    # **原始** ``config`` ⇒ ⇒ ⇒ **MUST NOT** 用 ``resolve_config`` 的结果
+    # （那会把 mapping **归一**成 ``RunConfig``）⇒ ⇒ ⇒ **逐字**保留原对象。
+    route_config = config
     run_config = resolve_config(config)
     # ⚠️ **旋钮的读取点**（**自 B7F3 起 · 关键字优先 · config 兜底** · 裁定 13 /
     # FR-023）⇒ ⇒ **``None`` ≡ 未指定** ⇒ ⇒ 「显式 ``None`` 覆盖 config」的
@@ -1988,6 +2150,7 @@ def run_graph(
                 checkpointer=checkpointer,
                 max_steps=effective_limit,
                 max_concurrency=effective_concurrency,
+                route_config=route_config,
             )
         return _first_graph(
             spec,
@@ -1998,6 +2161,7 @@ def run_graph(
             checkpointer=checkpointer,
             max_steps=effective_limit,
             max_concurrency=effective_concurrency,
+            route_config=route_config,
         )
 
 
@@ -2011,6 +2175,7 @@ def _first_graph(
     checkpointer: Any | None,
     max_steps: int,
     max_concurrency: int | None,
+    route_config: Any = None,
 ) -> SuperStepResult | InterruptResult:
     """**首次运行路径**（输入**不是** ``Command`` · spec FR-013 末两行）。"""
     history = None
@@ -2030,6 +2195,7 @@ def _first_graph(
             first_round=None,
             max_steps=max_steps,
             max_concurrency=max_concurrency,
+            route_config=route_config,
         )
 
     # ⚠️ **会话连续**（**续跑** · **上游同款** · 实测 E-26）
@@ -2058,6 +2224,7 @@ def _first_graph(
             first_round=_resume_target_nodes(snapshot, interrupts),
             max_steps=max_steps,
             max_concurrency=max_concurrency,
+            route_config=route_config,
             static_ack=static_ack,
             static_resume=is_static,
         )
@@ -2075,6 +2242,7 @@ def _first_graph(
         first_round=None,
         max_steps=max_steps,
         max_concurrency=max_concurrency,
+        route_config=route_config,
         static_ack=static_ack,
         static_resume=is_static,
     )
@@ -2090,6 +2258,7 @@ def _resume_graph(
     checkpointer: Any | None,
     max_steps: int,
     max_concurrency: int | None,
+    route_config: Any = None,
 ) -> SuperStepResult | InterruptResult:
     """**恢复路径**（输入**是** ``Command`` · spec FR-013 / 裁定 4）。"""
     resume_value = input.resume
@@ -2129,6 +2298,7 @@ def _resume_graph(
             first_round=targets,
             max_steps=max_steps,
             max_concurrency=max_concurrency,
+            route_config=route_config,
             static_ack=static_ack,
             static_resume=True,
         )
@@ -2198,4 +2368,5 @@ def _resume_graph(
         first_round=targets,
         max_steps=max_steps,
         max_concurrency=max_concurrency,
+        route_config=route_config,
     )

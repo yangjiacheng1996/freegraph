@@ -15,7 +15,8 @@
 **B7F2 交付 ``compile()``**：
 
 * 把 :class:`_BuilderSpec` **适配**为 L2 的 :class:`GraphSpec`（单源 ``END`` 过滤 ·
-  新 channels 映射 · ``conditional_edges`` 恒空）；
+  新 channels 映射 · **B8F1 起** ``conditional_edges`` **填入** L3 产出的
+  plain mapping（**恰 5 键** · 零归一化））；
 * 条件边 plain mapping 与注入项挂到 :class:`CompiledGraph` 上；
 * 未就绪的 6 个能力面方法抛内置 ``NotImplementedError``（点名归属 feature）。
 
@@ -176,6 +177,7 @@ def _graph_spec_from(
     builder_spec: _BuilderSpec,
     interrupt_before: Any,
     interrupt_after: Any,
+    conditional_edges: dict[str, tuple[dict[str, Any], ...]] | None = None,
 ) -> GraphSpec:
     """把 :class:`_BuilderSpec` 适配为 L2 的 :class:`GraphSpec`（B7F2 · DD-04/05）。
 
@@ -183,7 +185,11 @@ def _graph_spec_from(
     * ``nodes`` 原样搬运（``NodeSpec`` 同构）；
     * ``edges`` **仅**对 ``str``（单源）键过滤 ``END`` 目标；过滤后目标元组为空
       的源键**整体移除**；``tuple``（多源）键**原样透传**（交 V-16 显式失败）；
-    * ``conditional_edges`` **不传**（恒空 ⇒ 不触发 V-8）。
+    * ``conditional_edges`` —— **B8F1**（裁定 14 · 承接条款 **H-3**）⇒ **填入**
+      ``_conditional_mapping()`` 的结果（plain mapping · 外层 key = 源节点名 ·
+      内层 = **tuple** of **恰 5 键** dict）⇒ ⇒ ⇒ **零新增编译产物私有字段**
+      ⇒ ⇒ ⇒ **V-8 已放宽**（该字段**非空**不再��构造期失败）⇒ ⇒ ⇒
+      **零重新归一化**（L2 MUST NOT 重新归一化 ``path_map``）。
     """
     edges: dict[str | tuple[str, ...], tuple[str, ...]] = {}
     for key, targets in builder_spec.edges.items():
@@ -197,6 +203,7 @@ def _graph_spec_from(
         channels=dict(builder_spec.channels),
         nodes=dict(builder_spec.nodes),
         edges=edges,
+        conditional_edges=dict(conditional_edges or {}),
         interrupt_before=interrupt_before,
         interrupt_after=interrupt_after,
     )
@@ -689,8 +696,12 @@ class StateGraph:
         after = _static_points(interrupt_after, "interrupt_after")
 
         builder_spec = self._build_spec()
-        spec = _graph_spec_from(builder_spec, before, after)
+        # ⚠️ **B8F1**（裁定 14 · 承接条款 **H-3**）⇒ 条件边的 plain mapping
+        # **由 L3 产出**（`_conditional_mapping()` · **恰 5 键** · 零归一化）
+        # ⇒ ⇒ ⇒ **一次求值**（**MUST NOT** 在 `_graph_spec_from()` **内部**再调
+        # 一次 ⇒ 同一载荷**两处派生** ⇒ 漂移风险）。
         conditional_edges = _conditional_mapping(builder_spec)
+        spec = _graph_spec_from(builder_spec, before, after, conditional_edges)
 
         if store is not None:
             warnings.warn(

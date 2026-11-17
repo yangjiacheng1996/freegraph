@@ -152,6 +152,15 @@
   普通映射 = 运行期参数 ⇒ **原样**交给 L2 ⇒ MUST NOT 在门面层翻译成 `RunConfig`）。
   ⇒ 落点：`specs/b7f3-invoke-full-state/spec.md` 的**下游承接 D-5** · 契约 **CF-05**。
 
+## 下游承接（B8F1 · 2026-11-18 · **只接线 · 逐条最小改动**）
+
+- **D-1（B8F1 → B8F2 · M2 · `stream()` 的路由口径）**：`stream()` 的每一档的**路由判定** MUST 与
+  **B8F1** 交付的**路由求值实现点** **逐字同款**（**同一份**实现 ⇒ **MUST NOT** 另写一份）
+  ⇒ ⇒ 路由判定 MUST 在 `stream()` 的**同一次**执行里可观察 ⇒ ⇒ 「稀疏视图 + 补齐」（B7F3 的
+  D-1）口径**继续**适用 ⇒ ⇒ **MUST NOT** 让 `stream()` 自己求值路由。
+  ⇒ 落点：`specs/b8f1-conditional-edges-fresh-read/spec.md` 的**下游承接 D-1** ·
+  契约 `conditional-edge-contract.md` §2。
+
 ## 依据
 
 - 立项书 §5.2（B8F2 行）、§5.3（C12）、§5.8.1（可视化 12 项接口之「运行 · 流式事件」）、

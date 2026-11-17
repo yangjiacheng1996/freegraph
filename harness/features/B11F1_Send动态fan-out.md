@@ -135,6 +135,16 @@
 
 ---
 
+## 下游承接（B8F1 · 2026-11-18 · **只接线 · 逐条最小改动**）
+
+- **D-3（B8F1 → B11F1 · M1 · `Send` fan-out 的调度归属）**：**B8F1** 只把路由函数返回的
+  `Send` / `list[Send]` **喂进** B11F1 的既有 fan-out 任务构造器（`make_fanout` /
+  `validate_send`）⇒ ⇒ ⇒ **B11F1** MUST **NOT** 另写「路由来源」的 fan-out 路径 ⇒ ⇒ ⇒
+  两条来源（**节点返回 `Send`** / **路由返回 `Send`**）MUST 产出**同款**任务（同一落点 ·
+  同一入参形态）⇒ ⇒ ⇒ **MUST NOT** 改 B11F1 的冻结面（**V-19 / V-21**）。
+  ⇒ 落点：`specs/b8f1-conditional-edges-fresh-read/spec.md` 的**下游承接 D-3** ·
+  契约 `conditional-edge-contract.md` §4.1。
+
 ## 依据
 
 - 立项书 §5.2（B11F1 行）、§5.3（C18）、§5.4（DF1 / 协议纪律）、§9.1（门禁）。

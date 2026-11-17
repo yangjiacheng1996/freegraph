@@ -156,8 +156,12 @@ def test_the_contract_gate_is_satisfied() -> None:
        B7F3 · M2** ⇒ 见偏离登记 **V-4**）；
     ③ **C4** 的独立回归测试**恒绿**（``tests/contracts/test_contract_regressions.py``
        的挂载点 ``status=landed``）；
-    ④ **C8** 的挂载点**保持** ``status=not-landed · owner=B8F1 · milestone=M2``
-       （**MUST NOT** 改写成 ``landed``）。
+    ④ **C8** 的挂载点**保持** ``owner=B8F1 · milestone=M2`` ⇒ ⇒ ⇒ 且
+       ``status`` **自 B8F1 落地起**为 ``landed``（**2026-11-18 · B8F1
+       回溯修订** · 破冻结面 **T-5** · 宪法 v1.8.0「破冻结面的三条」① 的
+       「**拆分而不删**」⇒ ⇒ ⇒ **原断言**（「``status=not-landed``」）**逐字
+       替换**为「``status=landed``」⇒ ⇒ ⇒ **判据只可更严**（未落地 ⇒ 已落地
+       ⇒ **不得**退回）⇒ ⇒ ⇒ **承接方与里程碑两条断言逐字保留**。
 
     ⚠️ **本任务只核对「照常执行」的那几部分** ⇒ ⇒ 「``target.py`` **真跑**」
     按偏离登记 **V-4** 延期到 **B7F3**。
@@ -180,7 +184,11 @@ def test_the_contract_gate_is_satisfied() -> None:
     # ⚠️ **机器可读标记**（门禁 G29 ③ 逐条解析）：
     #   ``# GATE-MOUNT: <编号> · status=<not-landed|landed> · owner=<承接方> · …``
     assert "GATE-MOUNT: C4 · status=landed" in regressions
-    assert "GATE-MOUNT: C8 · status=not-landed" in regressions
+    # ⚠️ **2026-11-18 · B8F1**：C8 的挂载点已由 ``not-landed`` 翻为 ``landed``
+    # （破冻结面 **T-5**）⇒ ⇒ ⇒ **判据只可更严** ⇒ ⇒ ⇒ 「**不得**退回
+    # ``not-landed``」⇒ ⇒ ⇒ 承接方 / 里程碑两条断言**逐字保留**。
+    assert "GATE-MOUNT: C8 · status=landed" in regressions
+    assert "GATE-MOUNT: C8 · status=not-landed" not in regressions
     assert "owner=B8F1" in regressions
     assert "milestone=M2" in regressions
 

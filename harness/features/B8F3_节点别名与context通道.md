@@ -160,3 +160,13 @@
 ## 下游承接（B7F2 · 2026-11-16 · 只接线 · 逐条最小改动）
 
 - **D-3（B7F2 → B8F3 · M2 · 别名交接载体）**：B7F2 已在 `CompiledGraph` 的私有字段 `_builder_spec` 保留**完整 `_BuilderSpec`**（含 `node_records`）；B8F3 MUST 从该保留读取 `_NodeRecord.alias` 实现别名寻址语义；MUST NOT 要求用户重新声明别名；MUST NOT 要求 B7F2 改写快照内容（快照是**只读**交接面）。
+
+## 下游承接（B8F1 · 2026-11-18 · **只接线 · 逐条最小改动**）
+
+- **D-2（B8F1 → B8F3 · M2 · 节点别名与 `context` 通道）**：B8F1 的**路由函数入参 = fresh
+  视图**（「当前值 + 本节点本次写入」）⇒ ⇒ `context` 通道（**C21**）MUST **NOT** 进入该视图
+  （它是**运行期载体**，不是状态通道）⇒ ⇒ ⇒ 节点别名 MUST **NOT** 影响 `path_map` 的**查表**
+  （查表用**节点名**，**不**解析别名）⇒ ⇒ ⇒ **MUST NOT** 用别名改写 `path_map` 的键。
+  ⇒ 落点：`specs/b8f1-conditional-edges-fresh-read/spec.md` 的**下游承接 D-2** ·
+  契约 `conditional-edge-contract.md` §3。
+

@@ -260,9 +260,21 @@ class TestChannelTemplates:
         for key, channel in compiled._spec.channels.items():
             assert channel.checkpoint() == fresh._spec.channels[key].checkpoint()
 
-    def test_graphspec_conditional_edges_is_always_empty(self) -> None:
+    def test_graphspec_conditional_edges_carries_the_l3_payload(self) -> None:
+        """**2026-11-18 · B8F1 回溯修订**（破冻结面 · 冻结断言 ④ · **替换为反面断言**）。
+
+        ⚠️ **原断言**「``GraphSpec.conditional_edges`` **恒空**」⇒ ⇒ ⇒ **自 B8F1
+        起**该字段**承载** L3 产出的 plain mapping（**V-8 已放宽** · 裁定 14）
+        ⇒ ⇒ ⇒ **替换为反面断言**：**非空**且与 ``compiled._conditional_edges``
+        **逐字相等** ⇒ ⇒ ⇒ **判据只可更严**（恒空 ⇒ 非空且一致）⇒ ⇒ ⇒
+        **「产物持有条件边」的语义留存**（**拆分而不删**）。
+
+        ⚠️ **零新增私有字段** ⇒ ⇒ ⇒ ``vars(compiled)`` 的键数仍 == **11**
+        （**T-3 不破** ⇒ ``:111-114`` 的既有断言**逐字不动**）。
+        """
         compiled = build_minimal_graph(conditional=True).compile()
-        assert compiled._spec.conditional_edges == {}
+        assert compiled._spec.conditional_edges != {}
+        assert compiled._spec.conditional_edges == compiled._conditional_edges
 
 
 # ── T033 · 冻结载体（SC-010）──────────────────────────────────────────────

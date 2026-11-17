@@ -312,3 +312,63 @@ def test_the_fresh_view_drops_the_routing_channel_like_upstream() -> None:
     # 原始通道**不受影响**（读侧零污染）
     assert channels["route"].get() == "prev"
     assert channels["a"].get() == 2
+
+
+# ── T025 / T026 · **路由场景**下的 fresh 读（B8F1）────────────────────────
+
+
+def test_the_router_sees_the_reducing_channel_merged_with_its_old_value() -> None:
+    """**T025**：路由函数看到的**归约型**通道 = 「旧值 + 本次写入」的归约结果。
+
+    ⚠️ **C8**（契约 §3.2 · FR-009）⇒ ⇒ ⇒ 归约器**已在 fresh 读里生效**
+    ⇒ ⇒ ⇒ 断言必须是**否定式**（断言新值 ⇒ 而不只是「跑通了」）。
+    """
+    from freegraph.graph import START, StateGraph
+
+    observed: list[dict] = []
+
+    class RouteState(TypedDict):
+        messages: Annotated[list, operator.add]
+
+    def _router(state: dict) -> str:
+        observed.append(dict(state))
+        return "after"
+
+    builder = StateGraph(RouteState)
+    builder.add_node("writer", lambda state: {"messages": ["fresh"]})
+    builder.add_node("after", lambda state: {})
+    builder.add_edge(START, "writer")
+    builder.add_conditional_edges("writer", _router, ["after"])
+
+    builder.compile().invoke({"messages": ["seed"]})
+
+    assert observed == [{"messages": ["seed", "fresh"]}]
+
+
+def test_the_router_view_omits_the_channels_without_a_value() -> None:
+    """**T026**：**无值**的**覆盖型**通道 MUST **不在**路由函数的入参里（稀疏口径）。
+
+    ⚠️ 与**节点入参**同款口径（C4）⇒ ⇒ ⇒ 「无值 key 不出现」。
+    """
+    from freegraph.graph import START, StateGraph
+
+    observed: list[dict] = []
+
+    class RouteState(TypedDict):
+        messages: Annotated[list, operator.add]
+        llm_calls: int
+
+    def _router(state: dict) -> str:
+        observed.append(dict(state))
+        return "after"
+
+    builder = StateGraph(RouteState)
+    builder.add_node("writer", lambda state: {"messages": ["fresh"]})
+    builder.add_node("after", lambda state: {})
+    builder.add_edge(START, "writer")
+    builder.add_conditional_edges("writer", _router, ["after"])
+
+    builder.compile().invoke({"messages": []})
+
+    assert observed == [{"messages": ["fresh"]}]
+    assert "llm_calls" not in observed[0]

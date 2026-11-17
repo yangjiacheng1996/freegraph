@@ -42,7 +42,7 @@
 | 15 | **B6F1** | [B6F1_StateGraph构建器.md](B6F1_StateGraph构建器.md) | L3 | M2 | B4F1 | 1,320 | 构建器 API 与 LangGraph 同名同签名 | ★ |
 | 16 | **B7F2** | [B7F2_compile编译.md](B7F2_compile编译.md) | L3 | M2 | B6F1 | 1,200 | 图可编译；`compile()` 无参可调用 | ★ |
 | 17 | **B7F3** | [B7F3_invoke返回完整状态.md](B7F3_invoke返回完整状态.md) | L2 | M2 | B7F1,B12F1 | 980 | `invoke` 返回 `{'messages': [...], 'llm_calls': N}` 完整状态 | ★ |
-| 18 | **B8F1** | [B8F1_条件边路由与fresh读.md](B8F1_条件边路由与fresh读.md) | L2 | M2 | B5F2,B7F1 | 1,100 | C8 独立回归测试通过：路由函数看到本节点刚写入的值；差分夹具比对路由判定；**复用 B5F2 差分夹具**（条件边字段已预留）；**B7F1 侧已预留 `GraphSpec.conditional_edges`**（本轮恒空 · 填值即失败 ⇒ B8F1 **只需填值**即可复用，不新造第三套） | ★ |
+| 18 | **B8F1** | [B8F1_条件边路由与fresh读.md](B8F1_条件边路由与fresh读.md) | L2 | M2 | B5F2,B7F1 | 1,100 | C8 独立回归测试通过：路由函数看到本节点刚写入的值；差分夹具比对路由判定；**复用 B5F2 差分夹具**（条件边字段已预留）；**B7F1 侧已预留 `GraphSpec.conditional_edges`**（本轮恒空 · 填值即失败 ⇒ B8F1 **只需填值**即可复用，不新造第三套） | ★ | ⚠️ **口径注记（2026-11-18 · B8F1 已交付 · 发起者追认）**：上文的「**本轮恒空 · 填值即失败**」自 **B8F1** 起**放宽**（**V-8 已放宽** · 裁定 14 ⇒ **允许非空** · 由**路由求值**消费）⇒ ⇒ 「**只需填值**即可复用」**已成事实**（L3 的 `_conditional_mapping()` 的结果**已填入** `GraphSpec.conditional_edges` ⇒ 承载**恰 5 键**载荷）⇒ ⇒ **原描述不改写**（**只补注记**）· 落地见 `specs/b8f1-conditional-edges-fresh-read/` |
 | 19 | **B8F2** | [B8F2_stream多模式流式.md](B8F2_stream多模式流式.md) | L2 | M2 | B7F3 | 1,180 | 多模式流式输出 | |
 | 20 | **B22F1** | [B22F1_get_graph与draw_mermaid.md](B22F1_get_graph与draw_mermaid.md) | L3 | M2 | B7F2 | 1,140 | `draw_mermaid()` 离线必然成功、零出站 | ★ |
 | 21 | **B23F1** | [B23F1_draw_mermaid_png离线不阻断.md](B23F1_draw_mermaid_png离线不阻断.md) | L3 | M2 | B22F1 | 1,080 | PNG 路径离线不抛阻断性异常 | ★ |
