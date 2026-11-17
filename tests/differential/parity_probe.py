@@ -45,7 +45,7 @@ import threading
 import time
 import warnings
 from dataclasses import dataclass, field
-from typing import Any, Callable, Literal, TypedDict
+from typing import Annotated, Any, Callable, Literal, TypedDict
 
 ROOT = str(pathlib.Path(__file__).resolve().parents[2])
 
@@ -3603,6 +3603,24 @@ class CompileScenario:
 
 
 @dataclass
+class InvokeScenario:
+    """一个**执行期**同场景对跑用例（``invoke()`` 的**行为**）。
+
+    ⚠️ **四字段**（与 ``CompileScenario`` **同款**）：``name`` / ``verdict`` /
+    ``note`` / ``fg`` / ``up`` ⇒ ⇒ ``fg`` 与 ``up`` **各返回一个**载荷字典
+    （``kind`` / ``exc_type`` / ``exc_msg`` / ``same`` / ``stricter`` / ``diff_ok``）
+    ⇒ ⇒ **判词**决定比较哪一项（``SAME`` ⇒ ``same`` 逐字相等 · ``STRICTER`` ⇒
+    ``stricter`` 为真 · ``DIFF`` ⇒ ``diff_ok`` 为真）。
+    """
+
+    name: str
+    verdict: str
+    note: str
+    fg: Callable[[], Any]
+    up: Callable[[], Any]
+
+
+@dataclass
 class _CompileRun:
     kind: str
     exc_type: str = ""
@@ -3928,6 +3946,518 @@ def _run_compile_scenarios(keyword: str = "") -> list["ProbeResult"]:
     return results
 
 
+# ── B7F3 · 执行期差分场景（D-92…D-102）─────────────────────────────────────
+
+
+class _InvState(TypedDict):
+    """**执行期**差分用的最小状态 schema（两侧**同款**）。"""
+
+    messages: Annotated[list, operator.add]
+    llm_calls: int
+
+
+def _inv_append_a(state: dict[str, Any]) -> dict[str, Any]:
+    return {"messages": ["a"]}
+
+
+def _inv_append_b(state: dict[str, Any]) -> dict[str, Any]:
+    return {"messages": ["b"]}
+
+
+def _inv_bump(state: dict[str, Any]) -> dict[str, Any]:
+    return {"llm_calls": int(state.get("llm_calls") or 0) + 1}
+
+
+def _inv_boom(state: dict[str, Any]) -> dict[str, Any]:
+    raise Boom("原始消息 payload")
+
+
+class Boom(RuntimeError):
+    """**真异常**（两侧**同款** ⇒ 比类型 + 比消息）。"""
+
+
+def _fg_invoke_builder() -> Any:
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import END, START, StateGraph
+
+    builder = StateGraph(_InvState)
+    builder.add_node("a", _inv_append_a)
+    builder.add_node("b", _inv_append_b)
+    builder.add_edge(START, "a")
+    builder.add_edge("a", "b")
+    builder.add_edge("b", END)
+    return builder
+
+
+def _up_invoke_builder() -> Any:
+    from langgraph.graph import END, START, StateGraph
+
+    builder = StateGraph(_InvState)
+    builder.add_node("a", _inv_append_a)
+    builder.add_node("b", _inv_append_b)
+    builder.add_edge(START, "a")
+    builder.add_edge("a", "b")
+    builder.add_edge("b", END)
+    return builder
+
+
+def _fg_invoke_barrier_builder() -> Any:
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import END, START, StateGraph
+
+    builder = StateGraph(_InvState)
+    builder.add_node("a", _inv_append_a)
+    builder.add_node("b", _inv_append_b)
+    builder.add_node("c", _inv_append_b)
+    builder.add_edge(START, "a")
+    builder.add_edge(START, "b")
+    builder.add_edge(["a", "b"], "c")
+    builder.add_edge("c", END)
+    return builder
+
+
+def _up_invoke_barrier_builder() -> Any:
+    from langgraph.graph import END, START, StateGraph
+
+    builder = StateGraph(_InvState)
+    builder.add_node("a", _inv_append_a)
+    builder.add_node("b", _inv_append_b)
+    builder.add_node("c", _inv_append_b)
+    builder.add_edge(START, "a")
+    builder.add_edge(START, "b")
+    builder.add_edge(["a", "b"], "c")
+    builder.add_edge("c", END)
+    return builder
+
+
+def _fg_invoke_loop_builder() -> Any:
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import END, START, StateGraph
+
+    builder = StateGraph(_InvState)
+    builder.add_node("loop", _inv_bump)
+    builder.add_edge(START, "loop")
+    builder.add_edge("loop", "loop")
+    builder.add_edge("loop", END)
+    return builder
+
+
+def _up_invoke_loop_builder() -> Any:
+    from langgraph.graph import END, START, StateGraph
+
+    builder = StateGraph(_InvState)
+    builder.add_node("loop", _inv_bump)
+    builder.add_edge(START, "loop")
+    builder.add_edge("loop", "loop")
+    builder.add_edge("loop", END)
+    return builder
+
+
+def _ok(same: Any) -> dict[str, Any]:
+    return {
+        "kind": "OK",
+        "exc_type": "",
+        "exc_msg": "",
+        "same": same,
+        "stricter": False,
+        "diff_ok": False,
+    }
+
+
+def _err(exc: BaseException, same: Any = None) -> dict[str, Any]:
+    return {
+        "kind": "ERROR",
+        "exc_type": type(exc).__name__,
+        "exc_msg": str(exc),
+        "same": same,
+        "stricter": False,
+        "diff_ok": False,
+    }
+
+
+# ── D-92 · 最小图 + invoke({"messages": ["seed"]}) ─────────────────────────
+
+
+def _fg_d92() -> dict[str, Any]:
+    out = _fg_invoke_builder().compile().invoke({"messages": ["seed"]})
+    return _ok({"messages": list(out.get("messages", []))})
+
+
+def _up_d92() -> dict[str, Any]:
+    out = _up_invoke_builder().compile().invoke({"messages": ["seed"]})
+    return _ok({"messages": list(out.get("messages", []))})
+
+
+# ── D-93 · 初始输入含**全部** schema key ⇒ 键集逐字相等 ────────────────────
+
+
+def _fg_d93() -> dict[str, Any]:
+    out = _fg_invoke_builder().compile().invoke({"messages": ["seed"], "llm_calls": 0})
+    return _ok({"keys": list(out)})
+
+
+def _up_d93() -> dict[str, Any]:
+    out = _up_invoke_builder().compile().invoke({"messages": ["seed"], "llm_calls": 0})
+    return _ok({"keys": list(out)})
+
+
+# ── D-94 · 初始输入**缺**一个**覆盖型** key ⇒ 上游省略 · freegraph 保留 ──────
+
+
+def _fg_d94() -> dict[str, Any]:
+    out = _fg_invoke_builder().compile().invoke({"messages": ["seed"]})
+    keys = list(out)
+    return _ok({"keys": keys, "stricter": "llm_calls" in keys})
+
+
+def _up_d94() -> dict[str, Any]:
+    out = _up_invoke_builder().compile().invoke({"messages": ["seed"]})
+    keys = list(out)
+    return _ok({"keys": keys, "stricter": "llm_calls" in keys})
+
+
+# ── D-95 · 节点返回**未知 key** ⇒ 上游静默忽略 · freegraph 显式失败 ──────────
+
+
+def _fg_d95() -> dict[str, Any]:
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import END, START, StateGraph
+
+    builder = StateGraph(_InvState)
+    builder.add_node("a", lambda state: {"messages": ["a"], "typo_key": 1})
+    builder.add_edge(START, "a")
+    builder.add_edge("a", END)
+    try:
+        builder.compile().invoke({"messages": []})
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc, {"exc_type": type(exc).__name__})
+    return _ok({"exc_type": ""})
+
+
+def _up_d95() -> dict[str, Any]:
+    from langgraph.graph import END, START, StateGraph
+
+    builder = StateGraph(_InvState)
+    builder.add_node("a", lambda state: {"messages": ["a"], "typo_key": 1})
+    builder.add_edge(START, "a")
+    builder.add_edge("a", END)
+    try:
+        builder.compile().invoke({"messages": []})
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc, {"exc_type": type(exc).__name__})
+    return _ok({"exc_type": ""})
+
+
+# ── D-96 · 初始输入含**未知 key** ⇒ 上游静默忽略 · freegraph 显式失败 ────────
+
+
+def _fg_d96() -> dict[str, Any]:
+    try:
+        _fg_invoke_builder().compile().invoke({"messages": [], "bogus": 1})
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc, {"exc_type": type(exc).__name__})
+    return _ok({"exc_type": ""})
+
+
+def _up_d96() -> dict[str, Any]:
+    try:
+        _up_invoke_builder().compile().invoke({"messages": [], "bogus": 1})
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc, {"exc_type": type(exc).__name__})
+    return _ok({"exc_type": ""})
+
+
+# ── D-97 · 节点抛**真异常** ⇒ 两侧类型 + 消息逐字一致 ────────────────────────
+
+
+def _fg_d97() -> dict[str, Any]:
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import END, START, StateGraph
+
+    builder = StateGraph(_InvState)
+    builder.add_node("a", _inv_boom)
+    builder.add_edge(START, "a")
+    builder.add_edge("a", END)
+    try:
+        builder.compile().invoke({"messages": []})
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc, {"exc_type": type(exc).__name__, "exc_msg": str(exc)})
+    return _ok({"exc_type": "", "exc_msg": ""})
+
+
+def _up_d97() -> dict[str, Any]:
+    from langgraph.graph import END, START, StateGraph
+
+    builder = StateGraph(_InvState)
+    builder.add_node("a", _inv_boom)
+    builder.add_edge(START, "a")
+    builder.add_edge("a", END)
+    try:
+        builder.compile().invoke({"messages": []})
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc, {"exc_type": type(exc).__name__, "exc_msg": str(exc)})
+    return _ok({"exc_type": "", "exc_msg": ""})
+
+
+# ── D-98 · config = {"recursion_limit": 3} + 自环 ⇒ 两侧都超限 ─────────────
+
+
+def _fg_d98() -> dict[str, Any]:
+    try:
+        _fg_invoke_loop_builder().compile().invoke({"messages": []}, {"recursion_limit": 3})
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc, {"exc_type": type(exc).__name__})
+    return _ok({"exc_type": ""})
+
+
+def _up_d98() -> dict[str, Any]:
+    try:
+        _up_invoke_loop_builder().compile().invoke({"messages": []}, {"recursion_limit": 3})
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc, {"exc_type": type(exc).__name__})
+    return _ok({"exc_type": ""})
+
+
+# ── D-99 · 同一张编译图**连续两次** invoke ⇒ 都不累积 ────────────────────────
+
+
+def _fg_d99() -> dict[str, Any]:
+    compiled = _fg_invoke_builder().compile()
+    compiled.invoke({"messages": ["first"]})
+    second = compiled.invoke({"messages": ["second"]})
+    return _ok({"messages": list(second.get("messages", []))})
+
+
+def _up_d99() -> dict[str, Any]:
+    compiled = _up_invoke_builder().compile()
+    compiled.invoke({"messages": ["first"]})
+    second = compiled.invoke({"messages": ["second"]})
+    return _ok({"messages": list(second.get("messages", []))})
+
+
+# ── D-100 · 同一张编译图**并发两次** invoke ⇒ 都不串扰 ──────────────────────
+
+
+def _fg_d100() -> dict[str, Any]:
+    compiled = _fg_invoke_builder().compile()
+    results: list[Any] = []
+
+    def _run(tag: str) -> None:
+        results.append(list(compiled.invoke({"messages": [tag]}).get("messages", [])))
+
+    threads = [threading.Thread(target=_run, args=(tag,)) for tag in ("x", "y")]
+    for th in threads:
+        th.start()
+    for th in threads:
+        th.join()
+    return _ok({"results": sorted(results)})
+
+
+def _up_d100() -> dict[str, Any]:
+    compiled = _up_invoke_builder().compile()
+    results: list[Any] = []
+
+    def _run(tag: str) -> None:
+        results.append(list(compiled.invoke({"messages": [tag]}).get("messages", [])))
+
+    threads = [threading.Thread(target=_run, args=(tag,)) for tag in ("x", "y")]
+    for th in threads:
+        th.start()
+    for th in threads:
+        th.join()
+    return _ok({"results": sorted(results)})
+
+
+# ── D-101 · 中断后 invoke 的结果 ⇒ 两侧都有 __interrupt__（值形态不同）──────
+
+
+def _inv_interrupting_builder(freegraph_side: bool) -> Any:
+    if freegraph_side:
+        sys.path.insert(0, f"{ROOT}/src")
+        from freegraph.graph import END, START, StateGraph
+    else:
+        from langgraph.graph import END, START, StateGraph
+
+    def _asker(state: dict[str, Any]) -> dict[str, Any]:
+        if freegraph_side:
+            from freegraph.graph import interrupt
+        else:
+            from langgraph.types import interrupt
+        answer = interrupt("approve?")
+        return {"messages": [f"answer={answer}"]}
+
+    builder = StateGraph(_InvState)
+    builder.add_node("ask", _asker)
+    builder.add_edge(START, "ask")
+    builder.add_edge("ask", END)
+    return builder
+
+
+def _fg_d101() -> dict[str, Any]:
+    out = _inv_interrupting_builder(True).compile().invoke({"messages": []})
+    payload = out.get("__interrupt__")
+    return _ok(
+        {
+            "has": "__interrupt__" in out,
+            "shape": type(payload).__name__,
+            "value": repr(payload),
+        }
+    )
+
+
+def _up_d101() -> dict[str, Any]:
+    out = _inv_interrupting_builder(False).compile().invoke({"messages": []})
+    payload = out.get("__interrupt__")
+    return _ok(
+        {
+            "has": "__interrupt__" in out,
+            "shape": type(payload).__name__,
+            "value": repr(payload),
+        }
+    )
+
+
+# ── D-102 · 多源汇合（屏障）⇒ 两侧最终状态逐字相等 ──────────────────────────
+
+
+def _fg_d102() -> dict[str, Any]:
+    out = _fg_invoke_barrier_builder().compile().invoke({"messages": ["seed"]})
+    return _ok({"messages": list(out.get("messages", []))})
+
+
+def _up_d102() -> dict[str, Any]:
+    out = _up_invoke_barrier_builder().compile().invoke({"messages": ["seed"]})
+    return _ok({"messages": list(out.get("messages", []))})
+
+
+#: **D-92…D-102**（**11 条**）—— 判词分布 = SAME 7 / STRICTER 3 / DIFF 1。
+_INVOKE_SCENARIOS: list[InvokeScenario] = [
+    InvokeScenario("invoke D-92 minimal graph", "SAME", "", _fg_d92, _up_d92),
+    InvokeScenario("invoke D-93 full key set", "SAME", "", _fg_d93, _up_d93),
+    InvokeScenario(
+        "invoke D-94 uncovered key kept",
+        "STRICTER",
+        "freegraph 返回**全部** schema key（无值者填 None）⇒ 上游**省略**无值 channel"
+        "（偏离登记 X-1 · 键集更确定）",
+        _fg_d94,
+        _up_d94,
+    ),
+    InvokeScenario(
+        "invoke D-95 unknown node key",
+        "STRICTER",
+        "freegraph 抛 InvalidUpdateError ⇒ 上游**静默忽略**（偏离登记 X-2）",
+        _fg_d95,
+        _up_d95,
+    ),
+    InvokeScenario(
+        "invoke D-96 unknown input key",
+        "STRICTER",
+        "freegraph 抛 InvalidUpdateError ⇒ 上游**静默忽略**（偏离登记 X-3）",
+        _fg_d96,
+        _up_d96,
+    ),
+    InvokeScenario("invoke D-97 real exception", "SAME", "", _fg_d97, _up_d97),
+    InvokeScenario("invoke D-98 recursion limit", "SAME", "", _fg_d98, _up_d98),
+    InvokeScenario("invoke D-99 two consecutive calls", "SAME", "", _fg_d99, _up_d99),
+    InvokeScenario("invoke D-100 two concurrent calls", "SAME", "", _fg_d100, _up_d100),
+    InvokeScenario(
+        "invoke D-101 interrupt payload",
+        "DIFF",
+        "两侧都有 __interrupt__ 键 ⇒ freegraph 的值是 **tuple** · 上游是 **list**"
+        "（偏离登记 X-4 · 只透传）",
+        _fg_d101,
+        _up_d101,
+    ),
+    InvokeScenario("invoke D-102 multi-source barrier", "SAME", "", _fg_d102, _up_d102),
+]
+
+
+def _invoke_scenarios() -> list[InvokeScenario]:
+    """B7F3 执行期差分场景（上游缺席 ⇒ 返回空列表）。"""
+    try:
+        import langgraph  # noqa: F401
+    except Exception:
+        return []
+    return _INVOKE_SCENARIOS
+
+
+def _run_invoke(fn: Callable[[], Any]) -> dict[str, Any]:
+    """跑一个 ``fg`` / ``up`` 载荷构造器 ⇒ **归一**为载荷字典。"""
+    try:
+        value = fn()
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "kind": "ERROR",
+            "exc_type": type(exc).__name__,
+            "exc_msg": str(exc),
+            "same": None,
+            "stricter": False,
+            "diff_ok": False,
+        }
+    if isinstance(value, dict) and "kind" in value:
+        return value
+    return {
+        "kind": "OK",
+        "exc_type": "",
+        "exc_msg": "",
+        "same": value,
+        "stricter": False,
+        "diff_ok": False,
+    }
+
+
+def _run_invoke_scenarios(keyword: str = "") -> list["ProbeResult"]:
+    """跑全部**执行期**差分场景 ⇒ 返回逐场景结果（**不打印**）。"""
+    results: list[ProbeResult] = []
+    for scenario in _invoke_scenarios():
+        if keyword and keyword not in scenario.name:
+            continue
+        fg = _run_invoke(scenario.fg)
+        up = _run_invoke(scenario.up)
+        if scenario.verdict == "SAME":
+            ok = (
+                fg["kind"] == up["kind"]
+                and (fg["kind"] != "ERROR" or fg["exc_type"] == up["exc_type"])
+                and fg["same"] == up["same"]
+            )
+        elif scenario.verdict == "STRICTER":
+            if fg["kind"] == "ERROR" and up["kind"] == "OK":
+                # 更严的**失败信号**（上游成功 · freegraph 失败）
+                ok = scenario.note != ""
+            else:
+                # 更严的**成功路径**（freegraph 多给 / 多保留 ⇒ 判据更确定）
+                fgs = fg["same"] if isinstance(fg["same"], dict) else {}
+                ups = up["same"] if isinstance(up["same"], dict) else {}
+                ok = (
+                    scenario.note != ""
+                    and bool(fgs.get("stricter"))
+                    and not bool(ups.get("stricter"))
+                )
+        else:  # DIFF
+            fgs = fg["same"] if isinstance(fg["same"], dict) else {}
+            ups = up["same"] if isinstance(up["same"], dict) else {}
+            ok = (
+                scenario.note != ""
+                and bool(fgs.get("has"))
+                and bool(ups.get("has"))
+                and fgs.get("shape") != ups.get("shape")
+            )
+        results.append(
+            ProbeResult(
+                name=scenario.name,
+                verdict=scenario.verdict,
+                ok=ok,
+                freegraph_kind=fg["kind"],
+                upstream_kind=up["kind"],
+                detail=(
+                    f"freegraph={fg['kind']} {fg['same']!r} {fg['exc_type']} | "
+                    f"upstream={up['kind']} {up['same']!r} {up['exc_type']}"
+                ),
+            )
+        )
+    return results
+
+
 # ── 公开 API（供 pytest / CLI 复用）─────────────────────────────────────────
 
 
@@ -3954,6 +4484,7 @@ def run_all(keyword: str = "") -> list[ProbeResult]:
     「并发度上限」「确定性」这类**不对着上游比**的场景使用。
     """
     results: list[ProbeResult] = []
+    results.extend(_run_invoke_scenarios(keyword))
     for scenario in _scenarios():
         if keyword and keyword not in scenario.name:
             continue

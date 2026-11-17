@@ -193,11 +193,17 @@ class TestCompileIsWired:
             assert hasattr(compiled, name), name
 
     def test_compile_reports_invoke_b7f3(self, facade: object) -> None:
-        """``compile()`` 返回产物的 ``invoke()`` MUST 点名 **B7F3**。"""
+        """**B7F3 已交付** ⇒ ``invoke()`` 在合法路径上 MUST **不**抛 ``NotImplementedError``。
+
+        ⚠️ **替换为反面断言**（B7F3 · 破冻结面 · 追认项 ⑤）⇒ ⇒ **判据只可更严**：
+        原断言「抛 ``NotImplementedError`` 且点名 B7F3」⇒ ⇒ 反面「MUST **不**抛」
+        ⇒ ⇒ 语义**不删**（仍是「产物具备 ``invoke`` 能力面」这条纪律的判据）。
+        """
         compiled = _valid_graph(facade).compile()  # type: ignore[attr-defined]
-        with pytest.raises(NotImplementedError) as excinfo:
+        try:
             compiled.invoke({})
-        assert "B7F3" in str(excinfo.value)
+        except NotImplementedError as exc:  # pragma: no cover - 失败路径
+            pytest.fail(f"invoke 已由 B7F3 交付，不应抛 NotImplementedError：{exc}")
 
     def test_compile_does_not_mutate_the_builder(self, facade: object) -> None:
         """``compile()`` MUST NOT 改变构建器状态（可重复调用）。"""
@@ -222,7 +228,6 @@ class TestCompileIsWired:
         compiled = graph.compile()  # type: ignore[attr-defined]
         assert not hasattr(graph, "invoke")
         calls = (
-            ("invoke", ({},)),
             ("stream", ({},)),
             ("get_graph", ()),
             ("get_state", ({},)),
@@ -232,6 +237,12 @@ class TestCompileIsWired:
         for name, args in calls:
             with pytest.raises(NotImplementedError):
                 getattr(compiled, name)(*args)
+        # ⚠️ **拆分而不删**（B7F3 · 破冻结面 · 追认项 ⑤）：``invoke`` 已由 B7F3 交付
+        # ⇒ ⇒ 从参数化列表中**提出** ⇒ ⇒ 改为**独立断言** ⇒ ⇒ 其余 **5** 条目**逐字不动**。
+        try:
+            compiled.invoke({})
+        except NotImplementedError as exc:  # pragma: no cover - 失败路径
+            pytest.fail(f"invoke 已由 B7F3 交付，不应抛 NotImplementedError：{exc}")
 
 
 class TestRemainingBuilderMethodsNotWired:

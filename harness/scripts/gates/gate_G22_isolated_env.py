@@ -19,8 +19,11 @@
    ``sys.modules`` 中**从未**出现 ``langchain`` / ``langchain_core`` /
    ``langgraph``（运行环境里有 ≠ 被 freegraph 引入）；
    ③ 同时断言**零出站**（复用 G27 的归因函数 ⇒ 框架出站 == 0）；
-6. **③② 运行期（最小图）本 feature MUST NOT 实现** —— 待 B6F1 / B7F2 / B7F3
-   交付内核运行时后由 **M2** 承接（裁定 22 · 立项书 §6.2）。
+6. **③② 运行期（最小图）** —— **自 B7F3 起已交付**（裁定 22 · 立项书 §6.2 的
+   **M2** 承接）：在**验收环境**（``langchain-core`` 已在场）里**建图 → compile →
+   invoke** 一个最小图 ⇒ ⇒ 断言 ① ``sys.modules`` 中**仍无** langchain 家族
+   （**运行期**也不引）② **框架出站 == 0** ⇒ ⇒ **只接线 · MUST NOT 新增门禁编号**
+   ⇒ ⇒ 红线**不放宽**（③② 是同一红线的**运行期加强**）。
 
 **CLI 契约**（architecture-gates.md §2.1）：``--target-root <路径>``（被检的
 源码根，默认仓库根）· ``--project <pyproject 路径>``（默认
@@ -96,6 +99,42 @@ loaded = sorted(
     name for name in sys.modules if name.split(".")[0] in roots
 )
 print(json.dumps(loaded))
+"""
+
+_RUNTIME_SNIPPET = """
+import json
+import operator
+import sys
+from typing import Annotated, TypedDict
+sys.path.insert(0, %(gates)s)
+import _gatekit
+records = []
+with _gatekit.record_egress(records):
+    from freegraph.graph import END, START, StateGraph
+
+    class _State(TypedDict):
+        messages: Annotated[list, operator.add]
+        llm_calls: int
+
+    def _node(state):
+        return {"messages": ["a"]}
+
+    builder = StateGraph(_State)
+    builder.add_node("a", _node)
+    builder.add_edge(START, "a")
+    builder.add_edge("a", END)
+    out = builder.compile().invoke({"messages": ["seed"]})
+
+roots = set(%(roots)s)
+loaded = sorted(
+    name for name in sys.modules if name.split(".")[0] in roots
+)
+framework = [r for r in records if r.attribution == "framework"]
+print(json.dumps({
+    "loaded": loaded,
+    "framework_egress": len(framework),
+    "keys": sorted(out),
+}))
 """
 
 _EGRESS_SNIPPET = """
@@ -185,6 +224,97 @@ def _declaration_violations(project: Path) -> list[_gatekit.Violation]:
                 )
             )
     return violations
+
+
+def _runtime_violations(report: dict[str, object]) -> list[_gatekit.Violation]:
+    """**③② 运行期（最小图）**的判定 —— **纯函数**（真实路径与反向用例**共用**）。
+
+    ⚠️ **只接线 · MUST NOT 新增门禁编号** ⇒ ⇒ 判据挂在**既有** G22 的**运行期**面上
+    （规则号 ``G22-05`` 是 G22 内部的细分编号 · **不是**新门禁）。
+    """
+    violations: list[_gatekit.Violation] = []
+    loaded = list(report.get("loaded") or [])
+    if loaded:
+        violations.append(
+            _gatekit.Violation(
+                entry="、".join(loaded),
+                rule="G22-05",
+                detail=(
+                    "验收环境里**运行期**（建图 → compile → invoke）之后 "
+                    "sys.modules 出现了 langchain 家族"
+                ),
+                fix=(
+                    "移除该 import——**运行期**也不得引入 langchain 家族"
+                    "（FR-005 ③② · 宪法原则 II）"
+                ),
+            )
+        )
+        return violations
+    egress = int(report.get("framework_egress") or 0)
+    if egress:
+        violations.append(
+            _gatekit.Violation(
+                entry="（未知目标）",
+                rule="G22-05",
+                detail=(
+                    f"验收环境里**运行期**出现了 {egress} 次**框架出站**"
+                ),
+                fix="移除该出站（宪法原则 I · 零出站）",
+            )
+        )
+    return violations
+
+
+def _self_test_negative(repo_root: Path) -> int:
+    """**内置负向验证** —— 证明「③② 运行期」这条断言**确实能失败**。
+
+    ⇒ 在仓库副本的 ``src/freegraph/__init__.py`` 里**注入** ``import langchain``
+    ⇒ ⇒ 再跑同一段运行期探针 ⇒ ⇒ MUST **报出** ``G22-05`` 违规 ⇒ ⇒ 否则反向用例
+    **空转**（判据失效）。
+    """
+    copy = _gatekit.make_isolated_copy(repo_root)
+    init_path = copy / "src" / "freegraph" / "__init__.py"
+    init_path.write_text(
+        init_path.read_text(encoding="utf-8")
+        + "\nimport langchain_core  # 反向用例注入（langchain 家族 · G22 禁见）\n",
+        encoding="utf-8",
+    )
+    snippet = _RUNTIME_SNIPPET % {
+        "gates": json.dumps(str(GATES_DIR)),
+        "roots": repr(sorted(FORBIDDEN_MODULE_ROOTS)),
+    }
+    script = (
+        "import json, sys\n"
+        f"sys.path.insert(0, {str(copy / 'src')!r})\n"
+        f"sys.path.insert(0, {str(GATES_DIR)!r})\n"
+        + snippet
+    )
+    proc = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=str(copy),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=120,
+    )
+    if proc.returncode != 0:
+        print(f"[{GATE_ID}] 反向用例：探针脚本失败（退出码 {proc.returncode}）")
+        print(proc.stderr.strip()[:800])
+        return 1
+    report = json.loads(proc.stdout.strip().splitlines()[-1])
+    violations = _runtime_violations(report)
+    if not violations:
+        print(
+            f"[{GATE_ID}] 反向用例**空转** —— 注入 langchain 后运行期断言仍判绿"
+            "（反向用例失效）"
+        )
+        return 1
+    print(
+        f"[{GATE_ID}] 反向用例通过 —— 注入 langchain 后运行期断言报出："
+        f"{violations[0].rule} · {violations[0].detail}"
+    )
+    return 0
 
 
 def evaluate(target_root: Path, project: Path) -> list[_gatekit.Violation]:
@@ -389,6 +519,32 @@ def evaluate(target_root: Path, project: Path) -> list[_gatekit.Violation]:
                     f"[{GATE_ID}] 验收环境里的框架出站 = 0"
                     f"（用户出站 = {report['user_egress']}，记录在案不判失败）"
                 )
+        # ── 步骤 6 · ③② 运行期（最小图）—— **自 B7F3 起**（裁定 22 · M2 承接）──
+        snippet = _RUNTIME_SNIPPET % {
+            "gates": json.dumps(str(GATES_DIR)),
+            "roots": repr(sorted(FORBIDDEN_MODULE_ROOTS)),
+        }
+        code, out, err = _run_in_venv(venv, snippet, target_root)
+        if code != 0:
+            violations.append(
+                _gatekit.Violation(
+                    entry="验收环境 · ③② 运行期（最小图）",
+                    rule="G22-05",
+                    detail=f"子进程失败（退出码 {code}）：{err.strip()[:400]}",
+                    fix="修好隔离环境的运行期探针脚本",
+                )
+            )
+        else:
+            report = json.loads(out.strip().splitlines()[-1])
+            runtime_violations = _runtime_violations(report)
+            if runtime_violations:
+                violations.extend(runtime_violations)
+            else:
+                print(
+                    f"[{GATE_ID}] 验收环境 · ③② 运行期（最小图）："
+                    f"sys.modules 无 langchain 家族 · 框架出站 = 0"
+                    f" · 返回键集 = {report['keys']}"
+                )
     return violations
 
 
@@ -404,7 +560,18 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="被检的依赖声明文件（默认：<target-root>/pyproject.toml）",
     )
+    parser.add_argument(
+        "--self-test-negative",
+        action="store_true",
+        help="**内置负向验证**：注入 langchain ⇒ 证明「③② 运行期」断言确实能失败",
+    )
     args = parser.parse_args(argv)
+    if args.self_test_negative:
+        return _gatekit.run_gate(
+            lambda: _self_test_negative(REPO_ROOT),
+            GATE_ID,
+            RULE_TEXT,
+        )
     target_root = Path(args.target_root)
     project = Path(args.project) if args.project else target_root / "pyproject.toml"
     return _gatekit.run_gate(

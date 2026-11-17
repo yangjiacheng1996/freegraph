@@ -12,8 +12,17 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_graph_core_exits_two_when_the_facade_is_not_ready() -> None:
-    """M1 门面未就绪 ⇒ ``graph_core.py`` 以退出码 2 结束（不判 FAIL · EV-1）。"""
+def test_graph_core_succeeds_when_the_facade_is_ready() -> None:
+    """**B7F3 已交付** ⇒ ``graph_core.py`` MUST **成功**（退出码 **0**）。
+
+    ⚠️ **替换为反面断言**（B7F3 · 破冻结面 · 追认项 ⑤）⇒ ⇒ **判据只可更严**：
+    原断言「退出码 == 2（未就绪）」⇒ ⇒ 反面「退出码 == **0**（就绪**且绿**）」
+    ⇒ ⇒ **MUST NOT** 退化为「不再是 2」（⇒ 真失败 ``rc == 1`` 仍判绿 ⇒ **门禁失效**）
+    ⇒ ⇒ **MUST NOT** 保留「``[环境未就绪]`` 文本检查」（该文本**只在未就绪分支**打印
+    ⇒ ⇒ invoke 交付后**永不出现** ⇒ ⇒ 与「退出码 == 0」**互斥**）。
+
+    ✅ **拆分而不删**：subprocess **机制**断言（仍以子进程跑脚本并断言其退出码）**保留**。
+    """
     env = {
         **os.environ,
         "PYTHONPATH": str(_REPO_ROOT / "src"),
@@ -30,8 +39,7 @@ def test_graph_core_exits_two_when_the_facade_is_not_ready() -> None:
         errors="replace",
         timeout=120,
     )
-    assert proc.returncode == 2, proc.stdout + proc.stderr
-    assert "[环境未就绪]" in proc.stdout
+    assert proc.returncode == 0, proc.stdout + proc.stderr
 
 
 def test_graph_core_recursion_case_uses_the_hard_assertion() -> None:

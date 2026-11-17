@@ -35,14 +35,24 @@ from collections.abc import Callable, Hashable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal, Self, get_args, get_origin, get_type_hints
 
-from .contracts import Checkpointer, CompiledGraph as CompiledGraphProtocol, Store
+from .contracts import (
+    Checkpointer,
+    Command,
+    CompiledGraph as CompiledGraphProtocol,
+    RunConfig,
+    StateDict,
+    Store,
+)
 from .runtime import (
     Channel,
     EphemeralValue,
     GraphSpec,
+    InterruptResult,
     NodeSpec,
+    SuperStepResult,
     build_channels,
     parse_state_schema,
+    run_graph,
 )
 
 _START = "__start__"
@@ -215,6 +225,40 @@ def _conditional_mapping(
     return {source: tuple(items) for source, items in grouped.items()}
 
 
+def _full_state(spec: GraphSpec, sparse: Mapping[str, Any]) -> dict[str, Any]:
+    """**「完整状态」的归一** —— 稀疏视图 ⇒ 键集 == schema 全集的普通 ``dict``。
+
+    **单一实现点**（契约 **CF-01** / R-10）⇒ ⇒ 下游 **B8F2** 的
+    ``stream(values)`` MUST **复用**它 ⇒ ⇒ **MUST NOT** 另写一份「补齐」逻辑。
+
+    * 键集 = ``spec.channels`` **扣除**路由型通道 ⇒ ⇒ 路由通道的判定 MUST 沿用
+      **B7F1 的冻结口径**（``isinstance(channel, EphemeralValue)``）⇒ ⇒
+      **MUST NOT** 用「``branch:to:`` 前缀」之类**名称启发式** ⇒ ⇒
+      **MUST NOT** 依赖「节点订阅集」（间接口径）；
+    * 顺序 = 通道表的键顺序（= **schema 声明顺序** + 路由通道）⇒ ⇒ 扣除后
+      **自然**得到 schema 声明顺序（**不重排**）；
+    * 值 = ``sparse.get(key, None)`` ⇒ ⇒ **「缺席」** ⇒ ``None``；
+      **「值为 ``None``」** ⇒ 原样 ``None``（**MUST NOT** 把两者混为一谈）⇒ ⇒
+      归约型通道的**类型空值**（``[]`` / ``0``）**MUST NOT** 被改写成 ``None``
+      （契约 R-06）；
+    * ``"__interrupt__"`` 键（挂起时）⇒ ⇒ **保留**（追加在末尾 · **不覆盖** ·
+      **不重排**）⇒ ⇒ **无挂起**时**不出现**。
+
+    ⚠️ 返回值是**只读快照**：**MUST NOT** 原样回喂给下一次 ``invoke``
+    （回喂会把补齐的 ``None`` **真的写进**通道 ⇒ 节点里
+    ``state.get("llm_calls", 0) + 1`` 会 ``TypeError``）⇒ ⇒ 上游因省略无值
+    key 而回喂**安全**（实测 E-5）⇒ ⇒ 这是 freegraph 的**已知代价**。
+    """
+    out: dict[str, Any] = {}
+    for key, channel in spec.channels.items():
+        if isinstance(channel, EphemeralValue):
+            continue
+        out[key] = sparse.get(key, None)
+    if "__interrupt__" in sparse:
+        out["__interrupt__"] = sparse["__interrupt__"]
+    return out
+
+
 class CompiledGraph:
     """``compile()`` 的编译产物（B7F2 · L3 私有实现体 · **不进**门面导出面）。
 
@@ -256,9 +300,52 @@ class CompiledGraph:
         self.interrupt_before_nodes = interrupt_before_nodes
         self.interrupt_after_nodes = interrupt_after_nodes
 
-    def invoke(self, input: Any, config: Any = None) -> Any:  # noqa: A002
-        """执行图——**未就绪**（由 **B7F3** 交付）。"""
-        raise NotImplementedError("invoke 由 B7F3 交付")
+    def invoke(
+        self,
+        input: StateDict | Command | None,
+        config: RunConfig | Mapping[str, Any] | None = None,
+    ) -> StateDict:
+        """执行整张图并返回**完整状态**（**B7F3 已交付** · 契约 §1 / §3）。
+
+        **签名**（**逐字冻结** · 契约 §1）::
+
+            invoke(self, input: StateDict | Command | None,
+                   config: RunConfig | Mapping[str, Any] | None = None) -> StateDict
+
+        * ``input`` —— **状态字典**（**部分**键值对即可）/ ``Command``（恢复路径）
+          / ``None``（会话连续 · 照常跑 · **不**写任何通道）⇒ ⇒ **上游同款**
+          （``langgraph/pregel/main.py:3836-3838``）；
+        * ``config`` —— ``RunConfig``（会话面 + ``max_concurrency``）**或**普通
+          映射（运行期参数 · 如 ``{"recursion_limit": 3}``）**或** ``None``
+          ⇒ ⇒ **原样**交给 L2（**MUST NOT** 在门面层把映射翻译成 ``RunConfig``）；
+        * 返回 —— **普通 ``dict``**（``type(out) is dict``）· 键集 == **schema
+          全部 key**（**按 schema 声明顺序**）⇒ ⇒ 无值键以 ``None`` 补齐
+          （**仅覆盖型（无归约器）**通道）⇒ ⇒ 归约型通道的**类型空值**
+          （``[]`` / ``0``）**原样保留**（契约 R-06）⇒ ⇒ 路由通道**不进**键集
+          ⇒ ⇒ **挂起**时额外含 ``"__interrupt__"``（**元组**）。
+
+        ⚠️ **返回值是只读快照 · 不要原样回喂给下一次 `invoke`** —— 回喂会把
+        补齐的 ``None`` **真的写进**通道 ⇒ 节点里
+        ``state.get("llm_calls", 0) + 1`` 会 ``TypeError``（**归约型**通道则
+        会被追加一个 ``None``）⇒ ⇒ 上游因**省略**无值 key 而回喂**安全**
+        （实测 E-5）⇒ ⇒ 这是 freegraph 的**已知代价**（偏离登记 X-1）⇒ ⇒
+        **该禁令 MUST 写进用户可见文档**（本 docstring + ``README.md``）。
+
+        ⚠️ **零捕获** ⇒ 失败信号（``InvalidUpdateError`` / ``GraphRecursionError``
+        / ``InterruptError`` / 节点的真异常）**原类型 + 原消息**直达调用方 ⇒ ⇒
+        **MUST NOT** 包装 / 吞掉（契约 §4）。
+        """
+        result = run_graph(
+            self._spec,
+            input,
+            checkpointer=self.checkpointer,
+            config=config,
+        )
+        if isinstance(result, InterruptResult):
+            # ⚠️ **唯一**转成路径 = ``as_result_dict()``（B10F1 独占）⇒ ⇒
+            # 「补齐」是其**之后**的**独立**一步（对两条路径**同款**）。
+            return _full_state(self._spec, result.as_result_dict())
+        return _full_state(self._spec, result.state)
 
     def stream(
         self,

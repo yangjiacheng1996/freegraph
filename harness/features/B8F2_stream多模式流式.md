@@ -139,6 +139,19 @@
 
 ---
 
+## 下游承接（**B7F3** · 2026-11-16 · **只接线 · 逐条最小改动**）
+
+- **D-1（B7F3 → B8F2 · M2 · 「完整状态」的归一）**：`stream()` 的 `values` 档 MUST 与
+  B7F3 的 `invoke()` **逐字同款**（同一份「稀疏视图 + 补齐无值 key」的归一 ⇒ **单一实现点**）
+  ⇒ ⇒ MUST NOT 另写一份「补齐」逻辑；`updates` 档（增量）**不受**本口径约束。
+  ⇒ ⚠️ **层纪律（ARCH-1）**：`_full_state` 是 **L3 模块内**的私有函数 ⇒ ⇒ `stream()` 的**门面侧**（L3 · 与 `invoke()` **同模块**）MUST **复用**它 ⇒ ⇒ **MUST NOT** 让 **L2 依赖 L3**（反向 import）⇒ ⇒ **L2 只负责产出事件**（每轮的稀疏状态），**归一**在 L3 侧完成。
+  ⇒ 落点：`specs/b7f3-invoke-full-state/spec.md` 的**下游承接 D-1** · 契约 **CF-01**。
+- **D-5（B7F3 → B8F2 · M2 · `config` 注解放宽的归属）**：L1 `CompiledGraph.stream` 的
+  `config` 注解仍写 `RunConfig | None` ⇒ ⇒ 它的放宽归 **B8F2 自己**走「登记 + 回溯修订 +
+  发起者追认」⇒ ⇒ MUST 复用 B7F3 已定的**载体边界**（`RunConfig` = 会话面 + `max_concurrency`；
+  普通映射 = 运行期参数 ⇒ **原样**交给 L2 ⇒ MUST NOT 在门面层翻译成 `RunConfig`）。
+  ⇒ 落点：`specs/b7f3-invoke-full-state/spec.md` 的**下游承接 D-5** · 契约 **CF-05**。
+
 ## 依据
 
 - 立项书 §5.2（B8F2 行）、§5.3（C12）、§5.8.1（可视化 12 项接口之「运行 · 流式事件」）、

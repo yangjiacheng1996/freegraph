@@ -1961,9 +1961,20 @@ def run_graph(
     ⇒ 先读 ``.snapshot.values``、再把 ``input`` **按通道写入**叠加上去 ⇒ ⇒
     **``.id`` 可变**。
     """
+    # ⚠️ **关键字形态**的失败顺序**逐字不变**（既有顺序 · B12F1 FR-017 / V-18）。
     _validate_max_concurrency(max_concurrency)
     scheduler_state = state if state is not None else SchedulerState()
     run_config = resolve_config(config)
+    # ⚠️ **旋钮的读取点**（**自 B7F3 起 · 关键字优先 · config 兜底** · 裁定 13 /
+    # FR-023）⇒ ⇒ **``None`` ≡ 未指定** ⇒ ⇒ 「显式 ``None`` 覆盖 config」的
+    # 第三种语义**不存在** ⇒ ⇒ ⇒ **兼容扩展**（既有调用方零改动）。
+    effective_concurrency = (
+        max_concurrency if max_concurrency is not None else run_config.max_concurrency
+    )
+    # ⚠️ **config 兜底值**的校验点 = ``resolve_config`` **之后**、``_first_graph``
+    # **之前**（它只能在 resolve 之后才读到）⇒ ⇒ 失败信号与关键字形态**同款**
+    # （``TypeError`` / ``ValueError`` · 均**点名该参数**）。
+    _validate_max_concurrency(effective_concurrency)
     effective_limit = resolve_limit(run_config.recursion_limit, max_steps)
     table = new_run_table()
     with bind_run(table):
@@ -1976,7 +1987,7 @@ def run_graph(
                 table,
                 checkpointer=checkpointer,
                 max_steps=effective_limit,
-                max_concurrency=max_concurrency,
+                max_concurrency=effective_concurrency,
             )
         return _first_graph(
             spec,
@@ -1986,7 +1997,7 @@ def run_graph(
             table,
             checkpointer=checkpointer,
             max_steps=effective_limit,
-            max_concurrency=max_concurrency,
+            max_concurrency=effective_concurrency,
         )
 
 

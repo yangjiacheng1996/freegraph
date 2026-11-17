@@ -166,6 +166,14 @@
   `case_draw_mermaid`）、`harness/demo/target.py:163`。
 - 宪法 `.specify/memory/constitution.md`：原则 I（零出站）、原则 III（PNG 硬约束）。
 
+## 下游承接（**B7F3** · 2026-11-16 · **只接线 · 逐条最小改动**）
+
+- **D-3（B7F3 → B22F1 / B23F1 · M3 · 就绪顺序）**：只读基准脚本的调用顺序是「**先**
+  `get_graph(...).draw_mermaid_png()`，**后** `invoke(...)`」⇒ ⇒ **B22F1 / B23F1 MUST 先于**
+  B7F3 就绪 ⇒ ⇒ B7F3 **MUST NOT** 越界实现 `get_graph` / `draw_mermaid_png`。
+  ⇒ ⚠️ **状态更新（2026-11-17）**：**B7F3 已交付**（`invoke()` 已接线）⇒ ⇒ 本 feature 与 **B23F1** 现在是**固定脚本（`target.py`）端到端轮**（登记项 **EV-4**）的**剩余前置** ⇒ ⇒ MUST 先于该轮落地。
+  ⇒ 落点：`specs/b7f3-invoke-full-state/spec.md` 的**下游承接 D-3** · 契约 **CF-03**。
+
 ## 下游承接（B7F2 · 2026-11-16 · 只接线 · 逐条最小改动）
 
 - **D-5（B7F2 → B22F1 · M2 · 图结构导出的数据来源）**：B7F2 已在 `CompiledGraph` 上交付 `_spec`（`GraphSpec`：节点表 / 边表 / 通道表）与 `_conditional_edges`（plain mapping）。B22F1 的 `get_graph(*, xray=False)` MUST 从这两个**私有快照**导出结构；MUST NOT 重新解析构建器状态 / 重跑 `_build_spec()`。`draw_mermaid` / `draw_mermaid_png` 归 B23F1；产物公开属性面**不包含** `nodes` / `channels` / `builder`（X-10）。

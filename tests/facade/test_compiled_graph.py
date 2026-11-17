@@ -73,7 +73,6 @@ class TestCapabilitySurface:
     def test_each_unready_method_raises_not_implemented_naming_owner(self) -> None:
         compiled = build_minimal_graph().compile()
         calls = {
-            "invoke": (({},), "B7F3"),
             "stream": (({},), "B8F2"),
             "get_graph": ((), "B22F1"),
             "get_state": (({},), "B15F1"),
@@ -84,6 +83,19 @@ class TestCapabilitySurface:
             with pytest.raises(NotImplementedError) as excinfo:
                 getattr(compiled, name)(*args)
             assert owner in str(excinfo.value), (name, str(excinfo.value))
+
+    def test_invoke_is_delivered_and_does_not_raise_not_implemented(self) -> None:
+        """**B7F3 已交付** ⇒ ``invoke()`` 在合法路径上 MUST **不**抛 ``NotImplementedError``。
+
+        ⚠️ **拆分而不删**（B7F3 · 破冻结面 · 追认项 ⑤）：原断言把 ``invoke`` 与其余
+        **5 个**未就绪方法**并列**在参数化列表里 ⇒ ⇒ 本条**从列表中提出** ⇒ ⇒
+        改为**独立断言**（语义**不删**）⇒ ⇒ 其余 **5** 条目**逐字不动**。
+        """
+        compiled = build_minimal_graph().compile()
+        try:
+            compiled.invoke({})
+        except NotImplementedError as exc:  # pragma: no cover - 失败路径
+            pytest.fail(f"invoke 已由 B7F3 交付，不应抛 NotImplementedError：{exc}")
 
     def test_zero_attribute_error(self) -> None:
         compiled = build_minimal_graph().compile()

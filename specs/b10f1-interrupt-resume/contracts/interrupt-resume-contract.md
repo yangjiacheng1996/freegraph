@@ -60,7 +60,7 @@ run_graph(
 | `checkpointer` | **检查点后端**（**L1 协议**） | `None` ⇒ **不**持久化 ⇒ ⇒ **恢复不可用**（抛 `InterruptError`） |
 | `config` | 运行配置（`thread_id` 等） | 缺省 ⇒ `RunConfig()` |
 | `max_steps` | 步数上限 · 缺省 **10007**（**上游同款** · `langgraph/_internal/_config.py:32`） | 触顶且仍有任务 ⇒ 抛 `GraphRecursionError`（**L1 已有** · `contracts/errors.py:69`）⇒ ⚠️ 本 feature **只复用**该异常类型 ⇒ ⇒ **`recursion_limit` 配置面**属 **B13F1**（spec FR-024 · 本 feature **MUST NOT** 实现）|
-| `max_concurrency` | 并发度（**上游同名同义**） | **入口即失败**（类型不符 ⇒ `TypeError` · `< 1` ⇒ `ValueError`）· 沿用 B12F1 `_validate_max_concurrency` |
+| `max_concurrency` | 并发度（**上游同名同义**） | **入口即失败**（类型不符 ⇒ `TypeError` · `< 1` ⇒ `ValueError`）· 沿用 B12F1 `_validate_max_concurrency` · ⚠️ **自 B7F3 起：关键字优先 · config 兜底**（``None`` ≡ 未指定 ⇒ 关键字为 ``None`` 时回落到 ``config.max_concurrency``；config 兜底值的校验点 = ``resolve_config`` **之后**、``_first_graph`` **之前** ⇒ 失败信号与关键字形态**同款**）|
 
 ⚠️ **既有入口一字不动**：`run_super_step` / `run_super_steps` 的**签名与返回类型零改动**
 （B7F1 冻结面 · spec 裁定 10）⇒ ⇒ `run_graph` 是**图级**入口，二者是**不同层**（非替代关系）。

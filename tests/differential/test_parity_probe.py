@@ -81,6 +81,17 @@ def test_compile_parity_scenarios_meet_their_verdicts(upstream_version: str) -> 
     )
 
 
+def test_invoke_parity_scenarios_meet_their_verdicts(upstream_version: str) -> None:
+    """B7F3 执行期差分（D-92…D-102）MUST 符合各自判词（上游缺席 ⇒ skip）。"""
+    results = parity_probe._run_invoke_scenarios()
+    if not results:
+        pytest.skip("上游 langgraph 缺席 —— 差分场景不可执行（沿用 B5F2 的「缺席即 skip」纪律）")
+    failures = [result for result in results if not result.ok]
+    assert not failures, "\n".join(
+        f"  ✘ {result.name}: {result.detail}" for result in failures
+    )
+
+
 def test_the_verdict_vocabulary_is_closed(upstream_version: str) -> None:
     """**判词取值域 MUST 封闭** —— 只允许 ``SAME`` / ``STRICTER`` / ``DIFF``。
 
@@ -104,6 +115,15 @@ def test_the_verdict_vocabulary_is_closed(upstream_version: str) -> None:
         assert compile_scenario.verdict in allowed
         if compile_scenario.verdict in {"STRICTER", "DIFF"}:
             assert compile_scenario.note
+    for invoke_scenario in parity_probe._invoke_scenarios():
+        assert invoke_scenario.verdict in allowed, (
+            f"场景 {invoke_scenario.name!r} 的判词 {invoke_scenario.verdict!r} "
+            f"不在封闭取值域 {sorted(allowed)}"
+        )
+        if invoke_scenario.verdict in {"STRICTER", "DIFF"}:
+            assert invoke_scenario.note, (
+                f"场景 {invoke_scenario.name!r} 的判词 {invoke_scenario.verdict!r} MUST 带理由（note）"
+            )
 
 
 @pytest.mark.parametrize(

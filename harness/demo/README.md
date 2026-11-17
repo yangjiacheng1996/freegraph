@@ -61,7 +61,7 @@ python harness/demo/acceptance.py --record harness/verification/freegraph/manual
   `checkpointer=`/`store=` 关键字、C11 的 `invoke(input, config)` 与完整状态、
   C12 的 7 种 `stream_mode` 名、C13/C14/C15 的 `get_graph`/`draw_mermaid`/`draw_mermaid_png`、
   C16 的 `Command(goto=, update=, resume=)`、C17 的 `__interrupt__`、C18 的 `Send`、
-  C22 的 `RunConfig` 四字段、C7 的 list/dict 两种 `path_map`。
+  C22 的 `RunConfig` 九字段、C7 的 list/dict 两种 `path_map`。
 * **◌ 软断言** —— **语义由章程规定、但调用形态尚未拍板**的检查，**不判失败**，
   只标注「待锁定」。当前一处：
 
@@ -71,10 +71,33 @@ python harness/demo/acceptance.py --record harness/verification/freegraph/manual
 
   **形态一旦拍板，这里的软断言就该升级为硬断言。**
 
+* **◌ 依赖未交付 feature 的软断言**（**B7F3 起** · **2026-11-16**）—— 这类检查的
+  **形态已经锁定**，只是**所依赖的能力尚未交付**⇒ ⇒ **不判失败**，但**每条都具名
+  承接方**⇒ ⇒ **不是**「本 feature 未验证」的托词。
+
+  | 检查 | 未交付的能力 | 承接方 |
+  |---|---|---|
+  | A5 条件边与 fresh 读（C7 / C8） | **条件边路由求值** | **B8F1** |
+  | A6 的 C16 段（`Command(update=)` 经条件边到达） | **条件边路由求值** | **B8F1** |
+  | A9 的 context 段（C21 context 独立通道） | **context 独立通道** | **B8F3** |
+  | A10 的流式事件段（C25 别名出现在事件里） | **`stream()`** | **B8F2** |
+  | A6 的 C17 段（`Command(resume=)` 恢复取值） | **checkpointer 载体** | **B14F1** |
+  | agent_loop 的 B1 / B2 / B3（工具循环 · tool_call 形状 · 审批插入） | **条件边路由求值** | **B8F1** |
+
+  > ⚠️ **B7F3（2026-11-16）**：这批软断言**按 T011 的首次执行实测红点**登记
+  > ⇒ ⇒ **MUST NOT** 顺手降级与本 feature 无关的红点（实测暴露的 **2** 条**陈旧断言**
+  > ⇒ ⇒ **事实订正**，**不是**降级：`graph_core.py` 的 `not hasattr(cfg, "configurable")`
+  > ⇒ 改为 `cfg.configurable == {}`；`RunConfig.tags` 的期望 `['t1']` ⇒ 改为 `('t1',)`）。
+
 * ✅ **B7F2 已交付 `compile()`（2026-11-16）**：A3 组（`compile()` 无参可调用 /
-  `checkpointer=`/`store=` 关键字）现在**真跑通过**；`invoke()` / `stream()` 仍归
-  **B7F3 / B8F2** ⇒ `graph_core.py` 在 A3 通过之后、探测到 `invoke()` 未就绪时
-  仍以**退出码 2** 结束（`[环境未就绪]` · 不是 FAIL）。
+  `checkpointer=`/`store=` 关键字）现在**真跑通过**。
+
+* ✅ **B7F3 已交付 `invoke()`（2026-11-16）**：`invoke()` 已接线 ⇒ 就绪探针
+  （`_invoke_ready()` · 键在 `NotImplementedError` 上）**自动切换** ⇒ ⇒ `graph_core.py`
+  与 `agent_loop.py` 现在**跑完全部用例组**并以**退出码 0** 结束（**不是** 2）。
+  ⚠️ 仍为软断言的**5 组**（条件边路由 / context 独立通道 / `stream()` / 工具循环 /
+  恢复载体）见上表 ⇒ ⇒ `visualization.py` 仍以**退出码 1** 结束（`get_graph` /
+  `draw_mermaid` / `draw_mermaid_png` / `stream` 全未交付 ⇒ 归 **B22F1 / B23F1 / B8F2**）。
 
 * ✅ **已拍板（2026-11-05）——第三处软断言已关闭**：`interrupt` 恢复**必须依赖
   checkpointer**（内存态恢复不可靠；`interrupt` 的主场景是 time travel，须跨长时间 /

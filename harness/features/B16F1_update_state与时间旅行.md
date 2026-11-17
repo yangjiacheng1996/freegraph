@@ -162,6 +162,15 @@
 - 宪法 `.specify/memory/constitution.md`：原则 IV（trace / state / interrupt /
   time-travel 四类能力 MUST 有最小可用实现）。
 
+## 下游承接（**B7F3** · 2026-11-16 · **只接线 · 逐条最小改动**）
+
+- **D-5（B7F3 → B16F1 · M3 · `config` 注解放宽的归属）**：L1 `CompiledGraph.update_state` 的
+  `config` 注解仍写 `RunConfig | None` ⇒ ⇒ 它的放宽归 **B16F1 自己**走「登记 + 回溯修订 +
+  发起者追认」⇒ ⇒ MUST 复用 B7F3 已定的**载体边界**（`RunConfig` = 会话面 + `max_concurrency`；
+  普通映射 = 运行期参数 ⇒ **原样**交给 L2）。
+  ⇒ ⚠️ **状态更新（2026-11-17）**：**B7F3 已交付** ⇒ ⇒ 「`config` 的**双形态载体边界**」**已冻结**（`RunConfig` = 会话面 + `max_concurrency`；普通映射 = 运行期参数 ⇒ **原样**交给 L2 ⇒ **MUST NOT** 在门面层翻译成 `RunConfig`）⇒ ⇒ 本 feature 放开本方法的 `config` 注解时 MUST **原样**沿用该边界。
+  ⇒ 落点：`specs/b7f3-invoke-full-state/spec.md` 的**下游承接 D-5** · 契约 **CF-05**。
+
 ## 下游承接（B13F1 · 2026-11-15 · 只接线 · 逐条最小改动）
 
 - **D-6（B13F1 → B16F1 · M3 · 时间旅行）**：历史快照 MUST 能把「静态挂起」表示为 `interrupts == ()` 且 `suspension_kind` / `static_ack` 为静态值（`next` 允许为空）；从历史静态快照恢复 MUST 不要求动态中断载荷；MUST NOT 继续假设「`next` 非空 ⇒ 必有中断」。

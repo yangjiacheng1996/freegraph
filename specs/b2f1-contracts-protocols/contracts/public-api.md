@@ -79,7 +79,7 @@ from freegraph.contracts import (
 | `Checkpointer` | `get_tuple` / `list` / `put` / `put_writes` / `delete_thread` / **`delete_for_runs`** / **`copy_thread`** / `get_next_version` | **方法名与参数名已冻结**（逐字见 `data-model.md` §2.2）；**返回类型占位**（`Any`）——**载荷形状挂起 B14F1**<br>⚠️ **2026-11-12 上游对齐 P3**：由**六**方法增为**八**（**只增**）—— 新增 `delete_for_runs` / `copy_thread`（**上游 required** · 上游 `langgraph/checkpoint/base/__init__.py:331,350`）⇒ **上游形状的 saver 直接满足本协议** | C19 |
 | `TraceSink` | `on_span_start` / `on_span_end` / `current_span` | `(span: Span) -> None` ×2；`() -> Span \| None` | C23 / C24 |
 | `Store` | `get` / `search` / `put` / `delete` / `list_namespaces` / `batch` | **方法名与参数名已冻结**（逐字见 `data-model.md` §2.4）；命名空间为层级路径<br>⚠️ **2026-11-12 上游对齐 P3**：命名空间类型由 `Any` **收紧**为 `tuple[str, ...]`（**上游同款** · 上游 `langgraph/store/base/__init__.py:311`）⇒ 上游形状的 store **直接满足**本协议；**不补**上游的**异步变体**（v1 无 async） | C20 |
-| `CompiledGraph` | `invoke` / `stream` / `get_graph` / `get_state` / `get_state_history` / `update_state` | 返回类别已冻结；**参数名按 `data-model.md` §2.5 冻结为占位名**（B2F1 复核裁定） | C10 / C11 / C12 / C13 |
+| `CompiledGraph` | `invoke` / `stream` / `get_graph` / `get_state` / `get_state_history` / `update_state` | 返回类别已冻结；**参数名按 `data-model.md` §2.5 冻结为占位名**（B2F1 复核裁定）· ⚠️ **协议注解自 B7F3 起放宽**（`input: StateDict \| Command \| None` + `config: RunConfig \| Mapping[str, Any] \| None` ⇒ 详见 `src/freegraph/contracts/protocols.py`） | C10 / C11 / C12 / C13 |
 
 **各协议的上游来源**（宪法原则 VIII · 证据门禁；FR-014 要求「协议语义与上游同名能力的
 对应关系 MUST 附来源」）——
@@ -192,7 +192,7 @@ from freegraph.contracts import (
 | C8 | 条件边读状态 | 挂起 | — | B8F1 | 回归测试归 B8F1 |
 | C9 | 起止标记 | 挂起 | — | B2F2（导出）/ B6F1（使用） | 门面归 B2F2 |
 | C10 | **编译** | 已冻结 | — | `CompiledGraph` 六方法 | **协议面**已冻结；具体编译行为归 B7F2 |
-| C11 | **执行** | 已冻结 | — | `CompiledGraph.invoke` → **完整状态字典** | **协议面**已冻结；行为归 B7F3 |
+| C11 | **执行** | 已冻结 | — | `CompiledGraph.invoke` → **完整状态字典** | **协议面**已冻结；行为归 B7F3 · ⚠️ **协议注解自 B7F3 起放宽**（`input` 收 `Command` / `None`；`config` 收 `RunConfig` / 普通映射） |
 | C12 | 流式 | 已冻结 | — | `CompiledGraph.stream` → 事件迭代器 | **协议面**已冻结（元素类型 = `dict[str, Any]`）；**mode 枚举全集挂起 B8F2** |
 | C13 | **图结构导出** | 已冻结 | — | `Graph` / `Node` / `Edge` 字段逐字 + `get_graph(xray=)` | **自有类型**，不复用 `langchain_core.runnables.graph` |
 | C14 | mermaid 导出 | 挂起 | — | B22F1 | 消费 `Graph` / `Edge`（条件边可表达） |

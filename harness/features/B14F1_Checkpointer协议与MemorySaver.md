@@ -235,6 +235,15 @@
 
 ---
 
+## 下游承接（**B7F3** · 2026-11-16 · **只接线 · 逐条最小改动**）
+
+- **D-4（B7F3 → B14F1 · M3 · checkpointer 的落盘职责）**：B7F3 只**透传**编译产物持有的
+  `checkpointer`（MUST NOT 自己落盘 / 自己实现 saver）⇒ ⇒ 落盘与 `MemorySaver` 归 **B14F1**
+  ⇒ ⇒ `invoke()` 的**恢复**语义（MUST 挂 checkpointer）在 B14F1 落地前由 **L2 的既有失败信号**
+  承担（`InterruptError(reason="checkpointer_required")`）。
+  ⇒ ⚠️ **状态更新（2026-11-17）**：**B7F3 已交付** ⇒ ⇒ 「挂起 → 恢复」路径现在**已可达**（`invoke(Command(resume=...))`）⇒ ⇒ 但**未挂 checkpointer** 时 MUST 抛 `InterruptError`（`reason="checkpointer_required"`）⇒ ⇒ 本 feature 落地后该路径才有**正式载体**。
+  ⇒ 落点：`specs/b7f3-invoke-full-state/spec.md` 的**下游承接 D-4** · 契约 **CF-04**。
+
 ## 下游承接（**B7F4** · 2026-11-13 · **只接线 · 逐条最小改动**）
 
 - **D-4 · 跨 checkpoint 的屏障状态持久化**：上游的屏障通道把「已收齐的名字」落进

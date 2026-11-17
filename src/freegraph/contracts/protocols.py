@@ -19,7 +19,7 @@
 本模块**零** freegraph 内部 import、**零**第三方 import（仅标准库）。
 """
 
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from typing import Any, Protocol, runtime_checkable
 
 from .graph import Graph
@@ -238,6 +238,8 @@ class CompiledGraph(Protocol):
     成员                 签名                                                返回类别
     =================== ================================================== ==========================
     ``invoke``           ``(input, config=None) -> StateDict``                **完整状态字典**
+                         ⚠️ **自 B7F3 起已交付 / 放宽**（``input: StateDict | Command | None``
+                         · ``config: RunConfig | Mapping[str, Any] | None``）
     ``stream``           ``(input, config=None, *, stream_mode="values")``   **事件迭代器**
                          ``-> Iterator[dict[str, Any]]``
     ``get_graph``        ``(*, xray=False) -> Graph``                        **图结构**
@@ -260,7 +262,7 @@ class CompiledGraph(Protocol):
     参数名即无法实现，静态类型检查（SC-004）与对外文档都需要确切签名。
     下游 feature 确需改名者 MUST 走**契约修订**流程，MUST NOT 就地改型。
 
-    **挂起**：各方法的**行为细节与实现** —— ``invoke`` → B7F3、``stream`` →
+    **挂起**：各方法的**行为细节与实现** —— ``invoke`` → **B7F3（已交付 · 签名已放宽）**、``stream`` →
     B8F2（mode 枚举）、状态查询 → B15F1、``update_state`` → B16F1。
     **子图实现属 v2**（C26）；v1 只保 ``get_graph(xray=)`` 的**签名兼容**。
 
@@ -268,7 +270,9 @@ class CompiledGraph(Protocol):
     """
 
     def invoke(
-        self, input: StateDict, config: RunConfig | None = None
+        self,
+        input: StateDict | Command | None,
+        config: RunConfig | Mapping[str, Any] | None = None,
     ) -> StateDict: ...
 
     def stream(

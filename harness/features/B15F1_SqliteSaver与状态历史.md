@@ -204,6 +204,15 @@
 - 架构纪律：`harness/prompts/guide.md` §3.5（L4 只依赖 L1 · 持久化层不得 import
   可观测层）。
 
+## 下游承接（**B7F3** · 2026-11-16 · **只接线 · 逐条最小改动**）
+
+- **D-5（B7F3 → B15F1 · M3 · `config` 注解放宽的归属）**：L1 `CompiledGraph.get_state` /
+  `get_state_history` 的 `config` 注解仍写 `RunConfig | None` ⇒ ⇒ 它们的放宽归 **B15F1 自己**
+  走「登记 + 回溯修订 + 发起者追认」⇒ ⇒ MUST 复用 B7F3 已定的**载体边界**（`RunConfig` = 会话面
+  + `max_concurrency`；普通映射 = 运行期参数 ⇒ **原样**交给 L2）。
+  ⇒ ⚠️ **状态更新（2026-11-17）**：**B7F3 已交付** ⇒ ⇒ 「`config` 的**双形态载体边界**」**已冻结**（`RunConfig` = 会话面 + `max_concurrency`；普通映射 = 运行期参数 ⇒ **原样**交给 L2 ⇒ **MUST NOT** 在门面层翻译成 `RunConfig`）⇒ ⇒ 本 feature 放开本方法的 `config` 注解时 MUST **原样**沿用该边界。
+  ⇒ 落点：`specs/b7f3-invoke-full-state/spec.md` 的**下游承接 D-5** · 契约 **CF-05**。
+
 ## 下游承接（B11F1 · 2026-11-14 · 只接线 · 逐条最小改动）
 
 - **D-8（B11F1 → B15F1 · M3 · task_id / 中断现场）**：B11F1 允许同一节点在一轮内被 N 次调用 ⇒ `SqliteSaver` / 状态历史 MUST 接受 F-13 约定的持久化 `task_id`（标准任务 = 节点名；fan-out 任务 = `f"{节点名}:{TaskId}"`），且 `.pending_writes` MUST 能把 N 个同节点任务的中断记录区分开 ⇒ MUST NOT 继续假设"一轮一个节点一个任务"。
