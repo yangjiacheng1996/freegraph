@@ -620,8 +620,12 @@ def test_several_conditional_edges_of_one_source_are_each_evaluated_once() -> No
 
     builder.compile().invoke({"messages": [], "llm_calls": 0})
 
+    # ⚠️ **同轮内的执行顺序不可观察**（两个目标**并发**执行 · 线程调度决定先后）
+    # ⇒ ⇒ ⇒ 断言**集合**（+ 「``r`` 先于它们」这个**可判定**的部分）⇒ ⇒ ⇒
+    # **判据零放宽**（「各求值一次」与「两个目标都被触发」**逐条保留**）。
     assert route_calls == ["first", "second"]
-    assert calls == ["r", "b", "c"]
+    assert calls[0] == "r"
+    assert sorted(calls) == ["b", "c", "r"]
 
 
 def test_a_send_from_the_router_produces_the_same_kind_of_task_as_a_node_send() -> None:
