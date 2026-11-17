@@ -5,7 +5,6 @@
 <feature提示词>
 
 
-
 # 是否进行clarify
 我已经更新了spec，本来应该执行/speckit.clarify，针对spec中模棱两可的地方，向我提问，我可以帮你做决策，或者给出我的想法。
 但是clarify可能会引入不必要的新问题，导致我无休止的修改spec，所以能不做clarify就尽量不做。
@@ -41,7 +40,7 @@
 我已经更新了spec和plan，请你更新tasks
 
 # /speckit.analyse 
-我更新了 B7F3 的 spec、plan、tasks，请你阅读相关文档，检查三者内容是否有问题，是否对齐。如果遇到难以决策的地方可以question问我，提问时给出推荐选项，语言中文。分析之前，建议先阅读`harness/proposals/立项书.md`。
+我更新了 B8F1 的 spec、plan、tasks，请你阅读相关文档，检查三者内容是否有问题，是否对齐。如果遇到难以决策的地方可以question问我，提问时给出推荐选项，语言中文。分析之前，建议先阅读`harness/proposals/立项书.md`。
 
 # analyse之后
 好的，我看到你发现了一些问题。我授权你可以直接修改所有spec/中的文件，以修复以上问题。修复完成后我会新开会话再次执行/speckit.analyse检查。
@@ -56,7 +55,7 @@
 我看到了你的回答，明白现在需要更新宪法。请你给出宪法更新的提示词，我会新建另一个会话，开始执行/speckit.constitution +提示词 ，来修改宪法。
 
 # /speckit.implement
-根据 harness/docs/ 目录中的 LangChain、LangGraph 官方文档，harness/proposals/立项书.md，以及相关 spec，完成 B7F3（specs/b7f3-invoke-full-state）的 TDD 软件开发和测试。
+根据 harness/docs/ 目录中的 LangChain、LangGraph 官方文档，harness/proposals/立项书.md，以及相关 spec，完成 B8F1（specs/b8f1-conditional-edges-fresh-read）的 TDD 软件开发和测试。
 
 # /sepckit.converge
 我更新了 B<n>F<m> 的代码，请你根据代码改动，反向更新相关的 spec、plan、tasks。
