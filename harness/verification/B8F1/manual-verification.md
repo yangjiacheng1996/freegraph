@@ -263,7 +263,18 @@ B8F1 acceptance: PASS
 | **G29** | ✅ **PASS** | 契约门禁载体（只读基准 diff + **C4 / C8 挂载点（均 `landed`）** + 验收脚本集退出码） |
 | **G30** | ⚠️ **FAIL（既存）** | **8** 条违规 ⇒ **全部落在本 feature 未触碰的文件**上（`harness/demo/target.py` 的署名头例外未生效 · `harness/reports/Q7-*.md` 与 `specs/b3f1-scaffold-ci-gates/contracts/architecture-gates.md` 的**官方 Approved copy 文案指纹**）⇒ ⇒ ⇒ **在 pristine `HEAD` 树上复现**（`git archive HEAD` 展开后单独跑 G30 ⇒ **同样的 8 条**）⇒ ⇒ ⇒ **非本 feature 的回归** ⇒ ⇒ ⇒ 详见 §8 遗留问题 **1** |
 
-### 3.10 quickstart 验收闸口 **V1…V16**
+### 3.10 CI 实跑（GitHub Actions）
+
+| run | 提交 | 结论 | 备注 |
+|---|---|---|---|
+| **44263885109** | `fa87ad4` | ❌ **6/7**（`macos-15 / 3.11` 失败） | ⚠️ **首次推送**：失败点 = 「Run test suite」⇒ 根因 = 一个**同轮并发顺序**断言的 **flaky**（详见 §8 遗留问题 **6**）⇒ ⇒ ⇒ **已修**（`cbf2dbb`） |
+| **44267037798** | `cbf2dbb` | ✅ **7/7 作业全绿** | `ubuntu-24.04`（3.11 / 3.14）· `ubuntu-24.04-arm`（3.11）· `windows-2025`（3.11 / 3.14）· `macos-15`（3.11 / 3.14）⇒ |
+
+<https://github.com/yangjiacheng1996/freegraph/actions/runs/44267037798>
+
+⇒ ⇒ ⇒ 步骤 9 的 **G22**（隔离 venv + 运行期）/ **G27** / **G28**（断网）在 Linux 档**真跑**并全绿。
+
+### 3.11 quickstart 验收闸口 **V1…V16**
 
 | 闸口 | 命令 | 实测 |
 |---|---|---|
