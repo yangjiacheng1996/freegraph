@@ -234,3 +234,9 @@ artifacts/
 Thumbs.db
 *.tmp
 *.swp
+
+
+# ── 临时试验产物（**可能含硬编码凭据** · 2026-11-18 · B8F2 收尾时误收过一次）──
+# ⚠️ `harness/demo/tmp.py` 曾带**硬编码 API key** ⇒ ⇒ ⇒ 一律**不入库**。
+harness/demo/tmp.py
+langgraph.json

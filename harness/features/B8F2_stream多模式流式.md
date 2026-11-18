@@ -35,6 +35,21 @@
   消费者不取（不迭代）时，图仍应能正常跑完。
 - 本 feature 与 B19F1（`TraceSink`）是**两条独立的事件通道**——D11 尚未批准前，
   二者的关联性未规定；spec 中 MUST 标注这一未冻结项（见 §7）。
+- **上游的 `StreamWriter` 机制**（**照抄依据** · `langgraph 1.2.11`）：
+  `langgraph/config.py:126` 的 `get_stream_writer()` 靠 **contextvar** 取写入器；
+  跨线程可见性由**执行器**的 **`copy_context()`** 提供（`langgraph/pregel/_executor.py:64`
+  与 `:164` ⇒ `ctx.run(fn, …)`）⇒ ⇒ ⇒ 本仓库的落点见「下游承接（B7F1 + B10F1）」条。
+- **上游的 `tasks` 档产出粒度**（**照抄依据**）：`langgraph/pregel/_loop.py:580` 与 `:674`
+  的 `self._emit("tasks", map_debug_tasks, …)` ⇒ ⇒ ⇒ 产出 **task 级**事件（**每个**
+  task 完成时一条）⇒ 载荷 = `langgraph/types.py:637` 的 `PregelTask`（**七字段**：
+  `id` / `name` / `path` / `error` / `interrupts` / `state` / `result`）⇒ ⇒ ⇒ 本仓库
+  契约层**已有**逐字同名的 `PregelTask`（`src/freegraph/contracts/types.py:141`）⇒ ⇒ ⇒
+  ⇒ ⇒ ⇒ **零新增公开面**。
+- **上游的「单步 / 整轮」分离**（**照抄依据**）：`PregelLoop.tick()`
+  （`langgraph/pregel/_loop.py:599` · 注释「Execute a single iteration of the Pregel
+  loop」）⇒ ⇒ ⇒ `stream()` 的主循环 = `while loop.tick(): … yield`
+  （`langgraph/pregel/main.py:2964`）⇒ ⇒ ⇒ **单步是一等公民** ⇒ ⇒ ⇒ 本仓库的对应物
+  = `run_super_step`（**B7F1 已交付**）⇒ ⇒ ⇒ **零新增 L2 入口**。
 
 ### 3. 用户场景
 
@@ -69,6 +84,27 @@
 - **FR-007**：MUST NOT 引入 async（`astream` 属 v2 范围，未排 feature）——
   本 feature 只做同步流。
 - **FR-008**：系统 MUST NOT import `langchain` / `langchain-core`；MUST NOT 读环境变量。
+- **FR-009**：`stream()` MUST **逐轮**产出 ⇒ ⇒ ⇒ MUST 以**单轮入口**
+  （`run_super_step`）**反复驱动**（**上游同款** · `PregelLoop.tick()` · 见 §2 背景）
+  ⇒ ⇒ ⇒ MUST **NOT** 改动既有 L2 入口（`run_super_step` / `run_super_steps`）的
+  **签名**（**B7F1 的冻结面** · 契约 §1）⇒ ⇒ ⇒ ⇒ 要改 ⇒ MUST 走「破冻结面的三条」。
+- **FR-010**：`tasks` 档 MUST 产出 **task 级**事件（**每个** task 完成时一条 · **上游
+  同款**）⇒ ⇒ ⇒ 载荷 MUST 用 `freegraph.contracts.PregelTask`（**七字段**与上游**同名
+  同义**）⇒ ⇒ ⇒ ⇒ `SuperStepResult` MUST 增 `tasks` 字段 ⇒ ⇒ ⇒ ⇒ MUST **NOT** 删既有
+  **4** 个字段（**拆分而不删**）⇒ ⇒ ⇒ ⇒ 扩 `SuperStepResult` = **破 B7F1 的冻结面**
+  ⇒ ⇒ ⇒ MUST 走「破冻结面的三条」（**登记 + 回溯修订 + 发起者追认**）。
+- **FR-011**：节点侧的 `StreamWriter` 写入 MUST 照抄上游的 **contextvar + 执行器
+  `copy_context()`** 传播机制（见 §2 背景）⇒ ⇒ ⇒ MUST **NOT** 另立一套**并行**的显式
+  传参机制（原则 XII「零重复载体」）⇒ ⇒ ⇒ ⇒ 落点 = 给
+  `src/freegraph/runtime/_concurrency.py` 的 `run_tasks_concurrently` 加
+  `copy_context()` ⇒ ⇒ ⇒ ⇒ ⚠️ 该改动使 `_interrupt.py` docstring 的「线程池**不继承**
+  `contextvars`（**实测**）」表述**对 freegraph 的执行器**不再为真 ⇒ ⇒ ⇒ ⇒ MUST
+  **回溯修订**该表述与 B10F1 契约 §3（**只补注记** · **原描述不改写**）⇒ ⇒ ⇒ ⇒ B10F1
+  的两级 ContextVar 机制 MUST **NOT** 被移除（它照常工作）⇒ ⇒ ⇒ ⇒ ⇒ **判据只收紧**。
+- **FR-012**：`values` 档的**完整状态**归一 MUST 在 **L3**（门面侧 · 与 `invoke()`
+  **同模块**）完成 ⇒ ⇒ ⇒ MUST 复用 B7F3 的 `_full_state`（**单一实现点** · B7F3 的
+  下游承接 D-1）⇒ ⇒ ⇒ MUST **NOT** 复制到 L2（**ARCH-1** · L2 只依赖 L1）⇒ ⇒ ⇒ ⇒
+  ⇒ ⇒ ⇒ **L2 只负责产出每轮的稀疏状态**。
 
 ### 5. 成功标准
 
@@ -131,6 +167,19 @@
 
 - **交付物**：`stream()` 实现（7 种 mode）、`StreamWriter`、单元测试 +
   人工验证记录。
+- **逐 feature 的一键验收脚本**：`harness/verification/B8F2/acceptance.py`
+  （仓库既有范式 · **16** 个 feature 均有）⇒ ⇒ ⇒ 退出码 `0` PASS / `1` FAIL /
+  `2` 环境未就绪 ⇒ ⇒ ⇒ MUST 打印 `B8F2 acceptance: PASS|FAIL` ⇒ ⇒ ⇒ 并由一条
+  pytest **真跑**它（**纳入 CI 的常驻门禁** ⇒ 脚本与实现漂移 ⇒ 立刻红）。
+- **破冻结面的登记与回溯修订**（**FR-010 / FR-011** 触发）⇒ ⇒ ⇒ MUST 走宪法 v1.8.0 的
+  「破冻结面的三条」（登记 + 回溯修订 + 发起者追认）⇒ ⇒ ⇒ 受影响的上游已交付文档 =
+  **B7F1** 的 `superstep-contract.md`（`SuperStepResult` 的构造签名）与 **B10F1** 的
+  `interrupt-resume-contract.md` §3 + `src/freegraph/runtime/_interrupt.py` 的 docstring
+  ⇒ ⇒ ⇒ **只补注记** · 原描述**不改写**（宪法 v1.14.0）。
+- ⚠️ **规模口径的登记**（**不**单方面修改）：立项书 §5.2 的 B8F2 行写「1,180 行 · 3 人日」
+  ⇒ ⇒ ⇒ **FR-009…FR-012** 带来**额外工作量**（线程池 `copy_context()` + `SuperStepResult`
+  扩字段 + 两份上游契约的回溯修订 + 一键验收脚本）⇒ ⇒ ⇒ 本 feature 以**实现期实测**为准
+  ⇒ ⇒ ⇒ **行数 / 工时的修订属发起者职权**（与 B8F1 的**登记项 R-5** 同款处置 · 原则 VIII）。
 - **后续解锁**：**B22F1**（`get_graph` + `draw_mermaid`）→ **B23F1**（PNG）。
 - **验收脚本联动**：`harness/demo/visualization.py` 覆盖 C12–C15 / C26，
   其中「七种流式模式」一项由本 feature 交付——该脚本在 M2 阶段应转绿。
@@ -151,6 +200,45 @@
   发起者追认」⇒ ⇒ MUST 复用 B7F3 已定的**载体边界**（`RunConfig` = 会话面 + `max_concurrency`；
   普通映射 = 运行期参数 ⇒ **原样**交给 L2 ⇒ MUST NOT 在门面层翻译成 `RunConfig`）。
   ⇒ 落点：`specs/b7f3-invoke-full-state/spec.md` 的**下游承接 D-5** · 契约 **CF-05**。
+
+## 下游承接（**B7F1 + B10F1** · 2026-11-18 · **只接线 · 逐条最小改动**）
+
+- **D-1（B7F1 → B8F2 · M2 · 「单轮驱动」的入口形态）**：`stream()` MUST 以**单轮入口**
+  `run_super_step` **反复驱动**（**上游同款** · 上游的 `PregelLoop.tick()` 注释
+  「Execute a single iteration of the Pregel loop」· `langgraph/pregel/_loop.py:599`
+  ⇒ `stream()` 的主循环 = `while loop.tick(): … yield` · `langgraph/pregel/main.py:2964`）
+  ⇒ ⇒ ⇒ 本 feature MUST **NOT** 改动既有 L2 入口（`run_super_step` / `run_super_steps`）的
+  **签名**（**B7F1 的冻结面** · 契约 §1）⇒ ⇒ ⇒ ⇒ **零新增 L2 入口** ⇒ ⇒ ⇒
+  ⇒ ⇒ ⇒ 该形态是**上游同款** ⇒ ⇒ ⇒ **无需发起者另行裁决**。
+  ⇒ 落点：`specs/b7f1-superstep-loop/contracts/superstep-contract.md` §1（两个入口的签名）
+  · `specs/b8f2-stream-modes/spec.md` 的 **FR-009**。
+- **D-2（B7F1 → B8F2 · M2 · 「结果对象」的 task 级载荷）**：`tasks` 档 MUST 产出
+  **task 级**事件（**每个** task 完成时一条 · **上游同款** · 上游
+  `langgraph/pregel/_loop.py:580` / `:674` 的 `self._emit("tasks", map_debug_tasks, …)`
+  ⇒ 载荷 = `langgraph/types.py:637` 的 `PregelTask` **七字段**）
+  ⇒ ⇒ ⇒ 本仓库契约层**已有**逐字同名的 `PregelTask`
+  （`src/freegraph/contracts/types.py:141`）⇒ ⇒ ⇒ ⇒ **零新增公开面**
+  ⇒ ⇒ ⇒ ⇒ `SuperStepResult` MUST 增 `tasks` 字段 ⇒ ⇒ ⇒ ⇒ **MUST NOT** 删既有
+  **4** 个字段（**拆分而不删**）⇒ ⇒ ⇒ ⇒ ⚠️ **这是破 B7F1 的冻结面**（契约 §1 的
+  `SuperStepResult(state, executed, node_writes, steps)` 构造签名）⇒ ⇒ ⇒ ⇒ MUST 走
+  「破冻结面的三条」（**登记 + 回溯修订 + 发起者追认**）⇒ ⇒ ⇒ ⇒ **B8F2 有自己的
+  一次追认额度**（宪法 v1.8.0「每 feature ≤ 1 次」）。
+  ⇒ 落点：`specs/b7f1-superstep-loop/contracts/superstep-contract.md` §1 与 §5.3
+  · `specs/b8f2-stream-modes/spec.md` 的 **FR-010**。
+- **D-3（B10F1 → B8F2 · M2 · `StreamWriter` 的跨线程可见性）**：节点侧的 `StreamWriter`
+  写入 MUST 照抄上游的 **contextvar + 执行器 `copy_context()`** 传播机制
+  （`langgraph/config.py:126` 的 `get_stream_writer()` + `langgraph/pregel/_executor.py:64`
+  与 `:164` 的 `ctx.run(fn, …)`）⇒ ⇒ ⇒ 本仓库的落点 = 给
+  `src/freegraph/runtime/_concurrency.py` 的 `run_tasks_concurrently` 加
+  `copy_context()` ⇒ ⇒ ⇒ ⇒ **MUST NOT** 另立一套**并行**的显式传参机制
+  （原则 XII「零重复载体」）⇒ ⇒ ⇒ ⇒ ⚠️ 该改动使 `_interrupt.py` docstring 的
+  「线程池**不继承** `contextvars`（**实测**）」表述**对 freegraph 的执行器**不再为真
+  ⇒ ⇒ ⇒ ⇒ MUST **回溯修订**该表述与 B10F1 契约 §3（**只补注记** · **原描述不改写**）
+  ⇒ ⇒ ⇒ ⇒ B10F1 的两级 ContextVar 机制 MUST **NOT** 被移除（它照常工作 · 零脏状态
+  更成立）⇒ ⇒ ⇒ ⇒ ⇒ **判据只收紧**。
+  ⇒ 落点：`specs/b10f1-interrupt-resume/contracts/interrupt-resume-contract.md` §3
+  · `src/freegraph/runtime/_interrupt.py` 的模块 docstring
+  · `specs/b8f2-stream-modes/spec.md` 的 **FR-011**。
 
 ## 下游承接（B8F1 · 2026-11-18 · **只接线 · 逐条最小改动**）
 
