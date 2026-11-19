@@ -33,7 +33,7 @@
     [method] __init__(self, state_schema: Any, context_schema: Any = None, *, input_schema: Any = None, output_schema: Any = None) -> None
     [method] add_conditional_edges(self, source: str, path: Callable[..., str | list[str]], path_map: list[str] | dict[str, str] | None = None) -> Self
     [method] add_edge(self, start_key: str | list[str], end_key: str) -> Self
-    [method] add_node(self, node: str | Callable[..., Any], action: Callable[..., Any] | None = None, *, alias: str | None = None, defer: bool = False, metadata: Mapping[str, Any] | None = None) -> Self
+    [method] add_node(self, node: str | Callable[..., Any], action: Callable[..., Any] | None = None, *, alias: str | None = None, defer: bool = False, metadata: Mapping[str, Any] | None = None, destinations: dict[str, str] | tuple[str, ...] | None = None) -> Self
     [method] add_sequence(self, nodes: Sequence[Any]) -> Self
     [method] compile(self, checkpointer: Checkpointer | None = None, *, cache: Any = None, store: Store | None = None, interrupt_before: Any = None, interrupt_after: Any = None, debug: bool = False, name: str | None = None, transformers: Any = None) -> CompiledGraph
     [method] set_conditional_entry_point(self, path: Callable[..., str | list[str]], path_map: list[str] | dict[str, str] | None = None) -> Self

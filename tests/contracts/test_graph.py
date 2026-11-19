@@ -17,6 +17,7 @@ from typing import Any, Union, get_args, get_origin, get_type_hints
 import pytest
 
 from freegraph.contracts import Edge, Graph, Node
+from freegraph.contracts.graph import _escape_label, _safe_id
 
 #: ``Node`` 的字段清单（**3 个**，逐字）——``data-model.md`` §3.1。
 NODE_FIELDS = ["id", "name", "metadata"]
@@ -219,3 +220,66 @@ def _is_pure_data_type(annotation: Any) -> bool:
     if isinstance(annotation, type) and issubclass(annotation, pure_data_classes):
         return True
     return annotation in scalars
+
+
+# ── B22F1 · mermaid 文本导出（C14）────────────────────────────────────
+
+
+class TestGraphMermaid:
+    def test_empty_graph_is_legal_and_non_empty(self) -> None:
+        assert Graph().draw_mermaid() == "graph TD;\n"
+
+    def test_header_nodes_and_edges(self) -> None:
+        graph = Graph(
+            nodes=(Node(id="a"), Node(id="b")),
+            edges=(Edge(source="a", target="b"),),
+        )
+        text = graph.draw_mermaid()
+        assert text.splitlines()[0] == "graph TD;"
+        assert 'a["a"];' in text
+        assert 'b["b"];' in text
+        assert "a --> b;" in text
+        assert all(line.endswith(";") for line in text.splitlines())
+
+    def test_conditional_edges_are_dashed_with_or_without_label(self) -> None:
+        graph = Graph(
+            nodes=(Node(id="a"), Node(id="b")),
+            edges=(
+                Edge(source="a", target="b", conditional=True, condition="route"),
+                Edge(source="a", target="b", conditional=True, condition=None),
+            ),
+        )
+        text = graph.draw_mermaid()
+        assert "a -. &nbsp;route&nbsp; .-> b;" in text
+        assert "a -.-> b;" in text
+
+    def test_special_characters_are_escaped(self) -> None:
+        graph = Graph(nodes=(Node(id='a"b'), Node(id="x\ny")))
+        text = graph.draw_mermaid()
+        assert _safe_id('a"b') == 'a\\22b'
+        assert _safe_id("x\ny") == "x\\ay"
+        assert "#quot;" in text
+        assert "<br/>" in text
+        assert "\n" not in text.split('["', 1)[1].split('"]', 1)[0]
+        assert "mermaid.ink" not in text
+        assert "http://" not in text and "https://" not in text
+
+    def test_label_escape_is_deterministic_and_covers_all_entities(self) -> None:
+        raw = 'a"b\n<c>&d|e\\f#g'
+        escaped = _escape_label(raw)
+        assert escaped == "a#quot;b<br/>#lt;c#gt;#amp;d#124;e#92;f#35;g"
+        assert _escape_label(raw) == escaped
+
+    def test_draw_mermaid_is_deterministic(self) -> None:
+        graph = Graph(
+            nodes=(Node(id="a"), Node(id="b")),
+            edges=(Edge(source="a", target="b"),),
+        )
+        assert graph.draw_mermaid() == graph.draw_mermaid()
+
+    def test_non_ascii_names_use_safe_ids(self) -> None:
+        graph = Graph(nodes=(Node(id="中文"), Node(id="🙂")))
+        text = graph.draw_mermaid()
+        assert text.startswith("graph TD;")
+        assert "\\4e2d\\6587" in text
+        assert "\\1f642" in text

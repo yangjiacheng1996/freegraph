@@ -223,3 +223,13 @@ def test_the_differential_payload_matches_the_l3_product() -> None:
 
     assert expected == compiled._spec.conditional_edges
     assert expected == compiled._conditional_edges
+
+
+def test_graph_export_parity_scenarios_meet_their_verdicts(upstream_version: str) -> None:
+    """B22F1 图导出差分（D-01…D-15）MUST 符合各自判词。"""
+    results = parity_probe._run_graph_scenarios()
+    assert results, "graph export 差分场景集为空"
+    failures = [result for result in results if not result.ok]
+    assert not failures, "\n".join(
+        f"  ✘ {result.name}: {result.detail}" for result in failures
+    )

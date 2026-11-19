@@ -15,6 +15,7 @@
 |---|---|---|---|---|---|
 | P-01 | `StateGraph` 类与构造参数名 | `langgraph/graph/state.py:131` · `:216-225` | 同名同签名；`state_schema` 唯一必填位置参数；其余可选 | SAME | 宪法原则 III 第 2 项 |
 | P-02 | `add_node(node, action, *, defer, metadata, ...)` 与单 callable 形态 | `langgraph/graph/state.py:667-682` · `:778-799` | 同名同签名；支持单 callable；普通 callable `.name` 不参与取名 | SAME | 宪法原则 III 第 3 项 · E-21 |
+| P-02d | `add_node(..., destinations=...)` | `langgraph/graph/state.py:810-861` | 接受 `Sequence[str]` / `dict[str,str]`；显式覆盖返回注解推断；仅图渲染 | SAME（B22F1 追加） | T-2 / B22F1 |
 | P-02b | `add_node(..., alias=...)` | `langgraph/graph/state.py:667-682`（签名无 `alias`；运行时经 `**kwargs` 静默忽略 · 实测 E-24） | `alias` 为 freegraph 自研增量，只记录不实现语义 | DIFF | C25 · B8F3 ⇒ X-1 · D-74 |
 | P-02c | 普通 callable 的 `.name` 不参与取名 | `langgraph/graph/state.py:778-799`（实测 E-21） | 同款：`__name__` → 类型名；`.name` 忽略 | SAME | 上游首段已把 `node` 固定为 `str` ⇒ 第二段不再取 `.name` |
 | P-03 | 重复节点名 / 保留节点名 / 保留字符 | `langgraph/graph/state.py:802-811` · `langgraph/_internal/_constants.py:87-89` · 实测 E-18 | `add_node` 立即 `ValueError`，消息点名节点 | SAME | 早失败且异常类型一致 |

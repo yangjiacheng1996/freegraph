@@ -17,7 +17,7 @@
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field, fields
-from typing import Any, ClassVar, Literal, TypeAlias
+from typing import Any, ClassVar, Generic, Literal, TypeAlias, TypeVar
 
 from .errors import FreegraphError
 
@@ -29,6 +29,9 @@ StateDict: TypeAlias = dict[str, Any]
 **不支持**按 schema 参数化（``StateDict[MySchema]`` 是非法写法）——
 需要具体字段补全的用户改用自己的 ``TypedDict`` 标注节点签名。
 """
+
+N = TypeVar("N", bound=str)
+"""**命令目标类型参数**（仅用于 ``Command[Literal[...]]`` 的图渲染推断）。"""
 
 StreamWriter: TypeAlias = Callable[[Any], None]
 """**流写入器** —— 节点向 ``custom`` 流写自定义数据的可调用对象。
@@ -57,7 +60,7 @@ class Send:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class Command:
+class Command(Generic[N]):
     """**命令原语** —— 节点返回的命令，承载三个语义位。
 
     ============== ==================================== ==========

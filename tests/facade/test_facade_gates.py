@@ -502,6 +502,10 @@ class TestCompatMatrixCoversTheFacade:
     #: ``update_state`` 仍**未交付** ⇒ ⇒ **不得**升为「行为等价」）。
     MATRIX_ROWS_UPDATABLE_BY_B7F3 = frozenset({"CompiledGraph"})
 
+    #: **B22F1 · T-1 / T-5**：`Command` 泛型化 + `Graph.draw_mermaid` 追加 ⇒
+    #: 这两行的「差异说明」必须更新；等价程度不得变差。
+    MATRIX_ROWS_UPDATABLE_BY_B22F1 = frozenset({"Command", "Graph"})
+
     def test_existing_contract_rows_are_unchanged(self, repo_root: Path) -> None:
         """**既有 18 行逐字未改** —— 与 git 中���**上一版**逐字节比对。
 
@@ -543,6 +547,7 @@ class TestCompatMatrixCoversTheFacade:
             and name not in self.MATRIX_ROWS_UPDATABLE_BY_B11F1
             and name not in self.MATRIX_ROWS_UPDATABLE_BY_B12F1
             and name not in self.MATRIX_ROWS_UPDATABLE_BY_B7F3
+            and name not in self.MATRIX_ROWS_UPDATABLE_BY_B22F1
             and previous[name] != current.get(name)
         )
         assert not changed, f"既有契约层矩阵行被改动：{changed}"
@@ -567,6 +572,7 @@ class TestCompatMatrixCoversTheFacade:
             | self.MATRIX_ROWS_UPDATABLE_BY_B11F1
             | self.MATRIX_ROWS_UPDATABLE_BY_B12F1
             | self.MATRIX_ROWS_UPDATABLE_BY_B7F3
+            | self.MATRIX_ROWS_UPDATABLE_BY_B22F1
         ):
             if name not in previous:
                 # 该行属**门面**面（不在「契约层」集合内）⇒ 不由本判据守

@@ -84,14 +84,14 @@ uv run --no-project --python .venv python harness/scripts/gates/gate_G21_depende
 > 由 B24F1 补全与定稿）。
 >
 > **「公开面」的判定口径**（2026-11-08 · B4F1 分析轮澄清 · **2026-11-13 订正**）：**公开面 = 契约层 **20** 个符号
-> + 门面 `freegraph/graph.py` 的 7 个符号** ⇒ **内核子包**（如 `freegraph.runtime` 的
+> + 门面 `freegraph/graph.py` 的 **8** 个符号** ⇒ **内核子包**（如 `freegraph.runtime` 的
 > `parse_state_schema` / `ChannelSpec` / `SchemaSpec` / `InvalidSchemaError`）属 **L2 内部 API**
 > （用户可 import，但**不承诺稳定**）⇒ **不进本表**（相关 feature 的兼容矩阵**零新增行**）。
 
 | freegraph 符号 | 对应上游符号 | 等价程度 | 差异说明 |
 |---|---|---|---|
 | `StateDict` | （LangGraph 1.2.19 无同名公开符号） | 行为等价 | 与 `dict[str, Any]` 完全等价；上游把同一形状内联为 `dict[str, Any]`，未单列类型名 |
-| `Command` | `langgraph.types.Command` | 行为等价 | 四个语义位 `goto` / `update` / `resume` / `graph` **同名同义**（**上游同款** · 2026-11-12 上游对齐 P3 · 上游 `langgraph/types.py:821-824`）；**无构造期校验**（上游同款 · `Command()` 合法）；`goto` 目标**可以是节点名或 `Send`**（上游同款 · B11F1）；**运行期语义已落地**（B9F1 · `goto` 落到**边触发源**空间 · `update` 与普通返回值**共用同一条合并路径**）；节点亦可返回**命令列表**（上游同款）；**`update` 接受 list/tuple of 2-tuples**（上游同款 · 上游 `langgraph/types.py:836-840`）；**节点返回 `None` ⇒ 无写入**（上游同款 · 上游 `langgraph/graph/state.py:1459-1460`） |
+| `Command` | `langgraph.types.Command` | 行为等价 | **B22F1 起泛型化**（`Command[N]`；字段 / 构造 / `PARENT` / 运行期语义不变，仅用于图渲染推断）；四个语义位 `goto` / `update` / `resume` / `graph` **同名同义**（**上游同款** · 2026-11-12 上游对齐 P3 · 上游 `langgraph/types.py:821-824`）；**无构造期校验**（上游同款 · `Command()` 合法）；`goto` 目标**可以是节点名或 `Send`**（上游同款 · B11F1）；**运行期语义已落地**（B9F1 · `goto` 落到**边触发源**空间 · `update` 与普通返回值**共用同一条合并路径**）；节点亦可返回**命令列表**（上游同款）；**`update` 接受 list/tuple of 2-tuples**（上游同款 · 上游 `langgraph/types.py:836-840`）；**节点返回 `None` ⇒ 无写入**（上游同款 · 上游 `langgraph/graph/state.py:1459-1460`） |
 | `StateSnapshot` | `langgraph.types.StateSnapshot` | 行为等价 | **8** 个字段**同名同序**（**上游同款** · 2026-11-12 上游对齐 P3 · 上游 `langgraph/types.py:683-701`）；`created_at` / `metadata` **可空**（上游同款）；`tasks` / `interrupts` 的元素类型 = `PregelTask` / `Interrupt`（上游同款）；`config` / `parent_config` 的类型是 freegraph 自有的 `RunConfig`，不是 `RunnableConfig` |
 | `RunConfig` | `langchain_core.runnables.RunnableConfig` | 行为等价 | **9** 个键**同名同义**（**上游同款** · 2026-11-12 上游对齐 P3 · 上游 `langchain_core/runnables/config.py:80-124`）：`tags` / `metadata` / `max_concurrency` / `recursion_limit` / `run_name` / `run_id` / `configurable` **齐备**；`thread_id` **顶层**保留（上游放在 `configurable` 内 ⇒ 由 `resolved_thread_id()` **两种写法都解析**）；**不含** `callbacks`（上游的类型在 `langchain_core` ⇒ 照抄即引入依赖 ⇒ 回调走 freegraph 自有的 `TraceSink`）；`context` 是**独立通道**（契约 C21），**不塞进 `configurable`** |
 | `FreegraphError` | （无对应） | 不支持 | freegraph 自创的统一基类——上游三个错误分属 `Exception` / `RecursionError` / `GraphBubbleUp` 三棵互不相干的继承树，无法只捕获一个基类兜住全部内核错误 |
@@ -106,12 +106,12 @@ uv run --no-project --python .venv python harness/scripts/gates/gate_G21_depende
 | `TraceSink` | 无上游对应（自由设计） | 不支持 | 契约条目 **C23 / C24**（可观测挂钩 / 当前 span 上下文）——上游**无 span 推送协议**，其 `callbacks` / `tracers` 是**非同名**物 |
 | `Store` | `langgraph.store.base.BaseStore` | 行为等价 | 六方法与**参数名**逐字镜像上游（`search` 的 `namespace_prefix` 是位置参数、`list_namespaces` 的 `prefix` 是关键字参数——上游的这个命名分歧**照抄不统一**）；**命名空间类型收紧为 `tuple[str, ...]`**（**上游同款** · 2026-11-12 上游对齐 P3 · 上游 `langgraph/store/base/__init__.py:311` 的 `NamespacePath`）⇒ **上游形状的 store 直接满足本协议**；**未含**上游的**异步变体**（v1 无 async）；`batch` 操作表示挂起 v2；上游来源 `langgraph/store/base/__init__.py:733`（`batch`）/ `:756`（`get`）/ `:779`（`search`）/ `:856`（`put`）/ `:937`（`delete`）/ `:946`（`list_namespaces`） |
 | `CompiledGraph` | `langgraph.pregel.Pregel` | 部分等价 | 六方法的**返回类别**与**参数名（占位名）**已对齐（`invoke` → 完整状态字典 / `stream` → `dict[str, Any]` 事件迭代器 / `get_state` 查不到返回空值）；**`stream` 已交付**（B8F2 · 七种 mode · 四键信封 · `custom` 轮末批量 X-6）· **行为细节挂起** B15F1 / B16F1；上游来源 `langgraph/pregel/main.py:3783`（`invoke`）/ `:2655`（`stream`）/ `:845`（`get_graph`）/ `:1392`（`get_state`）/ `:1480`（`get_state_history`）/ `:2515`（`update_state`） |
-| `Graph` | `langchain_core.runnables.graph.Graph` | 部分等价 | **同名但自有实现**——不复用、不复制上游代码；freegraph 的节点 / 边集合是**不可变元组**（上游是 `dict[str, Node]` / `list[Edge]`）；上游来源 `langchain_core/runnables/graph.py:255` |
+| `Graph` | `langchain_core.runnables.graph.Graph` | 部分等价 | **同名但自有实现**——不复用、不复制上游代码；freegraph 的节点 / 边集合是**不可变元组**（上游是 `dict[str, Node]` / `list[Edge]`）；**B22F1 起**提供 `draw_mermaid()`（纯本地、零出站）；上游来源 `langchain_core/runnables/graph.py:255` |
 | `Node` | `langchain_core.runnables.graph.Node` | 部分等价 | **同名但自有实现**；freegraph 的 `name` 缺省**归一为 `id`**、`metadata` 是纯映射（上游 `Node.data` 装的是可调用对象 / pydantic 对象）；上游来源 `langchain_core/runnables/graph.py:95` |
 | `Edge` | `langchain_core.runnables.graph.Edge` | 部分等价 | **同名但自有实现**；freegraph 多一个 `conditional` 位并显式**不可哈希**（上游是 `NamedTuple`，可哈希）；上游来源 `langchain_core/runnables/graph.py:65` |
 | `Span` | 无上游对应（自由设计） | 不支持 | 契约条目 **C23 / C24**（可观测挂钩 / 当前 span 上下文）· 数据格式 **DF4**——11 字段、必带 `thread_id` / `run_id` / `node` / `checkpoint_id`；上游的近似物是 LangSmith 的 `RunTree`（**非同名**物） |
 | `TraceQuery` | 无上游对应（自由设计） | 不支持 | 契约条目 **C27**（本地 trace 存储与查询）——5 字段全可空、可组合，全空 = 取全部；freegraph 自有的本地 trace 查询契约 |
-| `StateGraph` | `langgraph.graph.StateGraph` | 行为等价 | **参数名与关键字逐字对齐上游**（**上游同款** · 2026-11-12 上游对齐 P3）：构造 `state_schema` / `context_schema` / `input_schema` / `output_schema` · `add_node(node, action=None, *, alias=None, defer=False, metadata=None)`（含**单 callable** 形态 `add_node(fn)`）· `add_edge(start_key, end_key)` · `add_conditional_edges(source, path, path_map=None)` · `compile(checkpointer=None, *, cache, store, interrupt_before, interrupt_after, debug, name, transformers)` · 另补上游同款的 `add_sequence` / `set_entry_point` / `set_conditional_entry_point` / `set_finish_point` / `validate` / `set_node_defaults` 六个方法；`alias` 是 freegraph **自有**增量（节点别名 · C25）· **构建器已交付（B6F1）；`compile` 已交付（B7F2）；`invoke` 已交付（B7F3）；**条件边路由求值已交付（B8F1）** —— 路由函数在源节点任务**成功落回**后被求值（**fresh 读**：看到「当前值 + 本节点本次写入」）、`path_map` 支持 **list / dict / `None`** 三形态、返回 `END` 终止整张图、返回序列 ⇒ 多目标同轮并行、返回 `Send` ⇒ 复用 **B11F1** 的 fan-out 构造器；上游来源 `langgraph/graph/state.py:131`（类本体）/ `:216-224`（构造）/ `:667-682`（`add_node`）/ `:928`（`add_edge`）/ `:982-989`（`add_conditional_edges`）/ `:1032-1077`（`add_sequence`）/ `:1079` · `:1092` · `:1116` · `:1129-1175` · `:272-335` / `:1177-1188`（`compile`） |
+| `StateGraph` | `langgraph.graph.StateGraph` | 行为等价 | **参数名与关键字逐字对齐上游**（**上游同款** · 2026-11-12 上游对齐 P3）：构造 `state_schema` / `context_schema` / `input_schema` / `output_schema` · `add_node(node, action=None, *, alias=None, defer=False, metadata=None, destinations=None)`（含**单 callable** 形态 `add_node(fn)`）· `add_edge(start_key, end_key)` · `add_conditional_edges(source, path, path_map=None)` · `compile(checkpointer=None, *, cache, store, interrupt_before, interrupt_after, debug, name, transformers)` · 另补上游同款的 `add_sequence` / `set_entry_point` / `set_conditional_entry_point` / `set_finish_point` / `validate` / `set_node_defaults` 六个方法；`alias` 是 freegraph **自有**增量（节点别名 · C25）· **构建器已交付（B6F1）；`compile` 已交付（B7F2）；`invoke` 已交付（B7F3）；**条件边路由求值已交付（B8F1）** —— 路由函数在源节点任务**成功落回**后被求值（**fresh 读**：看到「当前值 + 本节点本次写入」）、`path_map` 支持 **list / dict / `None`** 三形态、返回 `END` 终止整张图、返回序列 ⇒ 多目标同轮并行、返回 `Send` ⇒ 复用 **B11F1** 的 fan-out 构造器；上游来源 `langgraph/graph/state.py:131`（类本体）/ `:216-224`（构造）/ `:667-682`（`add_node`）/ `:928`（`add_edge`）/ `:982-989`（`add_conditional_edges`）/ `:1032-1077`（`add_sequence`）/ `:1079` · `:1092` · `:1116` · `:1129-1175` · `:272-335` / `:1177-1188`（`compile`） |
 | `START` | `langgraph.constants.START` | 行为等价 | 值与语义均一致（`'__start__'`）；上游来源 `langgraph/constants.py:30`（核实环境 `langgraph 1.2.11`） |
 | `END` | `langgraph.constants.END` | 行为等价 | 值与语义均一致（`'__end__'`）；上游来源 `langgraph/constants.py:28`（核实环境 `langgraph 1.2.11`） |
 | `Send` | `langgraph.types.Send` | 部分等价 | 形状等价（`node` / `arg`）；**freegraph 侧不可变**（上游可变）；**fan-out 行为已落地**（B11F1 · `Command.goto` 可装 `Send` · 类型定义在 L1）；上游来源 `langgraph/types.py:704`（核实环境 `langgraph 1.2.11`） |
@@ -123,6 +123,10 @@ uv run --no-project --python .venv python harness/scripts/gates/gate_G21_depende
 > ⇒ ⇒ **契约层仍 21 个符号 · 门面仍 7 个符号 · `freegraph.runtime` 仍 23 个符号 ·
 > `vars(compiled)` 仍 11 键** ⇒ ⇒ ⇒ **本表零新增行**（**兼容矩阵零新增行** ⇒ 门禁 **G8 / G19** 恒绿）
 > ⇒ ⇒ ⇒ `THIRD_PARTY_NOTICES` **零新增**（**零新增依赖** ⇒ **零新增许可证**）。
+>
+> ⚠️ **B22F1 的公开面增量 == 0 行**（2026-11-20）—— `Command` 泛型化 / `add_node(destinations=)` /
+> `Graph.draw_mermaid()` / `Edge.condition=None` 均**不新增顶层符号**；契约层仍 **22** · 门面仍 **8** ·
+> `freegraph.runtime` 仍 **23** · `vars(compiled)` 仍 **11** 键；`get_graph()` / `draw_mermaid()` 已交付。
 >
 > ⚠️ **B8F2 的公开面增量 == 2 行**（2026-11-20）—— 契约层 `StreamWriter` +
 > 门面 `get_stream_writer` ⇒ 契约层 **22** · 门面 **8** · `freegraph.runtime` 仍 **23**

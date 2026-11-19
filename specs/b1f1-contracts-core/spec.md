@@ -223,3 +223,11 @@ P1/P2 交付「契约存在」，P3 交付「契约不被内部实现污染」�
 - 契约权威：`harness/reports/Q8-图运行时最小契约.md` §3.4（C1–C27）+ §3.4.1（C27 增补 + C22 / C23 字段约定，2026-11-05 · D11）。
 - 架构与 feature 拆解：`harness/prompts/guide.md` §2.3 / §4.3。
 - 本 feature 提示词初稿：`harness/features/B1F1_契约层骨架.md`。
+
+---
+
+## B22F1 追加注记（2026-11-20 · 发起者追认）
+
+- **T-1**：`Command` 自本 feature 起**泛型化**（`Command[N]`）。字段（`goto` / `update` /
+  `resume` / `graph`）、构造签名、`PARENT` 哨兵与运行期语义**逐字不变**；新增
+  `Command[Literal[...]]` 下标能力，仅用于图渲染的类型推断。

@@ -9,10 +9,12 @@
 > | 所属 功能块 | B23（`draw_mermaid_png`） |
 > | 架构层 | L3 图定义层 |
 > | 里程碑 | M2 图定义与对外 API（第 20 个） |
-> | 前置依赖 | **B22F1** |
+> | 前置依赖 | **B22F1**（**已交付** · 2026-11-20） |
 > | 规模 | 1,080 行（实现 520 / 测试 560）· 3 人日 |
 > | 建议 short-name | `b23f1-draw-mermaid-png-offline` |
 > | MVP 必需（★） | **是**（固定脚本所需 6 项之一；**六项齐备 = MVP 达成**） |
+
+> **状态更新（2026-11-20）**：**B22F1 已交付**（`get_graph` + `draw_mermaid` 文本导出通过验收）。本 feature 现为固定脚本（`target.py`）端到端轮的**最后一个剩余前置**；C14 文本口径以 `specs/b22f1-get-graph-mermaid/contracts/graph-export-contract.md` 为准。
 
 ---
 

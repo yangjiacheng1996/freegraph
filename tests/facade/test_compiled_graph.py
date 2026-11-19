@@ -73,7 +73,6 @@ class TestCapabilitySurface:
     def test_each_unready_method_raises_not_implemented_naming_owner(self) -> None:
         compiled = build_minimal_graph().compile()
         calls = {
-            "get_graph": ((), "B22F1"),
             "get_state": (({},), "B15F1"),
             "get_state_history": (({},), "B15F1"),
             "update_state": (({}, {}), "B16F1"),
@@ -82,6 +81,13 @@ class TestCapabilitySurface:
             with pytest.raises(NotImplementedError) as excinfo:
                 getattr(compiled, name)(*args)
             assert owner in str(excinfo.value), (name, str(excinfo.value))
+
+    def test_get_graph_is_delivered(self) -> None:
+        """B22F1：``get_graph`` 返回自有 ``Graph``。"""
+        from freegraph.contracts.graph import Graph
+
+        compiled = build_minimal_graph().compile()
+        assert isinstance(compiled.get_graph(), Graph)
 
     def test_invoke_is_delivered_and_does_not_raise_not_implemented(self) -> None:
         """**B7F3 已交付** ⇒ ``invoke()`` 在合法路径上 MUST **不**抛 ``NotImplementedError``。

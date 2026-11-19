@@ -20,7 +20,7 @@ import re
 import typing
 from collections.abc import Mapping, Sequence
 from dataclasses import FrozenInstanceError, fields
-from typing import Any
+from typing import Any, Literal
 
 import pytest
 
@@ -445,3 +445,31 @@ class TestRunConfig:
         assert "thread_id=" in repr(RunConfig(thread_id="t"))
         assert RunConfig(thread_id="t") == RunConfig(thread_id="t")
         assert RunConfig(thread_id="t") != RunConfig(thread_id="u")
+
+
+class TestCommandGenericSurface:
+    """B22F1 · T-1：``Command`` 泛型化 **不得**改变运行期面。"""
+
+    def test_command_is_subscriptable_with_literal(self) -> None:
+        """``Command[Literal["b"]]`` 可下标（图渲染推断的前提）。"""
+        assert Command[Literal["b"]] is not None
+
+    def test_command_fields_are_unchanged(self) -> None:
+        """泛型化后字段清单逐字不变（``goto`` / ``update`` / ``resume`` / ``graph``）。"""
+        assert [f.name for f in fields(Command)] == [
+            "goto",
+            "update",
+            "resume",
+            "graph",
+        ]
+
+    def test_parent_and_slots_are_unchanged(self) -> None:
+        """``PARENT`` 仍是 ClassVar；不进入实例槽位。"""
+        assert Command.PARENT == "__parent__"
+        assert "PARENT" not in Command.__slots__
+        assert "PARENT" not in {f.name for f in fields(Command)}
+
+    def test_runtime_construction_is_unchanged(self) -> None:
+        """``Command(goto="a")`` 的行为 / 相等语义不变。"""
+        assert Command(goto="a").goto == "a"
+        assert Command(goto="a") == Command(goto="a")

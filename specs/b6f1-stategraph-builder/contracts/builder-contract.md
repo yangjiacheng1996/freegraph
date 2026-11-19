@@ -17,7 +17,7 @@
 | 项 | 契约 |
 |---|---|
 | 构造 | `StateGraph(state_schema: Any, context_schema: Any = None, *, input_schema: Any = None, output_schema: Any = None) -> None` |
-| 节点 | `add_node(node: str \| Callable[..., Any], action: Callable[..., Any] \| None = None, *, alias: str \| None = None, defer: bool = False, metadata: Mapping[str, Any] \| None = None) -> Self` |
+| 节点 | `add_node(node: str \| Callable[..., Any], action: Callable[..., Any] \| None = None, *, alias: str \| None = None, defer: bool = False, metadata: Mapping[str, Any] \| None = None, destinations: dict[str, str] \| tuple[str, ...] \| None = None) -> Self` |
 | 静态边 | `add_edge(start_key: str \| list[str], end_key: str) -> Self`（运行时也接受 `tuple[str, ...]` 源） |
 | 条件边 | `add_conditional_edges(source: str, path: Callable[..., str \| list[str]], path_map: list[str] \| dict[str, str] \| None = None) -> Self` |
 | 校验 | `validate(interrupt: Sequence[str] \| None = None) -> Self` |
@@ -45,7 +45,8 @@
 - 节点名 `__parent__` 在本层**不拒绝**（上游 `add_node` 同款接受）；由 B7F2 的
   `GraphSpec` 构造期 **B9F1 FR-005 `__parent__` 保留名检查**最终失败（与 V-1 / V-2 / V-3 同族）。
 - `alias` / `defer` / `metadata` 原样记录；`metadata` 浅拷贝。本 feature **不校验**其运行时类型。
-- MUST NOT 调用 `action`、MUST NOT 检查其返回注解。
+- **B22F1 追加**：`destinations` 仅用于图渲染（`get_graph`），不影响执行；`None` = 使用返回注解推断，显式序列 / dict = 覆盖推断（含空）。形态非法 ⇒ `TypeError`；目标存在性由编译期校验（`ValueError`）。
+- MUST NOT 调用 `action`、MUST NOT 检查其返回注解（`destinations=None` 时仅做 `get_type_hints` 只读推断）。
 
 ### 1.3 `add_edge` 语义
 
@@ -188,6 +189,8 @@ class _ConditionalEdgeSpec:
 | BV-7 | 条件边 source / path 形态非法 | `add_conditional_edges` | `TypeError` |
 | BV-8 | `path_map` 类型 / 元素类型非法 | `add_conditional_edges` | `TypeError` |
 | BV-9 | 同源分支名重复 | `add_conditional_edges` | `ValueError` |
+| BV-14 | `destinations` 形态非法（非 `Sequence[str]` / 非 `dict[str, str]`） | `add_node` | `TypeError` |
+| BV-15 | `destinations` 目标不存在（非 `END`） | `validate` / `compile` | `ValueError`（点名目标） |
 | BV-10 | schema 非法 | `validate` / `_build_spec` | B4F1 `InvalidSchemaError` |
 | BV-11 | 节点表为空（源 / 入口 / 目标校验通过后，如 `START -> END`；在 BV-12c 之后执行 · X-5） | `validate` / `_build_spec` | `ValueError` |
 | BV-12a | 源存在性：静态边源 / 条件边源（`START` 除外）不存在 | `validate` / `_build_spec` | `ValueError` |

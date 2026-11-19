@@ -228,11 +228,13 @@ class TestCompileIsWired:
         compiled = graph.compile()  # type: ignore[attr-defined]
         assert not hasattr(graph, "invoke")
         calls = (
-            ("get_graph", ()),
             ("get_state", ({},)),
             ("get_state_history", ({},)),
             ("update_state", ({}, {})),
         )
+        from freegraph.contracts.graph import Graph
+
+        assert isinstance(compiled.get_graph(), Graph)
         for name, args in calls:
             with pytest.raises(NotImplementedError):
                 getattr(compiled, name)(*args)

@@ -14,6 +14,8 @@
 > | 建议 short-name | `b22f1-get-graph-mermaid` |
 > | MVP 必需（★） | **是**（固定脚本所需 6 项之一；且**必须先于** `invoke` 就绪） |
 
+> **状态（2026-11-20）**：**已交付**。50/50 任务完成；`B22F1 acceptance: PASS`；全量 `1700 passed, 4 skipped`；人工验收通过。
+
 ---
 
 ## 提示词正文

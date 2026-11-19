@@ -24,7 +24,8 @@
 事件信封 / ``values`` 归一 / ``custom`` 轮末批量的组装均在本模块；``checkpointer``
 与静态断点在 v1 分别被忽略 / 显式拒绝。
 
-本模块 **不实现** ``get_graph()`` / checkpointer / store 的**行为**。
+**B22F1 交付 ``get_graph()``**：从编译期冻结快照导出自有 ``Graph``（零执行 / 零副作用）；
+checkpointer / store 的**行为**仍不在本模块。
 
 **上游对齐**（``langgraph 1.2.11`` · 原则 XI）：``StateGraph.__init__`` /
 ``add_node`` / ``add_edge`` / ``add_conditional_edges`` / ``validate`` / ``compile``
@@ -35,15 +36,19 @@ X-1…X-12。
 from __future__ import annotations
 
 import inspect
+import types
 import uuid
 import warnings
 from collections.abc import Callable, Hashable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Literal, Self, get_args, get_origin, get_type_hints
+from typing import Any, Literal, Self, Union, get_args, get_origin, get_type_hints
 
 from .contracts import (
     Checkpointer,
     Command,
+    Edge,
+    Graph,
+    Node,
     CompiledGraph as CompiledGraphProtocol,
     GraphInterrupt,
     RunConfig,
@@ -83,6 +88,7 @@ class _NodeRecord:
     alias: str | None = None
     defer: bool = False
     metadata: Mapping[str, Any] | None = None
+    destinations: tuple[tuple[str, str | None], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -118,12 +124,91 @@ class _BuilderSpec:
     conditional_edges: tuple[_ConditionalEdgeSpec, ...]
 
 
+@dataclass(frozen=True)
+class _EdgeGroup:
+    """图导出中间体：一条「边组」（B22F1 · 仅 L3 内部）。"""
+
+    sources: tuple[str, ...]
+    target: str
+    conditional: bool = False
+    condition: str | None = None
+
+
 def _branch_name(path: Callable[..., Any]) -> str:
     """按上游同款规则取分支名（普通 callable 的 ``.name`` **不参与**）。"""
     name = getattr(path, "__name__", None)
     if not isinstance(name, str) or not name or name == "<lambda>":
         return "condition"
     return name
+
+
+def _infer_command_destinations(action: Callable[..., Any]) -> tuple[str, ...]:
+    """从节点返回注解推断 ``Command[Literal[...]]`` 的目标（B22F1）。
+
+    与上游 ``langgraph/graph/state.py:810-858`` 同款：仅函数 / 方法 / 有方法
+    ``__call__`` 的可调用对象参与；先取 ``__call__`` 的 hints，再回退 action 本身；
+    任何解析异常都**静默降级为无声明**（MUST NOT 让登记失败）。
+    """
+    call = getattr(action, "__call__", None)
+    if not (
+        inspect.isfunction(action)
+        or inspect.ismethod(action)
+        or inspect.ismethod(call)
+    ):
+        return ()
+    try:
+        hints = (get_type_hints(call) if call is not None else None) or get_type_hints(
+            action
+        )
+    except (NameError, TypeError, StopIteration):
+        return ()
+
+    rtn = hints.get("return")
+    if rtn is None:
+        return ()
+    origin = get_origin(rtn)
+    if origin in (Union, types.UnionType):
+        for arg in get_args(rtn):
+            if get_origin(arg) is Command:
+                rtn = arg
+                origin = get_origin(rtn)
+                break
+    if origin is not Command:
+        return ()
+    args = get_args(rtn)
+    if not args:
+        return ()
+    literal = args[0]
+    if get_origin(literal) is not Literal:
+        return ()
+    return tuple(get_args(literal))
+
+
+def _normalize_destinations(
+    value: Mapping[str, str] | Sequence[str],
+) -> tuple[tuple[str, str | None], ...]:
+    """把**显式** ``destinations`` 归一为 ``(target, label | None)``（B22F1）。
+
+    ``None`` 不在此处理——``add_node`` 必须先判 ``destinations is None`` 再决定
+    是否调用推断（否则「未提供」与「显式空」不可区分）。
+    """
+    if isinstance(value, Mapping):
+        normalized: list[tuple[str, str | None]] = []
+        for target, label in value.items():
+            if not isinstance(target, str) or not isinstance(label, str):
+                raise TypeError("destinations mapping must be dict[str, str]")
+            normalized.append((target, label))
+        return tuple(normalized)
+    if isinstance(value, (str, bytes)):
+        raise TypeError("destinations must be a non-str sequence or a dict[str, str]")
+    if isinstance(value, Sequence):
+        normalized = []
+        for target in value:
+            if not isinstance(target, str):
+                raise TypeError("destinations sequence elements must be str")
+            normalized.append((target, None))
+        return tuple(normalized)
+    raise TypeError("destinations must be a non-str sequence or a dict[str, str]")
 
 
 def _normalize_path_map(
@@ -274,6 +359,134 @@ def _full_state(spec: GraphSpec, sparse: Mapping[str, Any]) -> dict[str, Any]:
     if "__interrupt__" in sparse:
         out["__interrupt__"] = sparse["__interrupt__"]
     return out
+
+
+def _export_nodes(
+    spec: GraphSpec,
+    builder_spec: _BuilderSpec,
+    interrupt_before: Sequence[str],
+    interrupt_after: Sequence[str],
+) -> list[Node]:
+    """构造 ``Graph.nodes``（B22F1 · 上游 ``_draw.py:221-236`` 同款）。"""
+    before = set(interrupt_before)
+    after = set(interrupt_after)
+    nodes: list[Node] = [Node(id=_START)]
+    for name in spec.nodes:
+        record = builder_spec.node_records[name]
+        metadata = dict(record.metadata or {})
+        if record.defer:
+            metadata["defer"] = True
+        if name in before and name in after:
+            metadata["__interrupt"] = "before,after"
+        elif name in before:
+            metadata["__interrupt"] = "before"
+        elif name in after:
+            metadata["__interrupt"] = "after"
+        nodes.append(Node(id=name, name=name, metadata=metadata))
+    nodes.append(Node(id=_END))
+    return nodes
+
+
+def _export_groups(
+    spec: GraphSpec,
+    builder_spec: _BuilderSpec,
+    conditional_edges: Mapping[str, tuple[dict[str, Any], ...]],
+) -> list[_EdgeGroup]:
+    """把静态 / 条件 / 节点声明边归一为 ``_EdgeGroup``（保序）。"""
+    groups: list[_EdgeGroup] = []
+    for key, targets in spec.edges.items():
+        sources = (key,) if isinstance(key, str) else tuple(key)
+        for target in targets:
+            groups.append(_EdgeGroup(sources=sources, target=target))
+    # ``_spec.edges`` 过滤了单源 END ⇒ 从完整冻结快照恢复。
+    for key, targets in builder_spec.edges.items():
+        if not isinstance(key, str):
+            continue
+        for target in targets:
+            if target == _END:
+                groups.append(_EdgeGroup(sources=(key,), target=target))
+    for source, items in conditional_edges.items():
+        for item in items:
+            branch = item["branch"]
+            for target in item["targets"]:
+                groups.append(
+                    _EdgeGroup(
+                        sources=(source,),
+                        target=target,
+                        conditional=True,
+                        condition=branch,
+                    )
+                )
+    for name in spec.nodes:
+        for target, label in builder_spec.node_records[name].destinations:
+            groups.append(
+                _EdgeGroup(
+                    sources=(name,),
+                    target=target,
+                    conditional=True,
+                    condition=label,
+                )
+            )
+    return groups
+
+
+def _export_edges(groups: Sequence[_EdgeGroup], spec: GraphSpec) -> tuple[Edge, ...]:
+    """静态可达闭包 + 终结补边 + 去重（B22F1 契约 §3）。"""
+    reachable = {_START}
+    changed = True
+    while changed:
+        changed = False
+        for group in groups:
+            if group.target in reachable:
+                continue
+            if all(source in reachable for source in group.sources):
+                reachable.add(group.target)
+                changed = True
+
+    edges: list[Edge] = []
+    for group in groups:
+        if not all(source in reachable for source in group.sources):
+            continue
+        for source in group.sources:
+            if source == _END:
+                continue
+            edges.append(
+                Edge(
+                    source=source,
+                    target=group.target,
+                    conditional=group.conditional,
+                    condition=group.condition,
+                )
+            )
+
+    outgoing = {edge.source for edge in edges}
+    for name in spec.nodes:
+        if name in reachable and name not in outgoing:
+            edges.append(Edge(source=name, target=_END))
+
+    deduped: dict[tuple[str, str], Edge] = {}
+    order: list[tuple[str, str]] = []
+    for edge in edges:
+        key = (edge.source, edge.target)
+        if key not in deduped:
+            deduped[key] = edge
+            order.append(key)
+        elif edge.conditional and not deduped[key].conditional:
+            deduped[key] = edge
+    return tuple(deduped[key] for key in order)
+
+
+def _export_graph(
+    spec: GraphSpec,
+    builder_spec: _BuilderSpec,
+    conditional_edges: Mapping[str, tuple[dict[str, Any], ...]],
+    interrupt_before: Sequence[str],
+    interrupt_after: Sequence[str],
+) -> Graph:
+    """从编译期冻结快照导出自有 ``Graph``（B22F1 · 零执行）。"""
+    nodes = _export_nodes(spec, builder_spec, interrupt_before, interrupt_after)
+    groups = _export_groups(spec, builder_spec, conditional_edges)
+    return Graph(nodes=tuple(nodes), edges=_export_edges(groups, spec))
 
 
 _STREAM_MODES: frozenset[str] = frozenset(
@@ -569,9 +782,19 @@ class CompiledGraph:
                         thread_id,
                     )
 
-    def get_graph(self, *, xray: bool = False) -> Any:
-        """图结构导出——**未就绪**（由 **B22F1** 交付）。"""
-        raise NotImplementedError("get_graph 由 B22F1 交付")
+    def get_graph(self, *, xray: bool = False) -> Graph:
+        """图结构导出（**B22F1 已交付** · C13）。
+
+        ``xray`` 在 v1 **仅作签名兼容**（无子图 ⇒ ``True`` 与 ``False`` 结果一致）；
+        导出只读编译期冻结快照，**零执行 / 零副作用**，运行前后逐项相等。
+        """
+        return _export_graph(
+            self._spec,
+            self._builder_spec,
+            self._conditional_edges,
+            self.interrupt_before_nodes,
+            self.interrupt_after_nodes,
+        )
 
     def get_state(self, config: Any) -> Any:
         """状态查询——**未就绪**（由 **B15F1** 交付）。"""
@@ -616,8 +839,13 @@ class StateGraph:
         alias: str | None = None,
         defer: bool = False,
         metadata: Mapping[str, Any] | None = None,
+        destinations: dict[str, str] | tuple[str, ...] | None = None,
     ) -> Self:
-        """登记一个节点（``str + action`` 或单 callable 形态），返回 ``self``。"""
+        """登记一个节点（``str + action`` 或单 callable 形态），返回 ``self``。
+
+        ``destinations`` 仅用于**图渲染**（`get_graph`），不影响执行；显式值覆盖
+        返回注解推断（含空序列 / 空 dict）。形态 / 目标校验见 B22F1 契约。
+        """
         if isinstance(node, str):
             name = node
             if action is None or not callable(action):
@@ -647,12 +875,19 @@ class StateGraph:
 
         if metadata is not None and isinstance(metadata, Mapping):
             metadata = dict(metadata)
+        if destinations is None:
+            effective_destinations = tuple(
+                (target, None) for target in _infer_command_destinations(action)
+            )
+        else:
+            effective_destinations = _normalize_destinations(destinations)
         self._nodes[name] = _NodeRecord(
             name=name,
             action=action,
             alias=alias,
             defer=defer,
             metadata=metadata,
+            destinations=effective_destinations,
         )
         return self
 
@@ -807,6 +1042,13 @@ class StateGraph:
                     raise ValueError(
                         f"At '{draft.source}' node, '{draft.branch_name}' branch "
                         f"found unknown target '{target}'"
+                    )
+        for name, record in self._nodes.items():
+            for target, _label in record.destinations:
+                if target != _END and target not in self._nodes:
+                    raise ValueError(
+                        f"At '{name}' node, destinations found unknown target "
+                        f"'{target}'"
                     )
 
     def _validate_nodes(self) -> None:

@@ -98,7 +98,6 @@ def test_the_error_symbol_set_is_unchanged() -> None:
 @pytest.mark.parametrize(
     ("method_name", "args", "owner"),
     [
-        ("get_graph", (), "B22F1"),
         ("get_state", (None,), "B15F1"),
         ("get_state_history", (None,), "B15F1"),
         ("update_state", (None, {}), "B16F1"),
@@ -113,3 +112,12 @@ def test_the_unimplemented_protocol_methods_still_name_their_owner(
     with pytest.raises(NotImplementedError) as excinfo:
         method(*args)
     assert owner in str(excinfo.value)
+
+
+def test_get_graph_is_delivered() -> None:
+    """B22F1：``get_graph`` 返回自有 ``Graph``，不再抛未实现。"""
+    from freegraph.contracts.graph import Graph
+
+    compiled = _compiled()
+    graph = compiled.get_graph()
+    assert isinstance(graph, Graph)

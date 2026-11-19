@@ -278,3 +278,15 @@ C18 / C26）· **「修订」列非空 4 处**（C17 / C22 / C23 / C27 · 正交
 | 15 | **B18F1 提示词**的交付物口径 | **B18F1** | 收窄为「span **生产**行为」（类型面以本文件为准） |
 | 16 | **B22F1 提示词**的 `Graph` / `Node` / `Edge` 命名 | **B22F1** | **不变**（与本文件一致） |
 | 17 | 契约层两个转出符号（`Command` / `RunConfig`）的**调用签名快照** | **B2F2**（已交付） | 门面 `freegraph.graph` 的 API 签名快照见 `specs/b2f2-public-api-facade/contracts/public-api-snapshot.txt`（**机器生成** · 由 `pytest tests/facade/test_api_snapshot.py --update-api-snapshot` 重新生成）——本文件的**字段语义与契约条目归属**仍是 `Command` / `RunConfig` 的权威，两处**各管一面、不重复** |
+
+---
+
+## B22F1 追加注记（2026-11-20 · 发起者追认）
+
+- **T-1**：`Command` 泛型化（`Command[N]`）。运行期字段 / 构造 / `PARENT` / 语义**逐字不变**；
+  仅新增 `Command[Literal[...]]` 下标能力，供图渲染类型推断。
+- **T-5**：`Graph` **追加** `draw_mermaid() -> str` 方法；`nodes` / `edges` 字段、构造签名、
+  不可哈希、`__all__` **均不变**。
+- **T-6**：`Edge` 不变式放宽——`add_conditional_edges` 分支边 `condition` 仍 MUST 非空；
+  节点声明的无标签边（`Command[Literal]` / `destinations` 序列）MAY 为 `None`
+  （与上游 `Edge.data=None` 同款）。

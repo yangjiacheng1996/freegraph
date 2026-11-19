@@ -15,6 +15,7 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+import string
 from typing import Any
 
 __all__ = [
@@ -22,6 +23,36 @@ __all__ = [
     "Node",
     "Edge",
 ]
+
+
+_SAFE_ID_CHARS = frozenset(string.ascii_letters + string.digits + "_-")
+
+
+def _safe_id(label: str) -> str:
+    """把节点名映射为**确定性、Mermaid 合法**的节点 id。
+
+    与上游 ``_to_safe_id``（``graph_mermaid.py:255-266``）逐字同款：
+    保留 ASCII 字母 / 数字 / ``_`` / ``-``，其余字符写成 ``\\`` + 小写十六进制码点。
+    """
+    return "".join(
+        char if char in _SAFE_ID_CHARS else "\\" + format(ord(char), "x")
+        for char in label
+    )
+
+
+def _escape_label(text: str) -> str:
+    """转义 mermaid 标签（节点标签与边标签同款）。
+
+    处理顺序敏感：先处理 ``#``，避免后续生成的实体被二次转义。
+    """
+    text = str(text)
+    text = text.replace("#", "#35;")
+    text = text.replace('"', "#quot;")
+    text = text.replace("<", "#lt;").replace(">", "#gt;")
+    text = text.replace("&", "#amp;").replace("|", "#124;").replace("\\", "#92;")
+    # 换行转义必须最后做，避免刚插入的 ``<br/>`` 被 ``<`` / ``>`` 二次转义。
+    text = text.replace("\r\n", "<br/>").replace("\n", "<br/>").replace("\r", "<br/>")
+    return text
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -79,9 +110,10 @@ class Edge:
     ``condition``    ``str | None``      ``None``    条件名（非条件边时为空）
     =============== ================== ========== ==================================
 
-    **不变式**（本层**不校验**）：``conditional`` 为真时 ``condition`` MUST 非空
-    ——值级守卫会与后续 30 个 feature 的实际用法反复冲突，由**生产者**
-    （图定义层）保证。
+    **不变式**（本层**不校验**）：``add_conditional_edges`` 分支边
+    ``conditional=True`` 时 ``condition`` MUST 非空；**节点声明的无标签边**
+    （``Command[Literal]`` / ``destinations`` 序列）``condition is None`` **合法**
+    （与上游 ``Edge.data=None`` 同款 · T-6）。值级守卫由**生产者**（图定义层）保证。
 
     **不可哈希**：四字段**全是标量**，dataclass **会自动生成** ``__hash__``
     ⇒ 类体 MUST **显式**写 ``__hash__ = None``，才兑现「四类统一不可哈希」。
@@ -128,3 +160,29 @@ class Graph:
     #: ``Graph`` / ``Span`` **统一不可哈希**」——dataclass 默认会为本类生成
     #: ``__hash__``，那会让「空图可哈希、非空图不可哈希」的不一致漏出去）。
     __hash__ = None  # type: ignore[assignment]
+
+    def draw_mermaid(self) -> str:
+        """导出**纯本地**的 mermaid 文本（C14 · B22F1）。
+
+        输出以 ``graph TD;`` 开头；节点 id 经 :func:`_safe_id` 安全化，
+        节点 / 边标签经 :func:`_escape_label` 转义；普通边实线、条件边虚线。
+        空图返回 ``graph TD;\\n``；同图同文本（确定性）。
+        """
+        lines = ["graph TD;"]
+        for node in self.nodes:
+            name = node.name if node.name is not None else node.id
+            lines.append(f'\t{_safe_id(node.id)}["{_escape_label(name)}"];')
+        for edge in self.edges:
+            source = _safe_id(edge.source)
+            target = _safe_id(edge.target)
+            if edge.conditional:
+                if edge.condition is None:
+                    lines.append(f"\t{source} -.-> {target};")
+                else:
+                    label = _escape_label(edge.condition)
+                    lines.append(
+                        f"\t{source} -. &nbsp;{label}&nbsp; .-> {target};"
+                    )
+            else:
+                lines.append(f"\t{source} --> {target};")
+        return "\n".join(lines) + "\n"

@@ -241,3 +241,94 @@ def test_constitutional_signature_and_self_return_match_upstream() -> None:
             is target
         )
         assert target.validate() is target
+
+
+# ── B22F1 · destinations / Command 泛型推断（T-006）────────────────────
+
+
+def _literal_targets(state: dict[str, Any]) -> Command[Literal["b", "c"]]:
+    return Command(goto="b")
+
+
+def _dest_a(state: dict[str, Any]) -> dict[str, Any]:
+    return {"count": 1}
+
+
+def _dest_b(state: dict[str, Any]) -> dict[str, Any]:
+    return {"count": 2}
+
+
+def _dest_c(state: dict[str, Any]) -> dict[str, Any]:
+    return {"count": 3}
+
+
+def _destinations_of(builder: StateGraph, name: str) -> tuple[tuple[str, str | None], ...]:
+    return builder._nodes[name].destinations  # type: ignore[attr-defined]
+
+
+def test_destinations_sequence_and_mapping_are_normalized() -> None:
+    """T-2：序列无标签、dict 带标签；列表被接受。"""
+    builder = StateGraph(State)
+    builder.add_node("a", _dest_a, destinations=["b", "c"])
+    builder.add_node("b", _dest_b)
+    builder.add_node("c", _dest_c)
+    assert _destinations_of(builder, "a") == (("b", None), ("c", None))
+
+    builder = StateGraph(State)
+    builder.add_node("a", _dest_a, destinations={"b": "to-b", "c": "to-c"})
+    builder.add_node("b", _dest_b)
+    builder.add_node("c", _dest_c)
+    assert _destinations_of(builder, "a") == (("b", "to-b"), ("c", "to-c"))
+
+
+def test_literal_inference_and_destinations_override() -> None:
+    """T-2/T-9：返回注解推断；显式 destinations 覆盖推断（含空）。"""
+    builder = StateGraph(State)
+    builder.add_node("a", _literal_targets)
+    builder.add_node("b", _dest_b)
+    builder.add_node("c", _dest_c)
+    assert _destinations_of(builder, "a") == (("b", None), ("c", None))
+
+    builder = StateGraph(State)
+    builder.add_node("a", _literal_targets, destinations={"c": "only-c"})
+    builder.add_node("b", _dest_b)
+    builder.add_node("c", _dest_c)
+    assert _destinations_of(builder, "a") == (("c", "only-c"),)
+
+    builder = StateGraph(State)
+    builder.add_node("a", _literal_targets, destinations=())
+    builder.add_node("b", _dest_b)
+    builder.add_node("c", _dest_c)
+    assert _destinations_of(builder, "a") == ()
+
+
+def test_destinations_do_not_enter_edges_or_execution() -> None:
+    """FR-011：destinations 仅用于图渲染，不进入 ``_spec.edges`` / 执行。"""
+    builder = StateGraph(State)
+    builder.add_node("a", _dest_a, destinations={"c": "to-c"})
+    builder.add_node("b", _dest_b)
+    builder.add_node("c", _dest_c)
+    builder.add_edge(START, "a")
+    builder.add_edge("a", "b")
+    builder.add_edge("b", END)
+    spec = builder._build_spec()  # type: ignore[attr-defined]
+    assert spec.edges.get("a") == ("b",)
+    assert "c" not in (spec.edges.get("a") or ())
+    compiled = builder.compile()
+    assert compiled.invoke({"count": 1}) == {"count": 2}
+
+
+def test_unknown_destination_fails_at_compile() -> None:
+    """FR-026：声明目标不在节点表且非 END ⇒ 编译期 ValueError。"""
+    builder = StateGraph(State)
+    builder.add_node("a", _dest_a, destinations=("nope",))
+    builder.add_node("b", _dest_b)
+    builder.add_edge(START, "a")
+    with pytest.raises(ValueError, match="nope"):
+        builder.compile()
+
+
+def test_invalid_destinations_shape_fails_at_registration() -> None:
+    """FR-026：非法形态 ⇒ 登记期 TypeError。"""
+    with pytest.raises(TypeError):
+        StateGraph(State).add_node("a", _dest_a, destinations=123)  # type: ignore[arg-type]

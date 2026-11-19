@@ -5648,6 +5648,282 @@ def _run_stream_scenarios(keyword: str = "") -> list["ProbeResult"]:
     return results
 
 
+
+# ── B22F1 · 图导出差分（D-01…D-15）─────────────────────────────────────
+
+
+class _GraphState(TypedDict, total=False):
+    v: int
+
+
+def _graph_namespaces() -> tuple[dict[str, Any], dict[str, Any]]:
+    """返回 freegraph / 上游的构建器命名空间（惰性 import）。"""
+    from freegraph.graph import END as FG_END
+    from freegraph.graph import START as FG_START
+    from freegraph.graph import Command as FG_Command
+    from freegraph.graph import StateGraph as FG_StateGraph
+
+    from langgraph.graph import END as UP_END
+    from langgraph.graph import START as UP_START
+    from langgraph.graph import StateGraph as UP_StateGraph
+    from langgraph.types import Command as UP_Command
+
+    return (
+        {
+            "StateGraph": FG_StateGraph,
+            "START": FG_START,
+            "END": FG_END,
+            "Command": FG_Command,
+        },
+        {
+            "StateGraph": UP_StateGraph,
+            "START": UP_START,
+            "END": UP_END,
+            "Command": UP_Command,
+        },
+    )
+
+
+def _make_graph(ns: dict[str, Any], kind: str) -> Any:
+    """按场景名构造一张编译图（两侧同款）。"""
+    StateGraph = ns["StateGraph"]
+    START = ns["START"]
+    END = ns["END"]
+    Command = ns["Command"]
+
+    def a(state: dict[str, Any]) -> dict[str, Any]:
+        return {}
+
+    def b(state: dict[str, Any]) -> dict[str, Any]:
+        return {}
+
+    def c(state: dict[str, Any]) -> dict[str, Any]:
+        return {}
+
+    builder = StateGraph(_GraphState)
+    if kind == "linear":
+        builder.add_node("a", a)
+        builder.add_node("b", b)
+        builder.add_edge(START, "a")
+        builder.add_edge("a", "b")
+        builder.add_edge("b", END)
+    elif kind == "conditional":
+        builder.add_node("a", a)
+        builder.add_node("b", b)
+        builder.add_edge(START, "a")
+        builder.add_conditional_edges("a", lambda s: "b", ["b", END])
+        builder.add_edge("b", END)
+    elif kind == "declared":
+        builder.add_node("a", a, destinations={"b": "to-b", "c": "to-c"})
+        builder.add_node("b", b)
+        builder.add_node("c", c)
+        builder.add_edge(START, "a")
+    elif kind == "literal":
+        def lit(state: dict[str, Any]) -> Command[Literal["b", "c"]]:  # type: ignore[name-defined]
+            return Command(goto="b")
+
+        builder.add_node("a", lit)
+        builder.add_node("b", b)
+        builder.add_node("c", c)
+        builder.add_edge(START, "a")
+    elif kind == "unknown":
+        builder.add_node("a", a, destinations=("nope",))
+        builder.add_node("b", b)
+        builder.add_edge(START, "a")
+    elif kind == "unreachable":
+        builder.add_node("a", a)
+        builder.add_node("d", b, destinations={"a": "x"})
+        builder.add_edge(START, "a")
+    elif kind == "self_loop":
+        builder.add_node("a", a)
+        builder.add_edge(START, "a")
+        builder.add_edge("a", "a")
+    elif kind == "cycle":
+        builder.add_node("a", a)
+        builder.add_node("b", b)
+        builder.add_edge(START, "a")
+        builder.add_edge("a", "b")
+        builder.add_edge("b", "a")
+    elif kind == "join":
+        builder.add_node("a", a)
+        builder.add_node("b", b)
+        builder.add_node("c", c)
+        builder.add_edge(START, "a")
+        builder.add_edge(START, "b")
+        builder.add_edge(["a", "b"], "c")
+        builder.add_edge("c", END)
+    elif kind == "join_unreachable":
+        builder.add_node("a", a)
+        builder.add_node("b", b)
+        builder.add_node("c", c)
+        builder.add_edge(START, "a")
+        builder.add_edge(["a", "b"], "c")
+        builder.add_edge("c", END)
+    elif kind == "dedupe":
+        builder.add_node("a", a, destinations={"b": "x"})
+        builder.add_node("b", b)
+        builder.add_edge(START, "a")
+        builder.add_edge("a", "b")
+    else:  # pragma: no cover - 防御
+        raise AssertionError(kind)
+    return builder.compile()
+
+
+def _graph_value(graph: Any, *, labels: bool = False) -> dict[str, Any]:
+    raw_nodes = graph.nodes
+    if isinstance(raw_nodes, dict):
+        node_values = raw_nodes.values()
+    else:
+        node_values = raw_nodes
+    nodes = {node.id for node in node_values}
+    edges = set()
+    for edge in graph.edges:
+        label = getattr(edge, "condition", None)
+        if label is None:
+            label = getattr(edge, "data", None)
+        key = (edge.source, edge.target, bool(edge.conditional))
+        edges.add(key + ((label,) if labels else ()))
+    return {"nodes": nodes, "edges": edges}
+
+
+def _graph_ok_mermaid(graph: Any) -> bool:
+    text = graph.draw_mermaid()
+    lines = text.splitlines()
+    return bool(text.strip()) and any("graph TD;" in line for line in lines) and all(
+        line.endswith(";") for line in lines if line.strip() and "graph TD;" not in line
+    )
+
+
+@dataclass
+class GraphScenario:
+    name: str
+    verdict: str
+    note: str
+    fg: Callable[[], Any]
+    up: Callable[[], Any]
+    diff_check: Callable[[Any, Any], bool] | None = None
+
+
+@dataclass
+class _GraphRun:
+    kind: str
+    value: Any = None
+    exc_type: str = ""
+
+
+def _run_graph_call(call: Callable[[], Any]) -> _GraphRun:
+    try:
+        return _GraphRun("OK", value=call())
+    except Exception as exc:  # noqa: BLE001 - 差分只关心成功 / 失败
+        return _GraphRun("ERROR", exc_type=type(exc).__name__)
+
+
+def _graph_export_scenarios() -> list[GraphScenario]:
+    fg_ns, up_ns = _graph_namespaces()
+    out: list[GraphScenario] = []
+
+    def add(name: str, kind: str, verdict: str = "SAME", note: str = "", **kwargs: Any) -> None:
+        def fg() -> Any:
+            app = _make_graph(fg_ns, kind)
+            if kwargs.get("before_after"):
+                before = _graph_value(app.get_graph())
+                if kwargs.get("stream"):
+                    list(app.stream({}, stream_mode="values"))
+                else:
+                    app.invoke({})
+                return {"before": before, "after": _graph_value(app.get_graph())}
+            if kwargs.get("xray"):
+                return {
+                    "true": _graph_value(app.get_graph(xray=True)),
+                    "false": _graph_value(app.get_graph(xray=False)),
+                }
+            graph = app.get_graph()
+            value = _graph_value(graph, labels=kwargs.get("labels", False))
+            if kwargs.get("mermaid"):
+                value["mermaid_ok"] = _graph_ok_mermaid(graph)
+            return value
+
+        def up() -> Any:
+            app = _make_graph(up_ns, kind)
+            if kwargs.get("before_after"):
+                before = _graph_value(app.get_graph())
+                if kwargs.get("stream"):
+                    list(app.stream({}, stream_mode="values"))
+                else:
+                    app.invoke({})
+                return {"before": before, "after": _graph_value(app.get_graph())}
+            if kwargs.get("xray"):
+                return {
+                    "true": _graph_value(app.get_graph(xray=True)),
+                    "false": _graph_value(app.get_graph(xray=False)),
+                }
+            graph = app.get_graph()
+            value = _graph_value(graph, labels=kwargs.get("labels", False))
+            if kwargs.get("mermaid"):
+                value["mermaid_ok"] = _graph_ok_mermaid(graph)
+            return value
+
+        out.append(GraphScenario(name, verdict, note, fg, up, kwargs.get("diff_check")))
+
+    add("graph D-01 linear", "linear")
+    add("graph D-02 conditional", "conditional")
+    add("graph D-03 declared multi-target", "declared")
+    add("graph D-04 special names", "declared", "STRICTER", "freegraph 标签转义更严", mermaid=True)
+    add("graph D-05 literal", "literal")
+    add("graph D-06 destinations labels", "declared", labels=True)
+    add("graph D-07 unknown destination", "unknown")
+    add("graph D-08 before/after", "linear", before_after=True)
+    add("graph D-09 xray", "linear", xray=True)
+    add("graph D-10 stream", "linear", before_after=True, stream=True)
+    add("graph D-11 unreachable", "unreachable")
+
+    def diff_extra_end(fg_value: Any, up_value: Any) -> bool:
+        fg_edges = {(s, t, c) for s, t, c in fg_value["edges"]}
+        up_edges = {(s, t, c) for s, t, c in up_value["edges"]}
+        extra = {edge for edge in up_edges - fg_edges if edge[1] == "__end__"}
+        return bool(extra)
+
+    add("graph D-12 self-loop", "self_loop", "DIFF", "末步单源启发式（X-08）", diff_check=diff_extra_end)
+    add("graph D-12b cycle", "cycle", "DIFF", "末步单源启发式（X-08）", diff_check=diff_extra_end)
+    add("graph D-13 join", "join")
+    add("graph D-14 join unreachable", "join_unreachable")
+    add("graph D-15 dedupe", "dedupe")
+    return out
+
+
+def _run_graph_scenarios(keyword: str = "") -> list[ProbeResult]:
+    results: list[ProbeResult] = []
+    for scenario in _graph_export_scenarios():
+        if keyword and keyword not in scenario.name:
+            continue
+        fg = _run_graph_call(scenario.fg)
+        up = _run_graph_call(scenario.up)
+        if scenario.verdict == "SAME":
+            if fg.kind == "ERROR" and up.kind == "ERROR":
+                ok = fg.exc_type == up.exc_type
+            else:
+                ok = fg.kind == up.kind == "OK" and fg.value == up.value
+        elif scenario.verdict == "STRICTER":
+            ok = bool(scenario.note) and fg.kind == "OK" and up.kind == "OK"
+            if ok and isinstance(fg.value, dict):
+                ok = bool(fg.value.get("mermaid_ok"))
+        else:  # DIFF
+            ok = bool(scenario.note)
+            if ok and scenario.diff_check is not None and fg.kind == up.kind == "OK":
+                ok = scenario.diff_check(fg.value, up.value)
+        results.append(
+            ProbeResult(
+                name=scenario.name,
+                verdict=scenario.verdict,
+                ok=ok,
+                freegraph_kind=fg.kind,
+                upstream_kind=up.kind,
+                detail=f"freegraph={fg.kind} {fg.value!r} | upstream={up.kind} {up.value!r}",
+            )
+        )
+    return results
+
+
 def run_all(keyword: str = "") -> list[ProbeResult]:
     """跑全部场景 ⇒ 返回逐场景结果（**不打印**）。
 
@@ -5787,4 +6063,5 @@ def run_all(keyword: str = "") -> list[ProbeResult]:
         )
     results.extend(_run_compile_scenarios(keyword))
     results.extend(_run_builder_scenarios(keyword))
+    results.extend(_run_graph_scenarios(keyword))
     return results
