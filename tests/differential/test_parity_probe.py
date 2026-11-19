@@ -29,6 +29,8 @@
 """
 from __future__ import annotations
 
+import os
+
 import pytest
 
 from . import parity_probe
@@ -233,3 +235,27 @@ def test_graph_export_parity_scenarios_meet_their_verdicts(upstream_version: str
     assert not failures, "\n".join(
         f"  ✘ {result.name}: {result.detail}" for result in failures
     )
+
+
+def test_png_parity_scenarios_meet_their_verdicts(upstream_version: str) -> None:
+    """B23F1 PNG 导出差分（D-01…D-10）MUST 符合各自判词。"""
+    results = parity_probe._run_png_scenarios()
+    assert results, "PNG 差分场景集为空"
+    failures = [result for result in results if not result.ok]
+    assert not failures, "\n".join(
+        f"  ✘ {result.name}: {result.detail}" for result in failures
+    )
+
+
+def test_upstream_png_returns_bytes_when_network_available(upstream_version: str) -> None:
+    """可选：上游真实渲染返回 bytes；默认不触网，网络缺席即 skip。"""
+    if os.environ.get("FREEGRAPH_ALLOW_UPSTREAM_PNG") != "1":
+        pytest.skip("未设置 FREEGRAPH_ALLOW_UPSTREAM_PNG；上游 PNG 默认不外呼 mermaid.ink")
+    _, up_ns = parity_probe._graph_namespaces()
+    up_graph = parity_probe._make_graph(up_ns, "linear").get_graph()
+    try:
+        data = up_graph.draw_mermaid_png(max_retries=0, retry_delay=0.0)
+    except Exception as exc:  # noqa: BLE001 - 网络 / 可选依赖缺席
+        pytest.skip(f"上游 PNG 渲染不可用：{type(exc).__name__}: {exc}")
+    assert isinstance(data, bytes)
+    assert data.startswith(b"\x89PNG\r\n\x1a\n")

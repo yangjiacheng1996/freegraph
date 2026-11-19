@@ -15,8 +15,8 @@
 ⑥ **未实现**的 L1 协议方法（**恰 5** 个）仍抛内置 ``NotImplementedError``
 且消息**点名归属 feature**（**FR-036**）。
 
-⚠️ **``draw_mermaid_png()`` 尚未存在**（属 **B23F1** 的 ``Graph`` 侧能力）
-⇒ ⇒ ⇒ **MUST NOT** 计入本项（spec SC-016 的实测口径）。
+⚠️ **``draw_mermaid_png()`` 已由 B23F1 交付**（属 ``Graph`` 侧能力）
+⇒ ⇒ ⇒ 仍 **MUST NOT** 计入本项（spec SC-016 的实测口径）。
 
 **签名头**（宪法原则 X）：本文件带署名头且模块 docstring 是首个语句。
 """

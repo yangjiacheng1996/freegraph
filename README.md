@@ -106,7 +106,7 @@ uv run --no-project --python .venv python harness/scripts/gates/gate_G21_depende
 | `TraceSink` | 无上游对应（自由设计） | 不支持 | 契约条目 **C23 / C24**（可观测挂钩 / 当前 span 上下文）——上游**无 span 推送协议**，其 `callbacks` / `tracers` 是**非同名**物 |
 | `Store` | `langgraph.store.base.BaseStore` | 行为等价 | 六方法与**参数名**逐字镜像上游（`search` 的 `namespace_prefix` 是位置参数、`list_namespaces` 的 `prefix` 是关键字参数——上游的这个命名分歧**照抄不统一**）；**命名空间类型收紧为 `tuple[str, ...]`**（**上游同款** · 2026-11-12 上游对齐 P3 · 上游 `langgraph/store/base/__init__.py:311` 的 `NamespacePath`）⇒ **上游形状的 store 直接满足本协议**；**未含**上游的**异步变体**（v1 无 async）；`batch` 操作表示挂起 v2；上游来源 `langgraph/store/base/__init__.py:733`（`batch`）/ `:756`（`get`）/ `:779`（`search`）/ `:856`（`put`）/ `:937`（`delete`）/ `:946`（`list_namespaces`） |
 | `CompiledGraph` | `langgraph.pregel.Pregel` | 部分等价 | 六方法的**返回类别**与**参数名（占位名）**已对齐（`invoke` → 完整状态字典 / `stream` → `dict[str, Any]` 事件迭代器 / `get_state` 查不到返回空值）；**`stream` 已交付**（B8F2 · 七种 mode · 四键信封 · `custom` 轮末批量 X-6）· **行为细节挂起** B15F1 / B16F1；上游来源 `langgraph/pregel/main.py:3783`（`invoke`）/ `:2655`（`stream`）/ `:845`（`get_graph`）/ `:1392`（`get_state`）/ `:1480`（`get_state_history`）/ `:2515`（`update_state`） |
-| `Graph` | `langchain_core.runnables.graph.Graph` | 部分等价 | **同名但自有实现**——不复用、不复制上游代码；freegraph 的节点 / 边集合是**不可变元组**（上游是 `dict[str, Node]` / `list[Edge]`）；**B22F1 起**提供 `draw_mermaid()`（纯本地、零出站）；上游来源 `langchain_core/runnables/graph.py:255` |
+| `Graph` | `langchain_core.runnables.graph.Graph` | 部分等价 | **同名但自有实现**——不复用、不复制上游代码；freegraph 的节点 / 边集合是**不可变元组**（上游是 `dict[str, Node]` / `list[Edge]`）；**B22F1 起**提供 `draw_mermaid()`（纯本地、零出站）；**B23F1 起**提供 `draw_mermaid_png()`（v1 固定示意图标占位 PNG，零出站、离线不阻断）；上游来源 `langchain_core/runnables/graph.py:255` |
 | `Node` | `langchain_core.runnables.graph.Node` | 部分等价 | **同名但自有实现**；freegraph 的 `name` 缺省**归一为 `id`**、`metadata` 是纯映射（上游 `Node.data` 装的是可调用对象 / pydantic 对象）；上游来源 `langchain_core/runnables/graph.py:95` |
 | `Edge` | `langchain_core.runnables.graph.Edge` | 部分等价 | **同名但自有实现**；freegraph 多一个 `conditional` 位并显式**不可哈希**（上游是 `NamedTuple`，可哈希）；上游来源 `langchain_core/runnables/graph.py:65` |
 | `Span` | 无上游对应（自由设计） | 不支持 | 契约条目 **C23 / C24**（可观测挂钩 / 当前 span 上下文）· 数据格式 **DF4**——11 字段、必带 `thread_id` / `run_id` / `node` / `checkpoint_id`；上游的近似物是 LangSmith 的 `RunTree`（**非同名**物） |
@@ -127,6 +127,11 @@ uv run --no-project --python .venv python harness/scripts/gates/gate_G21_depende
 > ⚠️ **B22F1 的公开面增量 == 0 行**（2026-11-20）—— `Command` 泛型化 / `add_node(destinations=)` /
 > `Graph.draw_mermaid()` / `Edge.condition=None` 均**不新增顶层符号**；契约层仍 **22** · 门面仍 **8** ·
 > `freegraph.runtime` 仍 **23** · `vars(compiled)` 仍 **11** 键；`get_graph()` / `draw_mermaid()` 已交付。
+>
+> ⚠️ **B23F1 的公开面增量 == 0 行**（2026-11-20）—— `Graph.draw_mermaid_png()` 是 **`Graph` 的实例方法**
+> ⇒ 不新增顶层符号；契约层仍 **22** · 门面仍 **8** · `freegraph.runtime` 仍 **23** ·
+> `vars(compiled)` 仍 **11** 键；无新增依赖 / extras；v1 只交付**固定示意图标占位 PNG**
+> （64×64 · 3 方框 + 2 连线 · 零出站 · 离线不阻断）。
 >
 > ⚠️ **B8F2 的公开面增量 == 2 行**（2026-11-20）—— 契约层 `StreamWriter` +
 > 门面 `get_stream_writer` ⇒ 契约层 **22** · 门面 **8** · `freegraph.runtime` 仍 **23**

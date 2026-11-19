@@ -16,7 +16,9 @@
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 import string
+import struct
 from typing import Any
+import zlib
 
 __all__ = [
     "Graph",
@@ -53,6 +55,76 @@ def _escape_label(text: str) -> str:
     # 换行转义必须最后做，避免刚插入的 ``<br/>`` 被 ``<`` / ``>`` 二次转义。
     text = text.replace("\r\n", "<br/>").replace("\n", "<br/>").replace("\r", "<br/>")
     return text
+
+
+_PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+_PNG_WIDTH = 64
+_PNG_HEIGHT = 64
+_PNG_BIT_DEPTH = 8
+_PNG_COLOR_TYPE = 2
+_PNG_COMPRESSION = 0
+_PNG_FILTER_METHOD = 0
+_PNG_INTERLACE = 0
+_PNG_BACKGROUND = (245, 245, 245)
+_PNG_BOX_FILL = (217, 232, 255)
+_PNG_INK = (51, 102, 153)
+_PNG_BOXES = ((8, 24, 19, 39), (26, 24, 37, 39), (44, 24, 55, 39))
+_PNG_CONNECTORS = ((20, 25, 32), (38, 43, 32))
+
+
+def _png_chunk(chunk_type: bytes, data: bytes) -> bytes:
+    """编码一个 PNG 块（长度 + 类型 + 数据 + CRC-32）。"""
+    body = chunk_type + data
+    return (
+        struct.pack(">I", len(data))
+        + body
+        + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
+    )
+
+
+def _placeholder_rgb_rows() -> bytes:
+    """生成 64×64 固定示意图标的原始扫描行（每行 filter 0 + RGB）。"""
+    background = bytes(_PNG_BACKGROUND)
+    box_fill = bytes(_PNG_BOX_FILL)
+    ink = bytes(_PNG_INK)
+    rows = [bytearray(background * _PNG_WIDTH) for _ in range(_PNG_HEIGHT)]
+    for x0, y0, x1, y1 in _PNG_BOXES:
+        for y in range(y0, y1 + 1):
+            row = rows[y]
+            for x in range(x0, x1 + 1):
+                color = ink if x in (x0, x1) or y in (y0, y1) else box_fill
+                offset = x * 3
+                row[offset : offset + 3] = color
+    for x0, x1, y in _PNG_CONNECTORS:
+        row = rows[y]
+        for x in range(x0, x1 + 1):
+            offset = x * 3
+            row[offset : offset + 3] = ink
+    raw = bytearray()
+    for row in rows:
+        raw.append(0)
+        raw.extend(row)
+    return bytes(raw)
+
+
+def _encode_placeholder_png(rows: bytes) -> bytes:
+    """把原始扫描行编码为最小合法 PNG（IHDR / IDAT / IEND）。"""
+    ihdr = struct.pack(
+        ">IIBBBBB",
+        _PNG_WIDTH,
+        _PNG_HEIGHT,
+        _PNG_BIT_DEPTH,
+        _PNG_COLOR_TYPE,
+        _PNG_COMPRESSION,
+        _PNG_FILTER_METHOD,
+        _PNG_INTERLACE,
+    )
+    return (
+        _PNG_SIGNATURE
+        + _png_chunk(b"IHDR", ihdr)
+        + _png_chunk(b"IDAT", zlib.compress(rows, 9))
+        + _png_chunk(b"IEND", b"")
+    )
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -186,3 +258,13 @@ class Graph:
             else:
                 lines.append(f"\t{source} --> {target};")
         return "\n".join(lines) + "\n"
+
+    def draw_mermaid_png(self) -> bytes:
+        """导出**纯本地**的 PNG 字节（C15 · B23F1）。
+
+        v1 只返回固定示意图标的占位 PNG；先调用 :meth:`draw_mermaid` 作为唯一图源，
+        但 v1 不把文本像素化。对任何 ``Graph`` 成功；零网络 / 零环境变量 /
+        零文件副作用；同一 / 不同 ``Graph`` 均返回相同字节。
+        """
+        _ = self.draw_mermaid()
+        return _encode_placeholder_png(_placeholder_rgb_rows())

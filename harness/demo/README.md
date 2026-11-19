@@ -96,8 +96,9 @@ python harness/demo/acceptance.py --record harness/verification/freegraph/manual
   （`_invoke_ready()` · 键在 `NotImplementedError` 上）**自动切换** ⇒ ⇒ `graph_core.py`
   与 `agent_loop.py` 现在**跑完全部用例组**并以**退出码 0** 结束（**不是** 2）。
   ⚠️ 仍为软断言的**5 组**（条件边路由 / context 独立通道 / `stream()` / 工具循环 /
-  恢复载体）见上表 ⇒ ⇒ `visualization.py` 仍以**退出码 1** 结束（`get_graph` /
-  `draw_mermaid` / `draw_mermaid_png` / `stream` 全未交付 ⇒ 归 **B22F1 / B23F1 / B8F2**）。
+  恢复载体）见上表 ⇒ ⇒ `visualization.py` 的 V1–V6 现在**全部真跑**
+  （`get_graph` / `draw_mermaid` 已由 **B22F1**、`draw_mermaid_png` 已由 **B23F1**、
+  `stream` 已由 **B8F2** 交付）。
 
 * ✅ **已拍板（2026-11-05）——第三处软断言已关闭**：`interrupt` 恢复**必须依赖
   checkpointer**（内存态恢复不可靠；`interrupt` 的主场景是 time travel，须跨长时间 /

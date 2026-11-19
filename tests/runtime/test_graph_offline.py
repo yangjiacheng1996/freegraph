@@ -1,11 +1,14 @@
 # Copyright (c) 2026 杨家成 · MIT License · https://github.com/yangjiacheng1996/freegraph
 
-"""B22F1 · 断网 / 零出站 / 静态禁用扫描（US3）。"""
+"""B22F1 / B23F1 · 断网 / 零出站 / 静态禁用扫描（US3）。"""
 
 from __future__ import annotations
 
 import ast
+import os
 import socket
+import subprocess
+import sys
 from pathlib import Path
 from typing import TypedDict
 
@@ -31,6 +34,7 @@ def _build() -> StateGraph:
     builder.add_edge("b", END)
     return builder
 
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 GRAPH_MODULES = (
     REPO_ROOT / "src" / "freegraph" / "contracts" / "graph.py",
@@ -47,18 +51,42 @@ class _SocketGuard:
         raise AssertionError("框架尝试出站")
 
 
-def test_draw_mermaid_and_get_graph_are_zero_egress(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_draw_mermaid_get_graph_and_png_are_zero_egress(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     guard = _SocketGuard()
     monkeypatch.setattr(socket, "socket", guard)
     compiled = _build().compile()
     graph = compiled.get_graph()
     text = graph.draw_mermaid()
+    png = graph.draw_mermaid_png()
     assert isinstance(text, str) and text.strip()
+    assert type(png) is bytes and png
+    assert guard.calls == 0
+
+
+def test_draw_mermaid_png_ignores_proxy_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    guard = _SocketGuard()
+    monkeypatch.setattr(socket, "socket", guard)
+    monkeypatch.setenv("HTTP_PROXY", "http://127.0.0.1:9")
+    monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:9")
+    graph = _build().compile().get_graph()
+    assert graph.draw_mermaid_png()
     assert guard.calls == 0
 
 
 def test_graph_sources_have_no_forbidden_network_or_env_usage() -> None:
-    forbidden_imports = {"socket", "http", "urllib", "subprocess"}
+    forbidden_imports = {
+        "socket",
+        "http",
+        "urllib",
+        "requests",
+        "httpx",
+        "aiohttp",
+        "subprocess",
+    }
     for path in GRAPH_MODULES:
         source = path.read_text(encoding="utf-8")
         # 署名头含项目 GitHub URL（原则 X）⇒ 只看代码体。
@@ -75,3 +103,26 @@ def test_graph_sources_have_no_forbidden_network_or_env_usage() -> None:
             elif isinstance(node, ast.ImportFrom) and node.module:
                 imported.add(node.module.split(".")[0])
         assert imported.isdisjoint(forbidden_imports), (path, imported & forbidden_imports)
+
+
+def test_png_runtime_does_not_load_langchain_family() -> None:
+    code = (
+        "import sys\n"
+        "from freegraph.contracts.graph import Graph\n"
+        "Graph().draw_mermaid_png()\n"
+        "forbidden = {'langchain', 'langchain_core', 'langgraph', 'langsmith'}\n"
+        "print(','.join(sorted(name for name in sys.modules "
+        "if name.split('.')[0] in forbidden)))\n"
+    )
+    proc = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=str(REPO_ROOT),
+        env={**os.environ, "PYTHONPATH": str(REPO_ROOT / "src")},
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=120,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert proc.stdout.strip() == "", proc.stdout

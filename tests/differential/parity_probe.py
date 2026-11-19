@@ -36,16 +36,19 @@ B9F1 的「空列表 = 无操作」三处分叉，都是在 P3 回改**之前**�
 """
 from __future__ import annotations
 
+import inspect
 import operator
 import os
 import pathlib
 import re
+import socket
 import sys
 import threading
 import time
 import warnings
 from dataclasses import dataclass, field
 from typing import Annotated, Any, Callable, Literal, TypedDict
+from unittest.mock import patch
 
 ROOT = str(pathlib.Path(__file__).resolve().parents[2])
 
@@ -5921,6 +5924,165 @@ def _run_graph_scenarios(keyword: str = "") -> list[ProbeResult]:
                 detail=f"freegraph={fg.kind} {fg.value!r} | upstream={up.kind} {up.value!r}",
             )
         )
+    return results
+
+
+def _png_looks_valid(data: Any) -> bool:
+    """差分级的最小 PNG 结构判据（签名 + IHDR + IEND）。"""
+    return (
+        isinstance(data, bytes)
+        and data.startswith(b"\x89PNG\r\n\x1a\n")
+        and b"IHDR" in data[:32]
+        and b"IEND" in data[-32:]
+    )
+
+
+def _run_png_scenarios(keyword: str = "") -> list[ProbeResult]:
+    """B23F1 · PNG 导出差分（D-01…D-10）。
+
+    只断言可判定的结构 / 类别；上游真实渲染需要网络的分支由单独的
+    ``test_upstream_png_returns_bytes_when_network_available`` 负责（缺席即 skip）。
+    """
+    fg_ns, up_ns = _graph_namespaces()
+    fg_graph = _make_graph(fg_ns, "linear").get_graph()
+    up_graph = _make_graph(up_ns, "linear").get_graph()
+    fg_data = fg_graph.draw_mermaid_png()
+    fg_sig = inspect.signature(type(fg_graph).draw_mermaid_png)
+    up_sig = inspect.signature(type(up_graph).draw_mermaid_png)
+    results: list[ProbeResult] = []
+
+    def add(
+        name: str,
+        verdict: str,
+        ok: bool,
+        *,
+        freegraph_kind: str = "OK",
+        upstream_kind: str = "OK",
+        detail: str = "",
+        note: str = "",
+    ) -> None:
+        if verdict in {"STRICTER", "DIFF"} and not note:
+            ok = False
+        results.append(
+            ProbeResult(
+                name=name,
+                verdict=verdict,
+                ok=ok,
+                freegraph_kind=freegraph_kind,
+                upstream_kind=upstream_kind,
+                detail=detail or note,
+            )
+        )
+
+    add(
+        "png D-01 method existence",
+        "SAME",
+        hasattr(fg_graph, "draw_mermaid_png") and hasattr(up_graph, "draw_mermaid_png"),
+        detail="both Graph objects expose draw_mermaid_png",
+    )
+    add(
+        "png D-02 return category",
+        "SAME",
+        isinstance(fg_data, bytes) and "bytes" in str(up_sig.return_annotation),
+        detail=(
+            f"freegraph={type(fg_data).__name__} | "
+            f"upstream annotation={up_sig.return_annotation!r}"
+        ),
+    )
+    add(
+        "png D-03 fixed-script call point",
+        "SAME",
+        _png_looks_valid(fg_graph.draw_mermaid_png()) and hasattr(up_graph, "draw_mermaid_png"),
+        detail="get_graph(xray=True).draw_mermaid_png() available on both; upstream render needs network",
+    )
+
+    offline_ok = False
+    offline_detail = ""
+    try:
+        import requests
+    except ImportError as exc:  # pragma: no cover - 极简环境
+        offline_ok = True
+        offline_detail = f"requests absent; upstream offline check skipped: {exc}"
+    else:
+        original_get = requests.get
+
+        def _boom(*_args: Any, **_kwargs: Any) -> Any:
+            raise requests.exceptions.ConnectionError("offline-simulated")
+
+        requests.get = _boom  # type: ignore[assignment]
+        try:
+            up_graph.draw_mermaid_png(max_retries=0, retry_delay=0.0)
+        except Exception as exc:  # noqa: BLE001
+            offline_ok = isinstance(exc, (ValueError, ImportError))
+            offline_detail = f"{type(exc).__name__}: {str(exc).splitlines()[0]}"
+        finally:
+            requests.get = original_get  # type: ignore[assignment]
+    add(
+        "png D-04 offline behavior",
+        "DIFF",
+        offline_ok and _png_looks_valid(fg_data),
+        upstream_kind="ERROR" if offline_ok else "UNEXPECTED",
+        detail=offline_detail,
+        note="P-04/P-09: upstream raises offline; freegraph returns a valid PNG",
+    )
+    add(
+        "png D-05 PNG structure",
+        "SAME",
+        _png_looks_valid(fg_data),
+        detail=f"bytes={len(fg_data)}",
+    )
+    empty_data = type(fg_graph)().draw_mermaid_png()
+    add(
+        "png D-06 empty graph",
+        "SAME",
+        _png_looks_valid(empty_data) and hasattr(up_graph, "draw_mermaid_png"),
+        detail="freegraph empty graph returns a valid PNG; upstream method present",
+    )
+    add(
+        "png D-07 determinism",
+        "STRICTER",
+        fg_graph.draw_mermaid_png() == fg_graph.draw_mermaid_png()
+        and type(fg_graph)().draw_mermaid_png() == fg_data,
+        note="same and different graphs are byte-identical; upstream does not promise this",
+    )
+    fg_extra = [name for name in fg_sig.parameters if name != "self"]
+    up_extra = [name for name in up_sig.parameters if name != "self"]
+    add(
+        "png D-08 signature difference",
+        "DIFF",
+        not fg_extra and "draw_method" in up_extra and "output_file_path" in up_extra,
+        detail=f"freegraph={fg_extra} | upstream={up_extra}",
+        note="v1 has zero optional parameters; upstream exposes rendering / file / network knobs",
+    )
+
+    class _Guard:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def __call__(self, *_args: Any, **_kwargs: Any) -> Any:
+            self.calls += 1
+            raise AssertionError("framework egress")
+
+    guard = _Guard()
+    with patch.object(socket, "socket", guard):
+        guarded_data = fg_graph.draw_mermaid_png()
+    add(
+        "png D-09 zero egress",
+        "STRICTER",
+        guard.calls == 0 and _png_looks_valid(guarded_data),
+        detail=f"framework egress calls={guard.calls}",
+        note="freegraph performs zero egress; upstream default API path egresses",
+    )
+    add(
+        "png D-10 type source",
+        "DIFF",
+        type(fg_graph).__module__ == "freegraph.contracts.graph"
+        and type(up_graph).__module__ == "langchain_core.runnables.graph",
+        detail=f"freegraph={type(fg_graph).__module__} | upstream={type(up_graph).__module__}",
+        note="freegraph uses its own Graph type (C13); upstream uses langchain_core",
+    )
+    if keyword:
+        results = [result for result in results if keyword in result.name]
     return results
 
 

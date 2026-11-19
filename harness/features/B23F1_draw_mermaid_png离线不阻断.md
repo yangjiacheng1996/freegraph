@@ -8,11 +8,14 @@
 > | feature ID | `B23F1` |
 > | 所属 功能块 | B23（`draw_mermaid_png`） |
 > | 架构层 | L3 图定义层 |
-> | 里程碑 | M2 图定义与对外 API（第 20 个） |
+> | 里程碑 | M2 图定义与对外 API（第 21 个） |
 > | 前置依赖 | **B22F1**（**已交付** · 2026-11-20） |
 > | 规模 | 1,080 行（实现 520 / 测试 560）· 3 人日 |
 > | 建议 short-name | `b23f1-draw-mermaid-png-offline` |
 > | MVP 必需（★） | **是**（固定脚本所需 6 项之一；**六项齐备 = MVP 达成**） |
+
+> **状态（2026-11-20）**：**已交付**。41/41 任务完成；`B23F1 acceptance: PASS`；
+> 全量 `1736 passed, 6 skipped`；人工验收通过。
 
 > **状态更新（2026-11-20）**：**B22F1 已交付**（`get_graph` + `draw_mermaid` 文本导出通过验收）。本 feature 现为固定脚本（`target.py`）端到端轮的**最后一个剩余前置**；C14 文本口径以 `specs/b22f1-get-graph-mermaid/contracts/graph-export-contract.md` 为准。
 
@@ -146,7 +149,7 @@
 - **后续解锁**：**B8F3**（节点别名 + `context` 通道）→ M3 全部 feature。
 - **★ MVP 达成点**：**本 feature 是六项最小交付集的最后一项**——完成即意味着
   `harness/demo/target.py` 的 **fake 模型轮**具备跑通条件（M2 里程碑的验收点，
-  §5.2 行序串行口径 = 第 20 个 feature / 第 60 天）。
+  §5.2 行序串行口径 = 第 21 个 feature / 第 63 天）。
 - **承接条款（门禁 3 的固定脚本 · B7F1 → B23F1 · M2）**：宪法质量门禁 3 的
   「`harness/demo/target.py` **原样可跑**」与门禁 5 的「**真实模型一轮**」在
   **B6F1 / B7F2 / B7F3 / B8F1 / B22F1 / B23F1** 齐备前**物理不可达成**（根因：

@@ -6,7 +6,7 @@
 
 **Input**: Feature specification from `/specs/b22f1-get-graph-mermaid/spec.md`
 
-**feature ID**: `B22F1`（M2 图定义与对外 API · **第 19 个** · 前置：**B7F2**（主）+
+**feature ID**: `B22F1`（M2 图定义与对外 API · **第 20 个** · 前置：**B7F2**（主）+
 B1F1 / B2F1 / B2F2 / B6F1 / B7F1 / B7F3 / B7F4 / B8F1 / B8F2 / B9F1（承接 H-1…H-9）
 · 下游：**B23F1**（D-1 / D-2））
 

@@ -8,7 +8,7 @@
 > | feature ID | `B22F1` |
 > | 所属 功能块 | B22（Graph 类型 + `get_graph` + `draw_mermaid`） |
 > | 架构层 | L3 图定义层 |
-> | 里程碑 | M2 图定义与对外 API（第 19 个） |
+> | 里程碑 | M2 图定义与对外 API（第 20 个） |
 > | 前置依赖 | **B7F2** |
 > | 规模 | 1,140 行（实现 620 / 测试 520）· 3 人日 |
 > | 建议 short-name | `b22f1-get-graph-mermaid` |

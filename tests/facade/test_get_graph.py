@@ -76,3 +76,38 @@ def test_get_graph_is_repeatable_and_equal() -> None:
     second = compiled.get_graph()
     assert first == second
     assert first is not second
+
+
+def test_graph_has_draw_mermaid_png() -> None:
+    compiled = build_minimal_graph().compile()
+    assert hasattr(compiled.get_graph(), "draw_mermaid_png")
+
+
+def test_draw_mermaid_png_returns_bytes_before_invoke() -> None:
+    compiled = build_minimal_graph(conditional=True).compile()
+    data = compiled.get_graph().draw_mermaid_png()
+    assert type(data) is bytes
+    assert data
+
+
+def test_draw_mermaid_png_available_on_xray_true_and_false() -> None:
+    compiled = build_minimal_graph().compile()
+    assert compiled.get_graph(xray=True).draw_mermaid_png()
+    assert compiled.get_graph(xray=False).draw_mermaid_png()
+
+
+def test_draw_mermaid_png_does_not_execute_nodes() -> None:
+    calls = {"n": 0}
+
+    def counted(state: dict[str, Any]) -> dict[str, Any]:
+        calls["n"] += 1
+        return {}
+
+    from freegraph.graph import START, StateGraph
+
+    builder = StateGraph(State)
+    builder.add_node("a", counted)
+    builder.add_edge(START, "a")
+    compiled = builder.compile()
+    assert compiled.get_graph(xray=True).draw_mermaid_png()
+    assert calls["n"] == 0
