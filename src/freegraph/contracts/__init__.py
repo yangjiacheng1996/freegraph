@@ -2,7 +2,7 @@
 
 """freegraph 的**唯一数据与类型契约层**。
 
-公开符号面**恰为 21 个**（见 ``contracts/public-api.md`` §0）——
+公开符号面**恰为 22 个**（见 ``contracts/public-api.md`` §0）——
 ⚠️ **2026-11-12 上游对齐 P3**：新增 ``Interrupt`` 与 ``PregelTask``（**上游同款** ·
 上游 ``langgraph/types.py:575-620`` / ``:637-646``）⇒ **C17** 的 ``.value`` / ``.id``
 终于有了**类型载体** ⇒ 快照的 ``tasks`` / ``interrupts`` 元素类型也随之上游化。
@@ -25,6 +25,7 @@ from .types import (
     RunConfig,
     StateDict,
     StateSnapshot,
+    StreamWriter,
 )
 
 __all__ = [
@@ -32,6 +33,7 @@ __all__ = [
     "Command",
     "StateSnapshot",
     "RunConfig",
+    "StreamWriter",
     "Send",
     "Interrupt",
     "PregelTask",

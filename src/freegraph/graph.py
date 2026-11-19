@@ -4,7 +4,7 @@
 
 本模块是 freegraph 对外的**唯一入口**（FR-001）——用户从这里取到
 ``StateGraph`` / ``START`` / ``END`` / ``Command`` / ``Send`` / ``interrupt`` /
-``RunConfig`` 共 **7 个**符号（导出面清单的**手写**权威是
+``RunConfig`` / ``get_stream_writer`` 共 **8 个**符号（导出面清单的**手写**权威是
 ``specs/b2f2-public-api-facade/contracts/facade-api.md`` §0）。
 
 **零实现体**（FR-006 · 门禁 G14）：本模块内**没有任何** ``class`` /
@@ -16,7 +16,7 @@
 
 .. note::
    **MUST NOT** 使用 ``from __future__ import annotations``——该 future import
-   会留下名为 ``annotations`` 的**公开绑定**，直接破坏「公开名恰 7 个」的
+   会留下名为 ``annotations`` 的**公开绑定**，直接破坏「公开名恰 8 个」的
    判据（``data-model.md`` R-3 · research D-02）。
 
 **层归属**：门面是**跨层单元**（层 =「—」）——它的导出面按定义横跨 L1–L3，
@@ -25,10 +25,10 @@ L5 可观测 · 门禁 G17 / G18）。
 
 **当前行为**：``StateGraph`` 的**建图环节已由 B6F1 接线**
 （``add_node`` / ``add_edge`` / ``add_conditional_edges`` / ``validate``）；
-``compile()`` **已交付**（**B7F2**）；``invoke()`` / ``stream()`` 仍抛内置
-``NotImplementedError``（分别归 **B7F3** / **B8F2**）；``interrupt``
-**已接线**（**B10F1**）⇒ 其实现体在 **L2** 的 ``freegraph.runtime._interrupt``
-⇒ 门面**模块级** ``from .runtime._interrupt import interrupt``
+``compile()`` **已交付**（**B7F2**）；``invoke()`` **已交付**（**B7F3**）；
+``stream()`` **已交付**（**B8F2**）；``interrupt`` **已接线**（**B10F1**）；
+``get_stream_writer`` **已接线**（**B8F2**）⇒ 其实现体在 **L2** 的
+``freegraph.runtime._stream_context`` ⇒ 门面**模块级** import
 （**ARCH-1 的唯一例外** ``facade-L1-L3`` ⇒ 门面 → L2 **合法** · 门禁
 G17 / G18 恒绿）。
 
@@ -40,6 +40,7 @@ G17 / G18 恒绿）。
 from ._stategraph import StateGraph
 from .contracts import Command, RunConfig, Send
 from .runtime._interrupt import interrupt
+from .runtime._stream_context import get_stream_writer
 
 START = "__start__"
 END = "__end__"
@@ -52,4 +53,5 @@ __all__ = [
     "interrupt",
     "Command",
     "RunConfig",
+    "get_stream_writer",
 ]

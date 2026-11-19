@@ -164,3 +164,9 @@ semconv；未注入 tracer 时零副作用、零开销**。
 - 路线依据：`harness/reports/Q6-可视化与可诊断性的规模与可行性.md` §1 / §4.2。
 - 契约权威：`harness/reports/Q8-图运行时最小契约.md` §3.4（C23 / C24）。
 - 宪法 `.specify/memory/constitution.md`：原则 IV（可诊断性是一等功能 · 路线 B）。
+
+## 下游承接（B8F2 → 本 feature · 2026-11-20 · 只接线）
+
+- **D-3（B8F2 → B18F1 · M3 · 两条事件通道独立、按 id 合并）**：`stream()` 的事件与 `TraceSink` 的 span **不互为前置**；二者 MUST 共享同一 `run_id` / `thread_id`（D11 已冻结）。
+- **载体 = L2 私有 contextvar** `_STREAM_RUN_ID` / `_STREAM_THREAD_ID`（由 `StreamSession` 绑定）；B18F1 MUST 读取同一对值。
+- **ARCH-3 例外（plan R-6）**：只读取运行期 `str | None` 元数据；MUST NOT 扩展为任意 L5 → L2 私有依赖，亦 MUST NOT 把 trace 数据塞进 `stream()` 信封。

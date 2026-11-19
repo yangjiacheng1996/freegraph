@@ -232,16 +232,17 @@ def test_the_command_test_files_never_use_the_builder_symbols() -> None:
 # ── SC-015 / SC-024 · 结构纪律 ───────────────────────────────────────────
 
 
-def test_the_result_object_still_has_exactly_four_fields() -> None:
-    """**SC-024**：``SuperStepResult`` 的字段数 == **4**（四字段**冻结面**不动）。
+def test_the_result_object_still_has_the_original_four_fields_plus_tasks() -> None:
+    """**SC-024**：``SuperStepResult`` 原 4 字段保留 + B8F2 追加 ``tasks``。
 
-    ⇒ **MUST NOT** 为记录跳转而扩字段（裁定 18）。
+    拆分而不删（T-1）：原四字段逐字保留，仅在末尾追加第 5 字段。
     """
     assert [field.name for field in fields(SuperStepResult)] == [
         "state",
         "executed",
         "node_writes",
         "steps",
+        "tasks",
     ]
 
 
@@ -284,8 +285,8 @@ print(json.dumps({
 """
     )
 
-    assert payload["contracts"] == 21
-    assert payload["facade"] == 7
+    assert payload["contracts"] == 22
+    assert payload["facade"] == 8
 
 
 def test_the_facade_end_value_equals_the_l2_terminal_marker(

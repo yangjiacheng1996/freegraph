@@ -170,3 +170,7 @@
   ⇒ 落点：`specs/b8f1-conditional-edges-fresh-read/spec.md` 的**下游承接 D-2** ·
   契约 `conditional-edge-contract.md` §3。
 
+## 下游承接（B8F2 → 本 feature · 2026-11-20 · 只接线）
+
+- **D-1（B8F2 → B8F3 · M2 · 别名在流式事件中的可见性）**：`stream_mode="updates"` 的装载键 MUST 是**节点名**（与 `invoke` / 图结构同一口径；沿用 B8F1 的 `path_map` 查表口径）⇒ B8F3 落地别名后 MUST NOT 为 `stream()` 另造一套命名映射。
+- **落点**：`stream()` 的载荷键 = `PregelTask.name` / `updates` 的节点名；别名解析归本 feature，`stream()` 只消费节点名。

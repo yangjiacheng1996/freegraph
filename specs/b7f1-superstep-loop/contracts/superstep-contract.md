@@ -27,7 +27,7 @@
 | 图规格 | `GraphSpec(channels: dict[str, Channel], nodes: dict[str, NodeSpec], edges: dict[str \| tuple[str, ...], tuple[str, ...]], *, conditional_edges: dict[str, Any] = <空映射>, interrupt_before: str \| Sequence[str] = (), interrupt_after: str \| Sequence[str] = ())` —— ⚠️ **`interrupt_before` / `interrupt_after` 是 B13F1 的兼容扩展**（keyword-only · 缺省 `()` · 构造后归一为 `tuple[str, ...]`；裸 `"*"` 展开为可执行节点）；⚠️ **`conditional_edges` 的缺省值 MUST 用「工厂语义」实现**（dataclass 的 `default_factory` 等价）⇒ **MUST NOT** 用字面可变默认值（`= {}`）⇒ dataclass 会抛 `ValueError: mutable default <class 'dict'>`（**实测**）· `channels` MUST 是**可变** `dict`（FR-034 · **MUST NOT** 用 `MappingProxyType` —— B4F1 的 `SchemaSpec.channels` 是只读映射，形态不同）<br>⚠️ **2026-11-13 · B7F4 回溯修订 R-1（拆分而不删）**：边表的**键类型**由 `str` 放宽为 **`str \| tuple[str, ...]`**（**兼容扩展** ⇒ **单源边的写法逐字不变** ⇒ 既有调用方**零改动**）⇒ **元组键** ⇒ 该边的**所有**源**共同**汇合到目标（**AND / 屏障**）⇒ **多源口径**的**唯一权威** = `specs/b7f4-multisource-join/contracts/superstep-multisource-contract.md` ⇒ ⇒ 本行的**其余文字逐字保留** |
 | 节点规格 | `NodeSpec(subscribes: tuple[str, ...], run: Callable[[dict[str, Any]], dict[str, Any]])` |
 | 调度状态 | `SchedulerState()` —— **由调用方持有**（裁定 16）· 承载「已消费版本」+ 轮次计数 |
-| 单轮结果 | `SuperStepResult(state: dict[str, Any], executed: tuple[str, ...], node_writes: dict[str, dict[str, tuple[Any, ...]]], steps: int)` |
+| 单轮结果 | `SuperStepResult(state: dict[str, Any], executed: tuple[str, ...], node_writes: dict[str, dict[str, tuple[Any, ...]]], steps: int)`（⚠️ **自 B8F2 起追加** `tasks: tuple[PregelTask, ...] = ()` · **拆分而不删**：原 4 字段逐字保留） |
 | 入口 1（单轮） | `run_super_step(spec: GraphSpec, state: SchedulerState, *, max_concurrency: int \| None = None) -> SuperStepResult`（⚠️ **2026-11-13 · B12F1 回溯修订 T-2**：增 **keyword-only** 的 `max_concurrency` —— **兼容扩展**（带缺省值 ⇒ 既有调用方零改动）· **上游同名同义**（`RunnableConfig["max_concurrency"]`）· 缺省上限 `min(32, cpu+4)`（**上游同款**）· 显式 `N` ⇒ 实际并发度 `min(本轮任务数, N)`（**N 不被 32 再夹**）· `N = 1` ⇒ **串行基线**）|
 | 入口 2（多轮） | `run_super_steps(spec: GraphSpec, state: SchedulerState \| None = None, *, max_steps: int = 10007, max_concurrency: int \| None = None) -> SuperStepResult`（**上游同款** · 2026-11-12 P2-c · ⚠️ **2026-11-13 · B12F1 回溯修订 T-2**：同上）|
 | 依赖 | **只依赖标准库**（`collections.abc` · `dataclasses` · `typing`）· MUST NOT import 第三方（L2 · FR-022） |
@@ -262,6 +262,11 @@ freegraph ran = ['a','b']  ⇒ b 被执行 ⇒ 随后 GraphRecursionError（自�
 > ⚠️ **本表的三列差异 = 跨 feature 冻结的判据**（裁定 34 · 2026-11-11 分析轮第 3 次）⇒
 > 「多轮入口的 `executed` 累计 / `node_writes` 按轮次先后拼接 / 单轮入口 `steps` **恒为 1**」
 > MUST 在本 feature 有断言（**SC-001**）⇒ 落点 = tasks **T064**。
+>
+> ⚠️ **2026-11-20 · B8F2 回溯修订 T-1（只补注记 · 原描述不改写）**：自 B8F2 起
+> `SuperStepResult` **追加**第 5 字段 `tasks: tuple[PregelTask, ...] = ()`（末尾 · 缺省）；
+> 原 `state` / `executed` / `node_writes` / `steps` **逐字保留**，单轮 / 多轮累计口径与
+> `executed` / `node_writes` 一致 ⇒ 既有按关键字构造的调用方零改动。
 
 ### 5.4 原子性（FR-032）
 

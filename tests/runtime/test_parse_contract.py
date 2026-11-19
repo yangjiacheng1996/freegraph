@@ -439,9 +439,9 @@ def test_the_ci_installs_the_upstream_only_through_the_differential_group() -> N
 
 
 def test_public_api_surface_is_unchanged() -> None:
-    """T049 · SC-015 · FR-015：契约层仍 **21** 个 · 门面仍 **7** 个符号。"""
-    assert len(_public_symbols("src/freegraph/contracts/__init__.py")) == 21
-    assert len(_public_symbols("src/freegraph/graph.py")) == 7
+    """T049 · SC-015 · FR-015：契约层 **22** 个 · 门面 **8** 个符号（B8F2 +1 / +1）。"""
+    assert len(_public_symbols("src/freegraph/contracts/__init__.py")) == 22
+    assert len(_public_symbols("src/freegraph/graph.py")) == 8
 
 
 def test_runtime_package_is_registered_as_l2_in_the_layer_registry() -> None:

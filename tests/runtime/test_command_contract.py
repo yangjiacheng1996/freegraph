@@ -75,7 +75,7 @@ INVARIANT_TESTS: dict[str, str] = {
     "I-11": "test_i11_the_dynamic_and_static_edges_are_superposed",
     "I-12": "test_i12_end_neither_jumps_nor_terminates",
     "I-13": "test_i13_the_empty_slots_and_lists_are_no_ops",
-    "I-14": "test_i14_the_result_object_has_exactly_four_fields",
+    "I-14": "test_i14_the_result_object_keeps_original_four_fields_plus_tasks",
 }
 
 
@@ -558,13 +558,19 @@ def test_i13_the_empty_slots_and_lists_are_no_ops() -> None:
         _run_returning([])
 
 
-def test_i14_the_result_object_has_exactly_four_fields() -> None:
-    """**I-14**：结果对象**四字段**（字段数断言）。"""
+def test_i14_the_result_object_keeps_original_four_fields_plus_tasks() -> None:
+    """**I-14**：原四字段保留，B8F2 在末尾追加 ``tasks``（拆分而不删）。"""
     from dataclasses import fields
 
     from freegraph.runtime import SuperStepResult
 
-    assert len(fields(SuperStepResult)) == 4
+    assert [field.name for field in fields(SuperStepResult)] == [
+        "state",
+        "executed",
+        "node_writes",
+        "steps",
+        "tasks",
+    ]
 
 
 # ── 上游同款（2026-11-12 上游对齐 P3）──────────────────────────────────────

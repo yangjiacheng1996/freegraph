@@ -213,10 +213,10 @@ class TestFrozenHoldingFace:
         assert len(runtime.__all__) == 23
 
     def test_facade_export_surface_is_unchanged(self) -> None:
-        """门面导出面 MUST 仍**恰好 7** 个符号。"""
+        """门面导出面 MUST 仍**恰好 8** 个符号（B8F2 +1）。"""
         import freegraph.graph as facade
 
-        assert len(facade.__all__) == 7
+        assert len(facade.__all__) == 8
 
 
 @pytest.mark.parametrize("payload", [{}, {"messages": []}])

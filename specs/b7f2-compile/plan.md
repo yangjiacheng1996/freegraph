@@ -232,6 +232,13 @@ layer-registry.md`）把 `src/freegraph/_stategraph.py` 登记为**文件级 L3 
 | A2 | 实现 6 个能力面方法，签名逐字对齐 L1 协议（`invoke(input, config=None)` / `stream(input, config=None, *, stream_mode="values")` / `get_graph(*, xray=False)` / `get_state(config)` / `get_state_history(config)` / `update_state(config, values, as_node=None)`），全部抛 `NotImplementedError` 并**点名归属 feature** | `_stategraph.py` | FR-011 · SC-004 / SC-008 |
 | A3 | `CompiledGraph` 带**私有**标记（模块内 `_` 前缀类名之外，类型不进 `freegraph.graph` 导出面；`__all__` 不动） | `_stategraph.py` | FR-017 · SC-013 |
 
+> ⚠️ **2026-11-20 · B8F2 回溯修订注记（T-3 · 只补注记 · 原 A2 描述不改写）**：
+> 自 **B8F2** 起，A2 的 `stream(input, config=None, *, stream_mode="values")` 已由
+> `NotImplementedError` 改为**真实交付**；签名默认值改为 **`stream_mode=None`（解析为
+> `"updates"`）**、`config` 放宽为 `RunConfig | Mapping[str, Any] | None`。原 A2 描述保留为
+> **历史事实**；现行权威见 `contracts/compile-contract.md` §2.4 的注记与
+> `specs/b8f2-stream-modes/contracts/stream-contract.md`。
+
 ### Phase B · `compile()` 入口与图规格适配
 
 | # | 动作 | 文件 | 判据 |

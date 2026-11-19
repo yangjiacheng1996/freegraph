@@ -8,7 +8,7 @@
 > | feature ID | `B8F2` |
 > | 所属 功能块 | B8（路由语义 + stream + 别名/context） |
 > | 架构层 | L2 执行内核层 |
-> | 里程碑 | M2 图定义与对外 API（第 18 个） |
+> | 里程碑 | M2 图定义与对外 API（第 19 个） |
 > | 前置依赖 | **B7F3** |
 > | 规模 | 1,180 行（实现 620 / 测试 560）· 3 人日 |
 > | 建议 short-name | `b8f2-stream-modes` |
@@ -38,7 +38,8 @@
 - **上游的 `StreamWriter` 机制**（**照抄依据** · `langgraph 1.2.11`）：
   `langgraph/config.py:126` 的 `get_stream_writer()` 靠 **contextvar** 取写入器；
   跨线程可见性由**执行器**的 **`copy_context()`** 提供（`langgraph/pregel/_executor.py:64`
-  与 `:164` ⇒ `ctx.run(fn, …)`）⇒ ⇒ ⇒ 本仓库的落点见「下游承接（B7F1 + B10F1）」条。
+  的 `copy_context()` 与 `:71` 的 `ctx.run(fn, …)`；async 路径见 `:164`）
+  ⇒ ⇒ ⇒ 本仓库的落点见「下游承接（B7F1 + B10F1）」条。
 - **上游的 `tasks` 档产出粒度**（**照抄依据**）：`langgraph/pregel/_loop.py:580` 与 `:674`
   的 `self._emit("tasks", map_debug_tasks, …)` ⇒ ⇒ ⇒ 产出 **task 级**事件（**每个**
   task 完成时一条）⇒ 载荷 = `langgraph/types.py:637` 的 `PregelTask`（**七字段**：
@@ -161,7 +162,7 @@
 - **可视化不阻断执行**（宪法原则 IV）：流式消费不得改变执行语义。
 - **人工门禁**：`harness/verification/<feature>/manual-verification.md`。
 - **证据门禁**：mode 名与语义须附 LangGraph 源码 / 文档来源
-  （`langgraph/types.py:122-130` `StreamMode`）。
+  （`langgraph/types.py:122-124` `StreamMode` 字面量；说明 docstring 至 `:136`）。
 
 ### 10. 交付物与后续
 
@@ -253,7 +254,7 @@
 
 - 立项书 §5.2（B8F2 行）、§5.3（C12）、§5.8.1（可视化 12 项接口之「运行 · 流式事件」）、
   §5.8.2（第 7 项）、§5.8.3（缺口 3 / D11）、§9.1（门禁）。
-- 源码参照：`langgraph/types.py:122-130`（`StreamMode`）。
+- 源码参照：`langgraph/types.py:122-124`（`StreamMode` 字面量；说明 docstring 至 `:136`）。
 - 契约权威：`harness/reports/Q8-图运行时最小契约.md` §3.4（C12）。
 - 验收脚本：`harness/demo/visualization.py`（七种流式模式用例）、
   `harness/demo/graph_core.py`（`stream_mode="updates"` 用例）。

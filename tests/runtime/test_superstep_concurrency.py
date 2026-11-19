@@ -593,7 +593,7 @@ def test_the_public_symbol_faces_are_unchanged() -> None:
     manifest = _parse_l1_manifest()
     assert manifest, "L1 公开符号面清单解析为空"
     assert set(l1.__all__) == manifest, "L1 的 `__all__` 与清单**集合不等**"
-    assert len(facade.__all__) == 7, f"门面符号面应为 7，实得 {len(facade.__all__)}"
+    assert len(facade.__all__) == 8, f"门面符号面应为 8，实得 {len(facade.__all__)}"
     # ⚠️ **回溯修订 T-1 ②**（**B10F1** · **拆分而不删**）：原判据是「符号数 == 20」
     # ⇒ ⇒ **硬编码数字** ⇒ ⇒ B10F1 **增**了 3 个符号 ⇒ ⇒ **必红** ⇒ ⇒
     # 改为「**与清单集合相等**」⇒ ⇒ **判据零放宽**（仍是「== 某份清单」）。
@@ -604,17 +604,17 @@ def test_the_public_symbol_faces_are_unchanged() -> None:
     )
 
 
-def test_the_super_step_result_keeps_its_four_fields() -> None:
-    """**SC-019**：``SuperStepResult`` 的**字段数 == 4**（⚠️ **不**新增 ``interrupts``）。
+def test_the_super_step_result_keeps_original_fields_and_appends_tasks() -> None:
+    """**SC-019**：原 4 字段保留 + B8F2 追加 ``tasks``（拆分而不删）。
 
-    ⇒ 中断信息**以抛出的方式**交给调用方（**裁定 25**）⇒ 加字段会是**死字段**。
+    ⇒ 中断信息**以抛出的方式**交给调用方（**裁定 25**）⇒ 不额外加 ``interrupts``。
     """
     import dataclasses
 
     from freegraph.runtime import SuperStepResult
 
     fields = [f.name for f in dataclasses.fields(SuperStepResult)]
-    assert fields == ["state", "executed", "node_writes", "steps"], fields
+    assert fields == ["state", "executed", "node_writes", "steps", "tasks"], fields
 
 
 def test_the_scheduler_state_constructor_signature_is_unchanged() -> None:

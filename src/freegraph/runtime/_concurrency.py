@@ -45,6 +45,7 @@ from __future__ import annotations
 import os
 from collections.abc import Callable, Iterable
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
+from contextvars import copy_context
 from dataclasses import dataclass
 from typing import Any
 
@@ -217,7 +218,10 @@ def run_tasks_concurrently(
     ) as executor:
         futures: dict[Future[Any], int] = {}
         for task_id, fn in materialized:
-            futures[executor.submit(_worker, task_id, fn)] = task_id
+            # ⚠️ **B8F2**：每任务捕获当前上下文（writer / custom sink /
+            # 运行标识）⇒ 与上游 `_executor.py:64` / `:71` 同款。
+            ctx = copy_context()
+            futures[executor.submit(ctx.run, _worker, task_id, fn)] = task_id
 
         pending: set[Future[Any]] = set(futures)
         failed = False

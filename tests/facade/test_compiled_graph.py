@@ -73,7 +73,6 @@ class TestCapabilitySurface:
     def test_each_unready_method_raises_not_implemented_naming_owner(self) -> None:
         compiled = build_minimal_graph().compile()
         calls = {
-            "stream": (({},), "B8F2"),
             "get_graph": ((), "B22F1"),
             "get_state": (({},), "B15F1"),
             "get_state_history": (({},), "B15F1"),
@@ -96,6 +95,13 @@ class TestCapabilitySurface:
             compiled.invoke({})
         except NotImplementedError as exc:  # pragma: no cover - 失败路径
             pytest.fail(f"invoke 已由 B7F3 交付，不应抛 NotImplementedError：{exc}")
+
+    def test_stream_is_delivered_and_yields_events(self) -> None:
+        """**B8F2 已交付** ⇒ ``stream()`` 返回惰性事件迭代器且可消费。"""
+        compiled = build_minimal_graph().compile()
+        events = list(compiled.stream({}, stream_mode="updates"))
+        assert events
+        assert all(set(event) == {"stream_mode", "payload", "run_id", "thread_id"} for event in events)
 
     def test_zero_attribute_error(self) -> None:
         compiled = build_minimal_graph().compile()

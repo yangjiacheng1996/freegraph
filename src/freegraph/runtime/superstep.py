@@ -53,7 +53,14 @@ from functools import partial
 from typing import Any
 
 from freegraph.contracts.errors import GraphInterrupt, GraphRecursionError, InvalidUpdateError
-from freegraph.contracts.types import Command, Interrupt, RunConfig, Send, StateDict
+from freegraph.contracts.types import (
+    Command,
+    Interrupt,
+    PregelTask,
+    RunConfig,
+    Send,
+    StateDict,
+)
 
 from ._concurrency import (
     _TaskOutcome,
@@ -77,6 +84,7 @@ from ._fanout import (
     make_fanout,
 )
 from ._recursion import resolve_config, resolve_limit
+from ._stream_context import bind_current_task, record_round_tasks
 from ._routing import evaluate_routes, validate_conditional_payload
 from ._static import (
     STATIC_AFTER,
@@ -348,13 +356,14 @@ class SchedulerState:
 class SuperStepResult:
     """**单轮结果** —— 五阶段产物的**可观测**载体。
 
-    **构造签名**（**逐字冻结** · 契约 §1）::
+    **构造签名**（**逐字冻结** · 契约 §1；**B8F2 起追加 ``tasks``**）::
 
         SuperStepResult(
             state: dict[str, Any],
             executed: tuple[str, ...],
             node_writes: dict[str, dict[str, tuple[Any, ...]]],
             steps: int,
+            tasks: tuple[PregelTask, ...] = (),
         )
 
     * ``state`` —— 本轮**结束**时的**稀疏**通道状态（合并 + 步末清空之后）；
@@ -364,7 +373,9 @@ class SuperStepResult:
       · 单轮入口 = 本轮 · 多轮入口 = **累计**（同名节点的同一通道按**轮次先后**
       拼接 · **不**按通道重排）⇒ B8F1 的 fresh 读复用前提（FR-006）；
     * ``steps`` —— **实际迭代轮数**（**含**那次发现「任务集为空」的**空轮**）·
-      单轮入口**恒为 1**（裁定 34）。
+      单轮入口**恒为 1**（裁定 34）；
+    * ``tasks`` —— **B8F2 追加**：本轮完成 task 的定格（单轮 = 本轮 · 多轮 =
+      累计 · **中断轮不产出**）；缺省 ``()`` ⇒ 既有按关键字构造的调用方零改动。
 
     **不可变**（data-model §1）。
     """
@@ -373,6 +384,7 @@ class SuperStepResult:
     executed: tuple[str, ...]
     node_writes: dict[str, dict[str, tuple[Any, ...]]]
     steps: int
+    tasks: tuple[PregelTask, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -1286,7 +1298,11 @@ def _run_round(
     *,
     max_concurrency: int | None = None,
     route_config: Any = None,
-) -> tuple[list[str], dict[str, dict[str, tuple[Any, ...]]]]:
+) -> tuple[
+    list[str],
+    dict[str, dict[str, tuple[Any, ...]]],
+    tuple[PregelTask, ...],
+]:
     """跑**一轮** super-step（阶段 ② · ②′ · ③ · ③′ · ④ · ⑤ · ⑥）。
 
     * **标准触发任务**：按**目标节点名序**分配 TaskId（0 起）；
@@ -1335,7 +1351,9 @@ def _run_round(
     ) -> Callable[[], dict[str, Any]]:
         def _inner() -> dict[str, Any]:
             started.append(task_id)
-            with bind_task(task_key, run_table, node_name=target):
+            with bind_current_task(task_id), bind_task(
+                task_key, run_table, node_name=target
+            ):
                 return fn()
 
         return _inner
@@ -1359,7 +1377,34 @@ def _run_round(
     target_by_id: dict[TaskId, str] = {
         task_id: target for task_id, _key, target, _node, _input in records
     }
+    task_key_by_id: dict[TaskId, str] = {
+        task_id: task_key for task_id, task_key, _target, _node, _input in records
+    }
     by_id: dict[TaskId, _TaskOutcome] = dict(zip(sorted(started), outcomes))
+
+    # ── B8F2 · task 定格（task 级事件 / SuperStepResult.tasks 的单一来源） ──
+    def _task_result(outcome: _TaskOutcome) -> dict[str, Any]:
+        return {
+            channel: values[0] if len(values) == 1 else tuple(values)
+            for channel, values in outcome.writes.items()
+        }
+
+    task_snapshot = tuple(
+        PregelTask(
+            id=f"{state.step}:{task_id}",
+            name=target_by_id[task_id],
+            path=(
+                (target_by_id[task_id],)
+                if task_key_by_id.get(task_id) == target_by_id[task_id]
+                else (target_by_id[task_id], task_id)
+            ),
+            error=by_id[task_id].error,
+            interrupts=by_id[task_id].interrupts,
+            state=None,
+            result=_task_result(by_id[task_id]),
+        )
+        for task_id in sorted(by_id)
+    )
 
     # ── ③′ 判定与落回（TaskId 序） ──
     error = _first_error(by_id)
@@ -1440,8 +1485,9 @@ def _run_round(
         )
         raise error
     if interrupts:
+        record_round_tasks(task_snapshot)
         raise GraphInterrupt(interrupts)
-    return list(executed), pending
+    return list(executed), pending, task_snapshot
 
 
 def _first_error(by_id: dict[TaskId, _TaskOutcome]) -> BaseException | None:
@@ -1506,6 +1552,65 @@ def _validate_max_concurrency(max_concurrency: int | None) -> None:
         raise ValueError(f"max_concurrency must be >= 1, got {max_concurrency!r}")
 
 
+def _run_single_step(
+    spec: GraphSpec,
+    state: SchedulerState,
+    *,
+    max_concurrency: int | None = None,
+    route_config: Any = None,
+    max_steps: int | None = None,
+) -> SuperStepResult | None:
+    """**唯一单轮实现点** —— ``run_super_step`` 与 ``_stream_tick`` 共用。
+
+    * ``route_config`` —— 原始 ``config``（B8F1 双参路由第二参）；
+    * ``max_steps`` —— ``None`` = 不判上限（``run_super_step`` 的既有语义）；
+      否则**执行前**判「触发集非空且 ``state.step >= max_steps``」⇒
+      ``GraphRecursionError``（恰好收敛不误抛）；
+    * 返回 ``None`` = 触发集为空（已收敛）；否则返回本轮结果。
+    """
+    _validate_max_concurrency(max_concurrency)
+    _reject_static_points_for_low_level(spec)
+    _evaluate_start_routes(spec, state, route_config=route_config)
+    triggered = _determine_triggers(spec, state)
+    if not triggered and not state.fanout:
+        return None
+    if max_steps is not None and state.step >= max_steps:
+        raise GraphRecursionError(recursion_limit=max_steps, current_step=state.step)
+    executed, pending, tasks = _run_round(
+        spec,
+        state,
+        triggered,
+        max_concurrency=max_concurrency,
+        route_config=route_config,
+    )
+    state.step += 1
+    return SuperStepResult(
+        state=_sparse_state(spec, state),
+        executed=tuple(executed),
+        node_writes=pending,
+        steps=1,
+        tasks=tasks,
+    )
+
+
+def _stream_tick(
+    spec: GraphSpec,
+    state: SchedulerState,
+    *,
+    max_steps: int,
+    max_concurrency: int | None = None,
+    route_config: Any = None,
+) -> SuperStepResult | None:
+    """L2 私有流式单轮入口（不进 ``__all__``）。"""
+    return _run_single_step(
+        spec,
+        state,
+        max_concurrency=max_concurrency,
+        route_config=route_config,
+        max_steps=max_steps,
+    )
+
+
 def run_super_step(
     spec: GraphSpec,
     state: SchedulerState,
@@ -1529,24 +1634,15 @@ def run_super_step(
       ``min(本轮任务数, N)``（**N 不被 32 再夹**）· ``N = 1`` ⇒ **串行基线**
       （FR-017 · 裁定 2 / 18）。
     """
-    _validate_max_concurrency(max_concurrency)
-    _reject_static_points_for_low_level(spec)
-    # ⚠️ **B8F1**：条件边挂在 ``__start__`` 上 ⇒ **阶段 ① 之前**求值一次
-    # （**幂等**）⇒ ⇒ ⇒ 目标在**第 1 轮**被触发。
-    _evaluate_start_routes(spec, state, route_config=None)
-    triggered = _determine_triggers(spec, state)
-    executed: list[str] = []
-    pending: dict[str, dict[str, tuple[Any, ...]]] = {}
-    if triggered or state.fanout:
-        executed, pending = _run_round(
-            spec, state, triggered, max_concurrency=max_concurrency
-        )
-        state.step += 1
+    result = _run_single_step(spec, state, max_concurrency=max_concurrency)
+    if result is not None:
+        return result
     return SuperStepResult(
         state=_sparse_state(spec, state),
-        executed=tuple(executed),
-        node_writes=pending,
+        executed=(),
+        node_writes={},
         steps=1,
+        tasks=(),
     )
 
 
@@ -1590,6 +1686,7 @@ def run_super_steps(
     scheduler_state = state if state is not None else SchedulerState()
     executed: list[str] = []
     pending: dict[str, dict[str, tuple[Any, ...]]] = {}
+    tasks: list[PregelTask] = []
     steps = 0
     while True:
         # ⚠️ **B8F1**：入口哨兵上的条件边 ⇒ **每轮之前**求值（**幂等** ⇒ 只有
@@ -1603,10 +1700,11 @@ def run_super_steps(
             raise GraphRecursionError(
                 recursion_limit=max_steps, current_step=scheduler_state.step
             )
-        round_executed, round_pending = _run_round(
+        round_executed, round_pending, round_tasks = _run_round(
             spec, scheduler_state, triggered, max_concurrency=max_concurrency
         )
         executed.extend(round_executed)
+        tasks.extend(round_tasks)
         for node_name, writes in round_pending.items():
             bucket = pending.setdefault(node_name, {})
             for key, values in writes.items():
@@ -1617,6 +1715,7 @@ def run_super_steps(
         executed=tuple(executed),
         node_writes=pending,
         steps=steps,
+        tasks=tuple(tasks),
     )
 
 
@@ -1846,6 +1945,7 @@ def _run_graph_loop(
     """
     executed: list[str] = []
     pending: dict[str, dict[str, tuple[Any, ...]]] = {}
+    tasks: list[PregelTask] = []
     steps = 0
     triggered: list[str] | None = list(first_round) if first_round is not None else None
     while True:
@@ -1887,7 +1987,7 @@ def _run_graph_loop(
                 )
             return result
         try:
-            round_executed, round_pending = _run_round(
+            round_executed, round_pending, round_tasks = _run_round(
                 spec,
                 state,
                 triggered,
@@ -1909,6 +2009,7 @@ def _run_graph_loop(
                 )
             return result
         executed.extend(round_executed)
+        tasks.extend(round_tasks)
         for node_name, writes in round_pending.items():
             bucket = pending.setdefault(node_name, {})
             for key, values in writes.items():
@@ -1944,6 +2045,7 @@ def _run_graph_loop(
         executed=tuple(executed),
         node_writes=pending,
         steps=steps,
+        tasks=tuple(tasks),
     )
     if static_resume and checkpointer is not None:
         _clear_static_suspension(run_config, checkpointer, state, result.state)

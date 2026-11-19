@@ -193,3 +193,8 @@
 
 - **D-5（B11F1 → B19F1 · M3 · 触发源暴露）**：fan-out 任务与静态边 / `goto` 同为下一轮任务，但它是**派发任务**（不是边触发源）⇒ B19F1 在调度层统一暴露时 MUST 把 fan-out 任务一并纳入（静态边 + `goto` + fan-out 一起给）⇒ MUST NOT 只暴露静态边一类。
 
+## 下游承接（B8F2 → 本 feature · 2026-11-20 · 只接线）
+
+- **D-3（B8F2 → B19F1 · M3 · 两条事件通道独立、按 id 合并）**：`stream()` 事件与 `TraceSink` span **不互为前置**；二者 MUST 共享同一 `run_id` / `thread_id`（D11 已冻结）。
+- **载体 = L2 私有 contextvar** `_STREAM_RUN_ID` / `_STREAM_THREAD_ID`（由 `StreamSession` 绑定）；B19F1 MUST 读取同一对值。
+- **ARCH-3 例外（plan R-6）**：只读取运行期 `str | None` 元数据；MUST NOT 反向要求 `stream()` 先落地，亦 MUST NOT 把 trace 数据塞进 `stream()` 信封。

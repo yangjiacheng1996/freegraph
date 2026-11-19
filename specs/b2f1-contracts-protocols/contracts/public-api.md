@@ -29,7 +29,7 @@ from freegraph.contracts import (
     GraphRecursionError,   # ├ 递归超限
     GraphInterrupt,        # └ 节点主动中断
 
-    # ── B2F1 新增的 10 个（本 feature 的交付面）──
+    # ── B2F1 / B11F1 新增的 11 个（含 Send）──
     NodeFunc,              # 节点函数协议（Callable[[StateDict], StateDict | Command | list[Command | StateDict] | None]）
     Checkpointer,          # 检查点协议（6 方法）
     TraceSink,             # 可观测接收端协议（3 方法）
@@ -42,13 +42,16 @@ from freegraph.contracts import (
     TraceQuery,            # trace 查询请求（C27 数据面）
     Send,                  # 动态 fan-out 载荷（目标节点 + 自定义入参）—— B11F1
 
+    # ── B8F2 新增的 1 个 ──
+    StreamWriter,          # 流写入器（Callable[[Any], None]）—— B8F2
+
     # ── B12F1 上游对齐新增的 2 个（P3 · 上游同款）──
     Interrupt,             # 中断信息（.value / .id）—— C17 的类型载体
     PregelTask,            # 一个任务的定格
 )
 ```
 
-**恰好 21 个**。不多、不少：
+**恰好 22 个**。不多、不少：
 
 > ⚠️ **2026-11-13 订正（上游对齐批次 P3 · 发起者已批准）**：本节清单原为 **18** 个
 > （= B1F1 的 8 + B2F1 的 10）⇒ **批次 P3**（`harness/proposals/上游对齐审计.md` §3 · P3-2 / P3-4 / P3-5）
@@ -63,7 +66,7 @@ from freegraph.contracts import (
 > 本节是**公开符号面的唯一手工维护点** —— spec / plan / tasks / `README.md` 兼容矩阵中的同款
 > 清单均以本节为准（spec FR-012）。
 
-- `__all__` **集合相等**断言为这 21 个名字（集合断言才能抓住「偷偷多导出一个」）。
+- `__all__` **集合相等**断言为这 22 个名字（集合断言才能抓住「偷偷多导出一个」）。
 - 契约层导出 `Send`（**B11F1**）但**不得**出现名为 `interrupt` 的公开符号（归 B10F1 · 由门面转出）。
 - `import freegraph.contracts` **不得**连带加载任何 freegraph 内部层模块。
 
@@ -79,7 +82,7 @@ from freegraph.contracts import (
 | `Checkpointer` | `get_tuple` / `list` / `put` / `put_writes` / `delete_thread` / **`delete_for_runs`** / **`copy_thread`** / `get_next_version` | **方法名与参数名已冻结**（逐字见 `data-model.md` §2.2）；**返回类型占位**（`Any`）——**载荷形状挂起 B14F1**<br>⚠️ **2026-11-12 上游对齐 P3**：由**六**方法增为**八**（**只增**）—— 新增 `delete_for_runs` / `copy_thread`（**上游 required** · 上游 `langgraph/checkpoint/base/__init__.py:331,350`）⇒ **上游形状的 saver 直接满足本协议** | C19 |
 | `TraceSink` | `on_span_start` / `on_span_end` / `current_span` | `(span: Span) -> None` ×2；`() -> Span \| None` | C23 / C24 |
 | `Store` | `get` / `search` / `put` / `delete` / `list_namespaces` / `batch` | **方法名与参数名已冻结**（逐字见 `data-model.md` §2.4）；命名空间为层级路径<br>⚠️ **2026-11-12 上游对齐 P3**：命名空间类型由 `Any` **收紧**为 `tuple[str, ...]`（**上游同款** · 上游 `langgraph/store/base/__init__.py:311`）⇒ 上游形状的 store **直接满足**本协议；**不补**上游的**异步变体**（v1 无 async） | C20 |
-| `CompiledGraph` | `invoke` / `stream` / `get_graph` / `get_state` / `get_state_history` / `update_state` | 返回类别已冻结；**参数名按 `data-model.md` §2.5 冻结为占位名**（B2F1 复核裁定）· ⚠️ **协议注解自 B7F3 起放宽**（`input: StateDict \| Command \| None` + `config: RunConfig \| Mapping[str, Any] \| None` ⇒ 详见 `src/freegraph/contracts/protocols.py`） | C10 / C11 / C12 / C13 |
+| `CompiledGraph` | `invoke` / `stream` / `get_graph` / `get_state` / `get_state_history` / `update_state` | 返回类别已冻结；**参数名按 `data-model.md` §2.5 冻结为占位名**（B2F1 复核裁定）· ⚠️ **协议注解自 B7F3 起放宽**（`input: StateDict \| Command \| None` + `config: RunConfig \| Mapping[str, Any] \| None` ⇒ 详见 `src/freegraph/contracts/protocols.py`）· ⚠️ **自 B8F2 起** `stream` 的 `stream_mode` 默认 `None`（解析为 `"updates"`）；原 `"values"` 仍合法 | C10 / C11 / C12 / C13 |
 
 **各协议的上游来源**（宪法原则 VIII · 证据门禁；FR-014 要求「协议语义与上游同名能力的
 对应关系 MUST 附来源」）——

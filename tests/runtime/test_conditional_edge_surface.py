@@ -45,9 +45,9 @@ def _compiled():
     return builder.compile()
 
 
-def test_the_facade_exports_exactly_seven_symbols() -> None:
-    """① 门面 ``freegraph.graph`` 的导出面 == **7** 个符号（**零变更**）。"""
-    assert len(graph.__all__) == 7
+def test_the_facade_exports_exactly_eight_symbols() -> None:
+    """① 门面 ``freegraph.graph`` 的导出面 == **8** 个符号（B8F2 +1）。"""
+    assert len(graph.__all__) == 8
     assert set(graph.__all__) == {
         "StateGraph",
         "START",
@@ -56,6 +56,7 @@ def test_the_facade_exports_exactly_seven_symbols() -> None:
         "interrupt",
         "Command",
         "RunConfig",
+        "get_stream_writer",
     }
 
 
@@ -65,9 +66,9 @@ def test_the_runtime_export_face_is_unchanged() -> None:
     assert len(runtime.__all__) == 23
 
 
-def test_the_contract_layer_exports_exactly_twenty_one_symbols() -> None:
-    """③ 契约层 ``freegraph.contracts.__all__`` == **21** 个符号（**零变更**）。"""
-    assert len(contracts.__all__) == 21
+def test_the_contract_layer_exports_exactly_twenty_two_symbols() -> None:
+    """③ 契约层 ``freegraph.contracts.__all__`` == **22** 个符号（B8F2 +1）。"""
+    assert len(contracts.__all__) == 22
 
 
 def test_the_compiled_product_still_holds_eleven_keys() -> None:
@@ -97,7 +98,6 @@ def test_the_error_symbol_set_is_unchanged() -> None:
 @pytest.mark.parametrize(
     ("method_name", "args", "owner"),
     [
-        ("stream", (None,), "B8F2"),
         ("get_graph", (), "B22F1"),
         ("get_state", (None,), "B15F1"),
         ("get_state_history", (None,), "B15F1"),

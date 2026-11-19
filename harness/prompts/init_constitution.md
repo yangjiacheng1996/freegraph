@@ -12,7 +12,7 @@
 >   并套用 Speckit 官方宪法模板（`Core Principles` / 附加章节 / `Governance` / 版本行）的结构。
 > - **待办**：宪法中 `TODO(...)` 标记的字段需要在批准日由 `/speckit.constitution` 填实。
 > - **📌 正文同步状态（2026-11-13 订正 · 重要）**：本文件的**宪法正文已与生效副本
->   `.specify/memory/constitution.md` 的规范性正文逐字同步**（**v1.15.1** · 2026-11-18）——
+>   `.specify/memory/constitution.md` 的规范性正文逐字同步**（**v1.15.2** · 2026-11-20）——
 >   即：**从 `## Core Principles` 起、到版本行为止**，与生效副本**逐字一致**（已用脚本 diff 校验）。
 >   **本次同步顺带补齐了一处既有隐患**：本模板此前停留在 **v1.6.0**（**缺**原则 **XI / XII**
 >   与「**跨 feature 承接的接线通则**」）⇒ ⇒ 再次执行 `/speckit.constitution` 本会把它们
@@ -250,9 +250,12 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
     ④ **数据结构与文件格式属内部实现细节**（**MUST NOT** 成为对外承诺）。
 - **标识与关联键约定（2026-11-05 修订，与 C1–C27 一并冻结）**：
   - `thread_id` = **会话**标识，由 `RunConfig` 承载；`run_id` = **单次运行**标识，
-    由运行时在每次 `invoke` / `stream` 开始时生成，**MUST NOT 可由用户指定或覆盖**
-    （**用户不设置**；`run_id` **不进** `RunConfig`——它是运行期产物而非配置项；
-    用户自带标识需求用 `thread_id` / `metadata` / `tags` 承担）；
+    由运行时在每次 `invoke` / `stream` 开始时生成，**MUST NOT 可由用户指定或覆盖**。
+    ⚠️ **2026-11-20 事实订正（v1.15.2）**：`RunConfig` 现已**保留** `run_id: str | None`
+    字段（2026-11-12 上游对齐 P3），但该字段 **MUST NOT** 被用作事件 / span 的 `run_id`；
+    运行时 MUST **忽略**它并生成自己的 `run_id`（用户自带标识需求仍用
+    `thread_id` / `metadata` / `tags` 承担）。历史表述「`run_id` 不进 `RunConfig`」见
+    `harness/proposals/立项书.md` §5.3.1（**历史事实**，现状以本段为准）；
   - **一次运行一个 `run_id`**：该次运行的所有节点、工具、模型调用与事件共享它
     （把每个节点视作一个微服务，则 `run_id` 是**链路监控的唯一通行证**，
     等价于分布式追踪的 trace id）；
@@ -890,7 +893,7 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
   这正是它被拆出来的目的：原宪法中本段占 **47%** 的篇幅却对「当前该怎么做」零增益）；
   ⇒ ⇒ 本文件（生效副本）**只保留规范性正文 + 版本行**，**不含**历史条目。
 
-**Version**: 1.15.1 | **Ratified**: 2026-11-05（发起者批准；首次批准即定版为 1.0.0） | **Last Amended**: 2026-11-18
+**Version**: 1.15.2 | **Ratified**: 2026-11-05（发起者批准；首次批准即定版为 1.0.0） | **Last Amended**: 2026-11-20
 
 <!-- CONSTITUTION-BODY-END -->
 

@@ -41,4 +41,5 @@
     [method] set_finish_point(self, key: str) -> Self
     [method] set_node_defaults(self, **kwargs) -> Self
     [method] validate(self, interrupt: Sequence[str] | None = None) -> Self
+[function] get_stream_writer() -> StreamWriter
 [function] interrupt(value: Any) -> Any

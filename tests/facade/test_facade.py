@@ -228,7 +228,6 @@ class TestCompileIsWired:
         compiled = graph.compile()  # type: ignore[attr-defined]
         assert not hasattr(graph, "invoke")
         calls = (
-            ("stream", ({},)),
             ("get_graph", ()),
             ("get_state", ({},)),
             ("get_state_history", ({},)),
@@ -237,8 +236,8 @@ class TestCompileIsWired:
         for name, args in calls:
             with pytest.raises(NotImplementedError):
                 getattr(compiled, name)(*args)
-        # ⚠️ **拆分而不删**（B7F3 · 破冻结面 · 追认项 ⑤）：``invoke`` 已由 B7F3 交付
-        # ⇒ ⇒ 从参数化列表中**提出** ⇒ ⇒ 改为**独立断言** ⇒ ⇒ 其余 **5** 条目**逐字不动**。
+        # ⚠️ **拆分而不删**（B8F2）：``stream`` 已交付 ⇒ 从列表中提出，改为可流式断言。
+        assert list(compiled.stream({}))
         try:
             compiled.invoke({})
         except NotImplementedError as exc:  # pragma: no cover - 失败路径

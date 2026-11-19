@@ -185,3 +185,8 @@
   `looks_like_png` 判据）、`harness/demo/target.py:163`。
 - 宪法 `.specify/memory/constitution.md`：原则 I（零出站 · 明文点名 `mermaid.ink`）、
   原则 III（PNG 硬约束）。
+
+## 下游承接（B8F2 → 本 feature · 2026-11-20 · 只接线）
+
+- **D-4（B8F2 → B23F1 · M2 · 图导出与流式互不影响）**：`draw_mermaid_png` MUST NOT 依赖 `stream()` 的副作用；`stream()` MUST NOT 调用 PNG 导出。
+- 两者只在「同一张编译产物」上共享只读规格（`_spec` / 条件边载荷）。

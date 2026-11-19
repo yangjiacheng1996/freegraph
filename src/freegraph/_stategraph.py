@@ -18,10 +18,13 @@
   新 channels 映射 · **B8F1 起** ``conditional_edges`` **填入** L3 产出的
   plain mapping（**恰 5 键** · 零归一化））；
 * 条件边 plain mapping 与注入项挂到 :class:`CompiledGraph` 上；
-* 未就绪的 6 个能力面方法抛内置 ``NotImplementedError``（点名归属 feature）。
+* 尚未就绪的能力面方法抛内置 ``NotImplementedError``（点名归属 feature）。
 
-本模块 **不执行**任何节点 / 路由函数 / 归约器，也**不实现** ``invoke()`` /
-``stream()`` / ``get_graph()`` / 条件边求值 / checkpointer / store 的**行为**。
+**B8F2 交付 ``stream()``**：L3 持有主循环（反复驱动 L2 私有 ``_stream_tick``），
+事件信封 / ``values`` 归一 / ``custom`` 轮末批量的组装均在本模块；``checkpointer``
+与静态断点在 v1 分别被忽略 / 显式拒绝。
+
+本模块 **不实现** ``get_graph()`` / checkpointer / store 的**行为**。
 
 **上游对齐**（``langgraph 1.2.11`` · 原则 XI）：``StateGraph.__init__`` /
 ``add_node`` / ``add_edge`` / ``add_conditional_edges`` / ``validate`` / ``compile``
@@ -31,8 +34,10 @@ X-1…X-12。
 
 from __future__ import annotations
 
+import inspect
+import uuid
 import warnings
-from collections.abc import Callable, Hashable, Mapping, Sequence
+from collections.abc import Callable, Hashable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal, Self, get_args, get_origin, get_type_hints
 
@@ -40,9 +45,11 @@ from .contracts import (
     Checkpointer,
     Command,
     CompiledGraph as CompiledGraphProtocol,
+    GraphInterrupt,
     RunConfig,
     StateDict,
     Store,
+    StreamWriter,
 )
 from .runtime import (
     Channel,
@@ -55,6 +62,9 @@ from .runtime import (
     parse_state_schema,
     run_graph,
 )
+from .runtime._stream import StreamSession
+from .runtime._stream_context import get_stream_writer
+from .runtime.superstep import _stream_tick
 
 _START = "__start__"
 _END = "__end__"
@@ -266,6 +276,105 @@ def _full_state(spec: GraphSpec, sparse: Mapping[str, Any]) -> dict[str, Any]:
     return out
 
 
+_STREAM_MODES: frozenset[str] = frozenset(
+    {"values", "updates", "checkpoints", "tasks", "debug", "messages", "custom"}
+)
+
+
+def _normalize_stream_modes(
+    stream_mode: str | Sequence[str] | None,
+) -> tuple[str, ...]:
+    """校验并归一 ``stream_mode``（调用时完成 · 契约 §7）。"""
+    if stream_mode is None:
+        return ("updates",)
+    if isinstance(stream_mode, str):
+        values = (stream_mode,)
+    elif isinstance(stream_mode, Sequence):
+        values = tuple(stream_mode)
+    else:
+        raise TypeError(
+            "stream_mode must be a str, a sequence of str, or None, "
+            f"got {type(stream_mode).__name__}"
+        )
+    if not values:
+        raise ValueError(
+            "stream_mode must not be an empty sequence; "
+            f"legal values: {sorted(_STREAM_MODES)}"
+        )
+    for value in values:
+        if not isinstance(value, str):
+            raise TypeError(
+                "stream_mode sequence items must be str, "
+                f"got {type(value).__name__}"
+            )
+        if value not in _STREAM_MODES:
+            raise ValueError(
+                f"invalid stream_mode {value!r}; legal values: {sorted(_STREAM_MODES)}"
+            )
+    return tuple(dict.fromkeys(values))
+
+
+def _event(
+    stream_mode: str,
+    payload: Any,
+    run_id: str,
+    thread_id: str | None,
+) -> dict[str, Any]:
+    """构造四键事件信封（唯一形态 · 契约 §2）。"""
+    return {
+        "stream_mode": stream_mode,
+        "payload": payload,
+        "run_id": run_id,
+        "thread_id": thread_id,
+    }
+
+
+def _debug_event(
+    step: int,
+    task: Any,
+    run_id: str,
+    thread_id: str | None,
+) -> dict[str, Any]:
+    """构造 ``debug`` 的包裹载荷（契约 §3.4）。"""
+    from datetime import datetime, timezone
+
+    return _event(
+        "debug",
+        {
+            "step": step,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "type": "task_result",
+            "payload": task,
+        },
+        run_id,
+        thread_id,
+    )
+
+
+def _wrap_node_action(action: Callable[..., Any]) -> Callable[..., Any]:
+    """按上游同款规则注入 ``writer`` 关键字（FR-036 · P-20）。"""
+    try:
+        signature = inspect.signature(action)
+    except (TypeError, ValueError):
+        return action
+    parameter = signature.parameters.get("writer")
+    if parameter is None:
+        return action
+    if parameter.kind not in (
+        inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        inspect.Parameter.KEYWORD_ONLY,
+    ):
+        return action
+    annotation = parameter.annotation
+    if annotation not in (inspect.Parameter.empty, StreamWriter, "StreamWriter"):
+        return action
+
+    def wrapped(state: Any) -> Any:
+        return action(state, writer=get_stream_writer())
+
+    return wrapped
+
+
 class CompiledGraph:
     """``compile()`` 的编译产物（B7F2 · L3 私有实现体 · **不进**门面导出面）。
 
@@ -277,7 +386,7 @@ class CompiledGraph:
     * 公开：6 个注入项 + 2 个归一后的断点元组（上游 ``Pregel`` 同款；
       ``transformers`` 命名差异见 X-12）。
 
-    6 个能力面方法在本 feature **全部未就绪** ⇒ 抛内置
+    ``invoke`` / ``stream`` 已交付；其余能力面方法仍抛内置
     ``NotImplementedError``（点名归属 feature）；MUST NOT 抛 ``AttributeError``。
     """
 
@@ -356,13 +465,109 @@ class CompiledGraph:
 
     def stream(
         self,
-        input: Any,  # noqa: A002
-        config: Any = None,
+        input: StateDict,
+        config: RunConfig | Mapping[str, Any] | None = None,
         *,
-        stream_mode: Any = "values",
-    ) -> Any:
-        """流式执行——**未就绪**（由 **B8F2** 交付）。"""
-        raise NotImplementedError("stream 由 B8F2 交付")
+        stream_mode: str | Sequence[str] | None = None,
+    ) -> Iterator[dict[str, Any]]:
+        """流式执行（**B8F2**）—— 惰性返回四键事件迭代器。"""
+        modes = _normalize_stream_modes(stream_mode)
+        run_id = uuid.uuid4().hex
+        return self._stream_events(input, config, modes, run_id)
+
+    def _stream_events(
+        self,
+        input: StateDict,
+        config: RunConfig | Mapping[str, Any] | None,
+        modes: tuple[str, ...],
+        run_id: str,
+    ) -> Iterator[dict[str, Any]]:
+        """L3 主循环：反复驱动 L2 私有单轮入口（与上游 ``while loop.tick()`` 同构）。"""
+        spec = self._spec
+        with StreamSession(spec, input, config, run_id=run_id) as session:
+            thread_id = session.thread_id
+            if "values" in modes:
+                yield _event(
+                    "values",
+                    _full_state(spec, session.initial_sparse),
+                    run_id,
+                    thread_id,
+                )
+
+            round_index = 1
+            while True:
+                step = round_index
+                round_index += 1
+                try:
+                    result = _stream_tick(
+                        spec,
+                        session.state,
+                        max_steps=session.max_steps,
+                        max_concurrency=session.max_concurrency,
+                        route_config=session.route_config,
+                    )
+                except GraphInterrupt as exc:
+                    interrupts = tuple(exc.args[0]) if exc.args else ()
+                    for value in session.take_custom():
+                        if "custom" in modes:
+                            yield _event("custom", value, run_id, thread_id)
+                    if "updates" in modes:
+                        yield _event(
+                            "updates",
+                            {"__interrupt__": interrupts},
+                            run_id,
+                            thread_id,
+                        )
+                    captured = session.take_round_tasks()
+                    if "tasks" in modes:
+                        for task in captured:
+                            yield _event("tasks", task, run_id, thread_id)
+                    if "debug" in modes:
+                        for task in captured:
+                            yield _debug_event(step, task, run_id, thread_id)
+                    if "values" in modes:
+                        sparse = dict(session.sparse_state())
+                        sparse["__interrupt__"] = interrupts
+                        yield _event(
+                            "values",
+                            _full_state(spec, sparse),
+                            run_id,
+                            thread_id,
+                        )
+                    break
+                except BaseException:
+                    for value in session.take_custom():
+                        if "custom" in modes:
+                            yield _event("custom", value, run_id, thread_id)
+                    raise
+
+                if result is None:
+                    break
+
+                for value in session.take_custom():
+                    if "custom" in modes:
+                        yield _event("custom", value, run_id, thread_id)
+                if "updates" in modes:
+                    for task in result.tasks:
+                        yield _event(
+                            "updates",
+                            {task.name: task.result},
+                            run_id,
+                            thread_id,
+                        )
+                if "tasks" in modes:
+                    for task in result.tasks:
+                        yield _event("tasks", task, run_id, thread_id)
+                if "debug" in modes:
+                    for task in result.tasks:
+                        yield _debug_event(step, task, run_id, thread_id)
+                if "values" in modes:
+                    yield _event(
+                        "values",
+                        _full_state(spec, result.state),
+                        run_id,
+                        thread_id,
+                    )
 
     def get_graph(self, *, xray: bool = False) -> Any:
         """图结构导出——**未就绪**（由 **B22F1** 交付）。"""
@@ -635,7 +840,9 @@ class StateGraph:
 
         state_channels = tuple(schema_spec.keys)
         nodes = {
-            name: NodeSpec(subscribes=state_channels, run=record.action)
+            name: NodeSpec(
+                subscribes=state_channels, run=_wrap_node_action(record.action)
+            )
             for name, record in self._nodes.items()
         }
         edges = {key: tuple(targets) for key, targets in self._edges.items()}

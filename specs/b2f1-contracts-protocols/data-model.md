@@ -154,7 +154,7 @@
 | 成员 | 签名（**返回类别已冻结**，D-08） | 返回类别 |
 |---|---|---|
 | `invoke` | `(input: StateDict, config: RunConfig \| None = None) -> StateDict` | **完整状态字典** |
-| `stream` | `(input: StateDict, config: RunConfig \| None = None, *, stream_mode: str \| Sequence[str] = "values") -> Iterator[dict[str, Any]]` | **事件迭代器**（**元素类型 = `dict[str, Any]`**，纯数据字典） |
+| `stream` | `(input: StateDict, config: RunConfig \| None = None, *, stream_mode: str \| Sequence[str] = "values") -> Iterator[dict[str, Any]]` | **事件迭代器**（**元素类型 = `dict[str, Any]`**，纯数据字典）· ⚠️ **2026-11-20 · B8F2 回溯修订 T-3（只补注记）**：自 B8F2 起 `config` 放宽为 `RunConfig \| Mapping[str, Any] \| None`、`stream_mode` 默认 `None`（解析为 `"updates"`）；原 `"values"` 写法仍合法 |
 | `get_graph` | `(*, xray: bool = False) -> Graph` | **图结构** |
 | `get_state` | `(config: RunConfig) -> StateSnapshot \| None` | **状态快照**（**查不到返回空值**，不抛异常） |
 | `get_state_history` | `(config: RunConfig) -> Iterator[StateSnapshot]` | **状态快照迭代器** |

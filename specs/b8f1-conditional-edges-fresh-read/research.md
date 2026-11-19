@@ -709,6 +709,11 @@ cd /tmp/opencode/b8f1
 | **DR-13** | 上游的 **`__start__` 伪节点的其余副作用**（`triggers=[START]` · `channels=START` · `tags=[TAG_HIDDEN]` · `attach_node(START, None)`） | `langgraph/graph/state.py:1373` · `:1508-1514` | freegraph 的 `__start__` 是**哨兵**（`src/freegraph/runtime/superstep.py:123`）⇒ 本 feature **只照抄「求值」这件事**（D-14）⇒ MUST **NOT** 把 `__start__` 变成可执行节点 | **B8F1**（本 feature 的口径）· 伪节点的其余形态仍**不**实现 | 出现「`__start__` 需要成为可观察节点」的用例 |
 | **DR-14** | 上游的 **`branch:to:` 通道写入**（`guard=False` 的 `EphemeralValue` + 写入即触发） | `langgraph/graph/state.py:1524-1530` · `:1581-1596` | freegraph 的 `V-6`（单值语义通道一轮收到多于一个值）**不可放宽** ⇒ 路由通道**不写**（D-09 · 偏离 **X-4**）⇒ 这是**结构差异**、非更严 | **B8F1**（本 feature 的口径） | 若 freegraph 的通道语义引入多值 ⇒ 需重新评估 |
 
+> **2026-11-19 关闭注记（只补注记 · 不改写原描述）**：**DR-4** 已由 **B8F2** 交付——
+> 参数名是 **`writer`**（上游 `_runnable.py:183-188`；`stream_writer` 是 runtime key），
+> 注解匹配集 = `StreamWriter` / `"StreamWriter"` / 空，无流时注入 no-op。⇒ B8F1 的 DR-4
+> **已关闭**；本行原描述保留为历史事实。
+
 ---
 
 ## §4 事实性表述的更正（**C-1 … C-9** · **只更正事实 · 判据只收紧不放宽**）

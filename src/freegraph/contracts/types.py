@@ -1,10 +1,11 @@
 # Copyright (c) 2026 杨家成 · MIT License · https://github.com/yangjiacheng1996/freegraph
 
-"""freegraph 契约层的**五个核心类型**。
+"""freegraph 契约层的**五个核心类型** + ``StreamWriter`` 类型别名。
 
 本模块定义后续全部 feature 都会引用的类型地基：
 
 * :data:`StateDict` —— 状态字典（类型别名，与 ``dict[str, Any]`` 完全等价）；
+* :data:`StreamWriter` —— 流写入器（类型别名，``Callable[[Any], None]``）；
 * :class:`Send` —— 动态 fan-out 载荷（目标节点 + 自定义入参）；
 * :class:`Command` —— 命令原语（跳转 / 写入 / 恢复三个语义位）；
 * :class:`StateSnapshot` —— 状态快照（某一时刻的完整定格）；
@@ -14,7 +15,7 @@
 因此可被外部项目单独消费（如 freechain 只取契约而不拖进运行时）。
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field, fields
 from typing import Any, ClassVar, Literal, TypeAlias
 
@@ -27,6 +28,13 @@ StateDict: TypeAlias = dict[str, Any]
 收到普通 dict 时类型检查必须通过（FR-002 / FR-014）。
 **不支持**按 schema 参数化（``StateDict[MySchema]`` 是非法写法）——
 需要具体字段补全的用户改用自己的 ``TypedDict`` 标注节点签名。
+"""
+
+StreamWriter: TypeAlias = Callable[[Any], None]
+"""**流写入器** —— 节点向 ``custom`` 流写自定义数据的可调用对象。
+
+**上游同款**（``langgraph/types.py:138``）：``Callable[[Any], None]``。
+由 :func:`freegraph.graph.get_stream_writer` 取得；无流时为 no-op。
 """
 
 

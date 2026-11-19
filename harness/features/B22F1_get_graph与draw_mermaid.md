@@ -188,3 +188,7 @@
   ⇒ 落点：`specs/b8f1-conditional-edges-fresh-read/spec.md` 的**下游承接 D-4** ·
   契约 `conditional-edge-contract.md` §2.1。
 
+## 下游承接（B8F2 → 本 feature · 2026-11-20 · 只接线）
+
+- **D-4（B8F2 → B22F1 · M2 · 图导出与流式互不影响）**：`get_graph` / `draw_mermaid` MUST NOT 依赖 `stream()` 的副作用；`stream()` MUST NOT 调用图导出。
+- 两者只在「同一张编译产物」上共享只读规格（`_spec` / 条件边载荷）。

@@ -18,8 +18,8 @@
 >
 > | 面 | 权威 | 性质 |
 > |---|---|---|
-> | **契约层的 18 个公开符号** | `specs/b2f1-contracts-protocols/contracts/public-api.md`（既有，G12 认定的那一个） | 手写清单 |
-> | **门面的 7 个导出符号** | **本文件 §0** | 手写清单（**导出面清单的唯一手写权威** · 裁定 10） |
+> | **契约层的 22 个公开符号** | `specs/b2f1-contracts-protocols/contracts/public-api.md`（既有，G12 认定的那一个） | 手写清单 |
+> | **门面的 8 个导出符号** | **本文件 §0** | 手写清单（**导出面清单的唯一手写权威** · 裁定 10） |
 > | **门面每个符号的完整签名** | `public-api-snapshot.txt`（**机器生成**） | 生成记录（**唯一入库 / 比对点** · 裁定 10） |
 >
 > **层归属（2026-11-07 发起者裁定）**：门面是**跨层单元**（层 =「—」）——
@@ -31,7 +31,7 @@
 
 ---
 
-## 0. 门面导出面（**恰 7 个** · 手动维护点）
+## 0. 门面导出面（**恰 8 个** · 手动维护点）
 
 ```python
 from freegraph.graph import (
@@ -40,22 +40,24 @@ from freegraph.graph import (
     START,                  # 常量 '__start__'（C9）
     END,                    # 常量 '__end__'（C9）
     Send,                   # 原语类型（不可变记录 · 行为在 B11F1）
-    interrupt,              # 原语函数（未接线 · 行为在 B10F1）
+    interrupt,              # 原语函数（行为在 B10F1）
     # ── 契约层转出的 2 个（原样转出 · 形状权威仍是 contracts/public-api.md）──
     Command,                # 命令原语（行为在 B9F1）
     RunConfig,              # 运行配置（C22 · 行为在 B8F3）
+    # ── B8F2 新增的 1 个 ──
+    get_stream_writer,      # 流写入器访问器（Callable[[Any], None]）—— B8F2
 )
 ```
 
-**恰好 7 个**。不多、不少：
+**恰好 8 个**。不多、不少：
 
 > **本节是**门面**导出面清单**的唯一**手写**维护点** —— spec / plan / tasks / `data-model.md` /
 > `README.md` 兼容矩阵中的同款清单均以本节为准（spec FR-002）。
 > **「调用签名」不在本节的管辖范围** —— 它由**机器生成**的 `public-api-snapshot.txt` 记录
 > （**唯一入库 / 比对点** · 裁定 10）。两者**各管一面、不重复**。
 
-- `__all__` **集合相等**断言为这 7 个名字（**两处口径同时成立**：见门禁 **G15**）。
-- 门面模块内**所有不以下划线开头的名字** MUST **恰为**这 7 个（抓「导出了但没进 `__all__`」）。
+- `__all__` **集合相等**断言为这 8 个名字（**两处口径同时成立**：见门禁 **G15**）。
+- 门面模块内**所有不以下划线开头的名字** MUST **恰为**这 8 个（抓「导出了但没进 `__all__`」）。
 - `CompiledGraph` / `Graph` / `Node` / `Edge` / `Span` / `TraceQuery` **MUST NOT** 出现在门面导出面
   （它们属契约层，由 `freegraph.contracts` 进入）。
 - `draw_mermaid` / `draw_mermaid_png` **MUST NOT** 出现在门面导出面（属 `Graph` 对象 · B22F1 / B23F1）。

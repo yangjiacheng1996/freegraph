@@ -352,8 +352,8 @@ def test_contract_error_rules_e1_to_e5_hold() -> None:
     assert InvalidChannelUpdateError.__module__ == "freegraph.runtime.errors"
     assert "EmptyChannelError" not in contracts.__all__
     assert "InvalidChannelUpdateError" not in contracts.__all__
-    assert len(contracts.__all__) == 21
-    assert len(facade.__all__) == 7
+    assert len(contracts.__all__) == 22
+    assert len(facade.__all__) == 8
     # E-2：用户侧 except FreegraphError 均能捕获
     channel = LastValue("k", int)
     with pytest.raises(FreegraphError):

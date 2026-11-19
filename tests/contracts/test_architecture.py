@@ -398,9 +398,10 @@ def parse_public_api_symbols(manifest: Path) -> tuple[list[str], list[str]]:
        （注释行不是符号；分组注释行用于切分「既有 / 新增」）；
     ④ 余下每行按 ``,`` 切分取**首段**再 ``strip()``，并**断言**其匹配
        ``^[A-Za-z_][A-Za-z0-9_]*$``（不匹配即报可读错误，MUST NOT 静默跳过）；
-    ⑤ 抽出的符号名集合 MUST 为 **20** 个（否则报可读错误，MUST NOT 静默返回空集）；
+    ⑤ 抽出的符号名集合 MUST 为 **22** 个（否则报可读错误，MUST NOT 静默返回空集）；
     ⑥ 按 §0 的**分组注释**把结果切分为「B1F1 已冻结的 8 个」·
-       「B2F1 新增的 10 个」·「B12F1 上游对齐新增的 2 个」三段。
+       「B2F1 / B11F1 新增的 11 个（含 Send）」·「B8F2 新增的 1 个」·
+       「B12F1 上游对齐新增的 2 个」四段（B2F1/B11F1/B8F2 均并入 ``new``）。
     """
     text = manifest.read_text(encoding="utf-8")
     blocks = re.findall(r"```[A-Za-z0-9_+-]*\n(.*?)```", text, re.S)
@@ -435,7 +436,9 @@ def parse_public_api_symbols(manifest: Path) -> tuple[list[str], list[str]]:
         if stripped.startswith("#"):
             if "B1F1 已冻结的 8 个" in stripped:
                 bucket = existing
-            elif "B2F1 新增的 10 个" in stripped:
+            elif "B2F1 / B11F1 新增的 11 个" in stripped:
+                bucket = new
+            elif "B8F2 新增的 1 个" in stripped:
                 bucket = new
             elif "B12F1 上游对齐新增的 2 个" in stripped:
                 bucket = aligned
@@ -447,15 +450,22 @@ def parse_public_api_symbols(manifest: Path) -> tuple[list[str], list[str]]:
         bucket.append(name)
 
     symbols = existing + new + aligned
-    assert len(symbols) == 21, (
-        f"{manifest} §0 解析出的符号数 MUST 为 21，实得 {len(symbols)}：{symbols}"
+    assert len(symbols) == 22, (
+        f"{manifest} §0 解析出的符号数 MUST 为 22，实得 {len(symbols)}：{symbols}"
     )
     assert len(existing) == 8, (
         f"{manifest} §0 的「既有」段 MUST 恰为 8 个，实得 {len(existing)}"
     )
-    assert set(new) | set(aligned) == FR012_NEW_SYMBOLS | {"Interrupt", "PregelTask", "Send"}, (
+    expected_new = FR012_NEW_SYMBOLS | {
+        "Interrupt",
+        "PregelTask",
+        "Send",
+        "StreamWriter",
+    }
+    assert set(new) | set(aligned) == expected_new, (
         f"{manifest} §0 的「新增 + 上游对齐」段 MUST 恰为 FR-012 所列的 10 个 + "
-        f"上游对齐新增的 2 个，实得 {sorted((set(new) | set(aligned)) ^ (FR012_NEW_SYMBOLS | {'Interrupt', 'PregelTask'}))}（对称差）"
+        f"上游对齐 2 个 + Send + StreamWriter，实得 "
+        f"{sorted((set(new) | set(aligned)) ^ expected_new)}（对称差）"
     )
     assert set(aligned) == {"Interrupt", "PregelTask"}, (
         f"{manifest} §0 的「上游对齐」段 MUST 恰为 2 个（Interrupt / PregelTask），"
@@ -730,16 +740,18 @@ class TestPyTypedMarker:
 class TestPublicSymbolSurface:
     """G7 · 公开符号面恰为 **20** 个（FR-012 · **清单驱动** · 期望值从 public-api.md §0 解析）。"""
 
-    def test_manifest_splits_into_eight_existing_ten_new_and_two_aligned(
+    def test_manifest_splits_into_eight_existing_eleven_b2f1_one_b8f2_and_two_aligned(
         self, repo_root: Path
     ) -> None:
-        """**新增集合段**（始终启用）——既有恰 8 个、新增恰为 FR-012 的 10 个。
-
-        这是 SC-017「新增恰为 10 个」的机械落点（总集合相等断言**不覆盖**这一维）。
-        """
+        """**新增集合段** —— 既有 8 个；新增 = B2F1/B11F1 11 个 + B8F2 1 个 + 对齐 2 个。"""
         existing, new = parse_public_api_symbols(repo_root / PUBLIC_API_MANIFEST)
         assert len(existing) == 8
-        assert set(new) == FR012_NEW_SYMBOLS | {"Interrupt", "PregelTask", "Send"}
+        assert set(new) == FR012_NEW_SYMBOLS | {
+            "Interrupt",
+            "PregelTask",
+            "Send",
+            "StreamWriter",
+        }
 
     def test_all_equals_public_symbols(self, repo_root: Path) -> None:
         """**集合相等段** —— ``__all__`` MUST **集合等于** §0 解析出的 20 个符号。
@@ -1493,7 +1505,7 @@ class TestPureDataDiscipline:
 class TestPublicSymbolAnnotations:
     """SC-010 / FR-012 · 公开符号面（**清单驱动**）的注解 MUST 可被完整解析。"""
 
-    def test_all_twenty_symbols_have_resolvable_annotations(
+    def test_all_twenty_two_symbols_have_resolvable_annotations(
         self, repo_root: Path
     ) -> None:
         """清单里的符号逐一解析——无未解析的字符串注解、无解析异常。
@@ -1505,7 +1517,7 @@ class TestPublicSymbolAnnotations:
 
         existing, new = parse_public_api_symbols(repo_root / PUBLIC_API_MANIFEST)
         symbols = existing + new
-        assert len(symbols) == 21
+        assert len(symbols) == 22
 
         for name in symbols:
             symbol = getattr(contracts, name)

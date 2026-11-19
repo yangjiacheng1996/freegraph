@@ -88,6 +88,10 @@ run_graph(
 **单任务场景的原断言逐字保留**；`prepare_task` / `bind_task` MUST 接受**任务标识**而不仅是节点名
 （恢复路径 MUST 按持久化的 `task_id` 还原到对应任务现场）⇒ 未追认前 MUST NOT 合入。
 ⚠️ `contextvars` ⇒ **async 天然兼容**（v2 预留）⇒ ⇒ 零迁移成本。
+⚠️ **2026-11-20 · B8F2 回溯修订 T-4（只补注记 · 原描述不改写）**：自 B8F2 起
+`run_tasks_concurrently` 对**每个任务**执行 `copy_context()` ⇒ 线程池**继承**运行级
+contextvars（不再依赖「主线程读出后显式交给工作线程」这一条作为唯一可达路径）；
+两级 ContextVar 机制**照常工作**，判据只收紧。
 
 ---
 

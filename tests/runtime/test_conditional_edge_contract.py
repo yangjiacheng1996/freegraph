@@ -420,10 +420,10 @@ def test_i12_a_duplicated_branch_name_is_rejected() -> None:
 
 
 def test_i13_the_public_faces_are_unchanged() -> None:
-    """**I-13**：**零新增公开面**（7 / 23 / 21 个符号 + 11 键持有面）。"""
-    assert len(graph.__all__) == 7
+    """**I-13**：B8F2 后公开面为 8 / 23 / 22（原 7 / 23 / 21 只增不删）。"""
+    assert len(graph.__all__) == 8
     assert set(runtime.__all__) == set(RUNTIME_EXPORT_SYMBOLS)
-    assert len(contracts.__all__) == 21
+    assert len(contracts.__all__) == 22
 
     builder = StateGraph(_RouteState)
     builder.add_node("r", lambda state: {})

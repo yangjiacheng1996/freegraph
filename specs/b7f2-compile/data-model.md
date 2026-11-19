@@ -74,6 +74,11 @@ CompiledGraph(
 | `get_state_history` | `(config)` | `NotImplementedError`（点名 B15F1） | B15F1 |
 | `update_state` | `(config, values, as_node=None)` | `NotImplementedError`（点名 B16F1） | B16F1 |
 
+> ⚠️ **2026-11-20 · B8F2 回溯修订注记（T-3 · 只补注记 · 原描述不改写）**：
+> 自 **B8F2** 起，`stream` 已交付，签名默认值改为 **`stream_mode=None`（解析为 `"updates"`）**、
+> `config` 放宽为 `RunConfig | Mapping[str, Any] | None`。上表原 `"values"` /
+> `NotImplementedError` 保留为历史；现行权威见 `specs/b8f2-stream-modes/contracts/stream-contract.md`。
+
 > **与 L1 协议的边界**：协议的「`get_state` 查不到 ⇒ 空值、MUST NOT 抛异常」约束的是
 > **已实现之后**的语义；本表的 `NotImplementedError` 是「**尚未交付**」信号 ⇒ 不同层、不冲突。
 

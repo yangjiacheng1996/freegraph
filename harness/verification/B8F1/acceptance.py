@@ -33,7 +33,7 @@
 * **A7** **双参形态**（第二参 == 用户交给 ``invoke`` 的**原始** ``config``（逐字）·
   第二参**不叫** ``config`` ⇒ 按**一参**调用 ⇒ ``TypeError`` · 注解**不在**
   匹配集 ⇒ **跳过注入** · **MUST NOT** 发 ``UserWarning``）· FR-003 · SC-021；
-* **A8** **零新增公开面**（契约 **21** · 门面 **7** · ``runtime`` **23** ·
+* **A8** **公开面只增不删**（B8F2 后契约 **22** · 门面 **8** · ``runtime`` **23** ·
   ``vars(compiled)`` == **11** 键 · **零新增错误类型**）· FR-037 · SC-016；
 * **A9** **差分组全绿**（**D-103…D-120** · 判词分布 SAME **12** / DIFF **4** /
   STRICTER **2**）· FR-032 · SC-013；
@@ -754,11 +754,11 @@ def _check_a7_no_warning() -> tuple[bool, str]:
 
 
 def _check_a8() -> tuple[bool, str]:
-    """**A8** · 公开面**零变更**（21 / 7 / 23 / 11 键 · 零新增错误类型）。"""
+    """**A8** · 公开面**只增不删**（B8F2 后 22 / 8 / 23 / 11 键 · 零新增错误类型）。"""
     from freegraph import contracts, graph, runtime
 
     counts = (len(contracts.__all__), len(graph.__all__), len(runtime.__all__))
-    ok = counts == (21, 7, 23)
+    ok = counts == (22, 8, 23)
 
     builder = StateGraph(State)
     builder.add_node("r", lambda state: {})
@@ -932,7 +932,7 @@ def main() -> int:
 
     # ── A8 · 零新增公开面 ───────────────────────────────────────────────
     print("\n[A8] 零新增公开面")
-    _check_gate("A8", "21 / 7 / 23 符号 + 11 键 + 零新增错误类型", _check_a8)
+    _check_gate("A8", "22 / 8 / 23 符号 + 11 键 + 零新增错误类型", _check_a8)
 
     # ── A9 · 差分组 ─────────────────────────────────────────────────────
     print("\n[A9] 差分组 D-103…D-120")

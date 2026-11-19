@@ -35,7 +35,7 @@ def test_the_result_objects_keep_their_field_counts() -> None:
     """
     import dataclasses
 
-    assert len(dataclasses.fields(SuperStepResult)) == 4
+    assert len(dataclasses.fields(SuperStepResult)) == 5
     assert len(dataclasses.fields(InterruptResult)) == 4
 
     result = InterruptResult(
@@ -89,6 +89,7 @@ def test_the_runtime_all_export_surface_holds_the_expected_symbols() -> None:
         "StateDict",
         "StateSnapshot",
         "Store",
+        "StreamWriter",
         "TraceQuery",
         "TraceSink",
     }

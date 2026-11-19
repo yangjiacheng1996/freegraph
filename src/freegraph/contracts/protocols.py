@@ -278,9 +278,9 @@ class CompiledGraph(Protocol):
     def stream(
         self,
         input: StateDict,
-        config: RunConfig | None = None,
+        config: RunConfig | Mapping[str, Any] | None = None,
         *,
-        stream_mode: str | Sequence[str] = "values",
+        stream_mode: str | Sequence[str] | None = None,
     ) -> Iterator[dict[str, Any]]: ...
 
     def get_graph(self, *, xray: bool = False) -> Graph: ...

@@ -60,10 +60,10 @@ READ_CONTRACT_PATH = (
 EXPECTED_INVARIANTS = tuple(f"I-{index}" for index in range(1, 12))
 
 #: 契约层（``freegraph.contracts``）的**冻结符号数**。
-CONTRACT_SYMBOL_COUNT = 21
+CONTRACT_SYMBOL_COUNT = 22
 
 #: 门面（``freegraph.graph``）的**冻结符号数**。
-FACADE_SYMBOL_COUNT = 7
+FACADE_SYMBOL_COUNT = 8
 
 
 class SampleSchema(TypedDict):

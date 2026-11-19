@@ -105,6 +105,13 @@ def compile(
 | `get_state_history(config)` | `NotImplementedError`（含 `B15F1`） |
 | `update_state(config, values, as_node=None)` | `NotImplementedError`（含 `B16F1`） |
 
+> ⚠️ **2026-11-20 · B8F2 回溯修订注记（T-3 · 只补注记 · 原描述不改写）**：
+> 自 **B8F2** 起，`stream` 的**行为**由 `NotImplementedError` 改为**真实交付**，且
+> **签名默认值**由 `stream_mode="values"` 改为 **`stream_mode=None`（解析为 `"updates"`）**、
+> `config` 注解放宽为 `RunConfig | Mapping[str, Any] | None`（与 L1 协议同步）。
+> 上表原 `"values"` / `NotImplementedError` 文字**保留为历史事实**；现行权威以
+> `specs/b8f2-stream-modes/contracts/stream-contract.md` 与 `specs/b2f1-contracts-protocols/contracts/public-api.md` 为准。
+
 **判据**：`hasattr` 6/6；`AttributeError` 出现次数 == 0；静默返回 `None` 次数 == 0。
 
 ---

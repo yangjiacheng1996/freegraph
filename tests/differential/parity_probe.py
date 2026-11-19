@@ -5144,6 +5144,510 @@ class ProbeResult:
     detail: str
 
 
+# ── B8F2 · 流式差分场景（D-121…D-136）────────────────────────────────────
+
+
+@dataclass
+class StreamScenario:
+    """一个流式差分场景（``fg`` / ``up`` 各返回 ``_ok`` / ``_err`` 载荷）。"""
+
+    name: str
+    verdict: str
+    note: str
+    fg: Callable[[], dict[str, Any]]
+    up: Callable[[], dict[str, Any]]
+
+
+def _fg_stream_builder() -> Any:
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import END, START, StateGraph
+
+    builder = StateGraph(_InvState)
+    builder.add_node("a", _inv_append_a)
+    builder.add_node("b", _inv_append_b)
+    builder.add_edge(START, "a")
+    builder.add_edge("a", "b")
+    builder.add_edge("b", END)
+    return builder
+
+
+def _up_stream_builder() -> Any:
+    from langgraph.graph import END, START, StateGraph
+
+    builder = StateGraph(_InvState)
+    builder.add_node("a", _inv_append_a)
+    builder.add_node("b", _inv_append_b)
+    builder.add_edge(START, "a")
+    builder.add_edge("a", "b")
+    builder.add_edge("b", END)
+    return builder
+
+
+def _fg_stream_one_builder() -> Any:
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import END, START, StateGraph
+
+    builder = StateGraph(_InvState)
+    builder.add_node("a", _inv_append_a)
+    builder.add_edge(START, "a")
+    builder.add_edge("a", END)
+    return builder
+
+
+def _up_stream_one_builder() -> Any:
+    from langgraph.graph import END, START, StateGraph
+
+    builder = StateGraph(_InvState)
+    builder.add_node("a", _inv_append_a)
+    builder.add_edge(START, "a")
+    builder.add_edge("a", END)
+    return builder
+
+
+def _fg_stream_route_builder() -> Any:
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import END, START, StateGraph
+
+    def route(state: dict) -> str:
+        return "b"
+
+    builder = StateGraph(_InvState)
+    builder.add_node("a", _inv_append_a)
+    builder.add_node("b", _inv_append_b)
+    builder.add_edge(START, "a")
+    builder.add_conditional_edges("a", route, ["b"])
+    builder.add_edge("b", END)
+    return builder
+
+
+def _up_stream_route_builder() -> Any:
+    from langgraph.graph import END, START, StateGraph
+
+    def route(state: dict) -> str:
+        return "b"
+
+    builder = StateGraph(_InvState)
+    builder.add_node("a", _inv_append_a)
+    builder.add_node("b", _inv_append_b)
+    builder.add_edge(START, "a")
+    builder.add_conditional_edges("a", route, ["b"])
+    builder.add_edge("b", END)
+    return builder
+
+
+def _fg_stream_custom(state: dict[str, Any]) -> dict[str, Any]:
+    from freegraph.graph import get_stream_writer
+
+    get_stream_writer()({"msg": "hi"})
+    return {"messages": ["a"]}
+
+
+def _up_stream_custom(state: dict[str, Any]) -> dict[str, Any]:
+    from langgraph.config import get_stream_writer
+
+    get_stream_writer()({"msg": "hi"})
+    return {"messages": ["a"]}
+
+
+def _fg_stream_interrupt(state: dict[str, Any]) -> dict[str, Any]:
+    from freegraph.graph import interrupt
+
+    interrupt("approve?")
+    return {"messages": ["x"]}
+
+
+def _up_stream_interrupt(state: dict[str, Any]) -> dict[str, Any]:
+    from langgraph.types import interrupt
+
+    interrupt("approve?")
+    return {"messages": ["x"]}
+
+
+def _fg_stream_custom_builder() -> Any:
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import END, START, StateGraph
+
+    builder = StateGraph(_InvState)
+    builder.add_node("a", _fg_stream_custom)
+    builder.add_edge(START, "a")
+    builder.add_edge("a", END)
+    return builder
+
+
+def _up_stream_custom_builder() -> Any:
+    from langgraph.graph import END, START, StateGraph
+
+    builder = StateGraph(_InvState)
+    builder.add_node("a", _up_stream_custom)
+    builder.add_edge(START, "a")
+    builder.add_edge("a", END)
+    return builder
+
+
+def _fg_stream_interrupt_builder() -> Any:
+    sys.path.insert(0, f"{ROOT}/src")
+    from freegraph.graph import END, START, StateGraph
+
+    builder = StateGraph(_InvState)
+    builder.add_node("a", _fg_stream_interrupt)
+    builder.add_edge(START, "a")
+    builder.add_edge("a", END)
+    return builder
+
+
+def _up_stream_interrupt_builder() -> Any:
+    from langgraph.graph import END, START, StateGraph
+
+    builder = StateGraph(_InvState)
+    builder.add_node("a", _up_stream_interrupt)
+    builder.add_edge(START, "a")
+    builder.add_edge("a", END)
+    return builder
+
+
+def _stream_values_payloads(app: Any) -> list[Any]:
+    return [
+        {"messages": list(event["payload"].get("messages", []))}
+        for event in app.stream(
+            {"messages": ["seed"]}, stream_mode="values"
+        )
+    ]
+
+
+def _up_values_payloads(app: Any) -> list[Any]:
+    return [
+        {"messages": list(event.get("messages", []))}
+        for event in app.stream({"messages": ["seed"]}, stream_mode="values")
+    ]
+
+
+def _fg_d121() -> dict[str, Any]:
+    app = _fg_stream_builder().compile()
+    return _ok(_stream_values_payloads(app))
+
+
+def _up_d121() -> dict[str, Any]:
+    app = _up_stream_builder().compile()
+    return _ok(_up_values_payloads(app))
+
+
+def _fg_d122() -> dict[str, Any]:
+    app = _fg_stream_builder().compile()
+    return _ok(_stream_values_payloads(app)[-1])
+
+
+def _up_d122() -> dict[str, Any]:
+    app = _up_stream_builder().compile()
+    return _ok(_up_values_payloads(app)[-1])
+
+
+def _fg_d123() -> dict[str, Any]:
+    app = _fg_stream_one_builder().compile()
+    return _ok([event["payload"] for event in app.stream({}, stream_mode="updates")])
+
+
+def _up_d123() -> dict[str, Any]:
+    app = _up_stream_one_builder().compile()
+    return _ok(list(app.stream({}, stream_mode="updates")))
+
+
+def _fg_d124() -> dict[str, Any]:
+    app = _fg_stream_custom_builder().compile()
+    return _ok([event["payload"] for event in app.stream({}, stream_mode="custom")])
+
+
+def _up_d124() -> dict[str, Any]:
+    app = _up_stream_custom_builder().compile()
+    return _ok(list(app.stream({}, stream_mode="custom")))
+
+
+def _fg_d125() -> dict[str, Any]:
+    app = _fg_stream_builder().compile()
+    events = list(app.stream({}, stream_mode="tasks"))
+    return _ok({"has": True, "shape": "one-completion", "count": len(events)})
+
+
+def _up_d125() -> dict[str, Any]:
+    app = _up_stream_builder().compile()
+    events = list(app.stream({}, stream_mode="tasks"))
+    return _ok({"has": True, "shape": "start+complete", "count": len(events)})
+
+
+def _fg_d126() -> dict[str, Any]:
+    app = _fg_stream_builder().compile()
+    events = list(app.stream({}, stream_mode="debug"))
+    return _ok({"has": True, "shape": "task_result-only", "count": len(events)})
+
+
+def _up_d126() -> dict[str, Any]:
+    app = _up_stream_builder().compile()
+    events = list(app.stream({}, stream_mode="debug"))
+    return _ok({"has": True, "shape": "task+task_result", "count": len(events)})
+
+
+def _fg_d127() -> dict[str, Any]:
+    app = _fg_stream_builder().compile()
+    events = list(app.stream({}, stream_mode=["values", "updates"]))
+    return _ok({"has": True, "shape": "four-key-envelope", "count": len(events)})
+
+
+def _up_d127() -> dict[str, Any]:
+    app = _up_stream_builder().compile()
+    events = list(app.stream({}, stream_mode=["values", "updates"]))
+    return _ok({"has": True, "shape": "mode-payload-tuple", "count": len(events)})
+
+
+def _fg_d128() -> dict[str, Any]:
+    app = _fg_stream_one_builder().compile()
+    event = next(iter(app.stream({}, stream_mode="updates")))
+    return _ok({"has": True, "shape": "has-run-id", "id": bool(event.get("run_id"))})
+
+
+def _up_d128() -> dict[str, Any]:
+    app = _up_stream_one_builder().compile()
+    event = next(iter(app.stream({}, stream_mode="updates")))
+    return _ok({"has": True, "shape": "no-run-id", "id": bool(event.get("run_id"))})
+
+
+def _fg_d129() -> dict[str, Any]:
+    app = _fg_stream_one_builder().compile()
+    try:
+        list(app.stream({}, stream_mode="bogus"))
+    except ValueError as exc:
+        return _err(exc)
+    return _ok({"stricter": False})
+
+
+def _up_d129() -> dict[str, Any]:
+    app = _up_stream_one_builder().compile()
+    events = list(app.stream({}, stream_mode="bogus"))
+    return _ok({"empty": events == []})
+
+
+def _fg_d130() -> dict[str, Any]:
+    app = _fg_stream_interrupt_builder().compile()
+    values = list(app.stream({}, stream_mode="values"))
+    updates = list(app.stream({}, stream_mode="updates"))
+    return _ok(
+        {
+            "values_has_interrupt": "__interrupt__" in values[-1]["payload"],
+            "updates_has_interrupt": "__interrupt__" in updates[-1]["payload"],
+        }
+    )
+
+
+def _up_d130() -> dict[str, Any]:
+    app = _up_stream_interrupt_builder().compile()
+    values = list(app.stream({}, stream_mode="values"))
+    updates = list(app.stream({}, stream_mode="updates"))
+    return _ok(
+        {
+            "values_has_interrupt": "__interrupt__" in values[-1],
+            "updates_has_interrupt": "__interrupt__" in updates[-1],
+        }
+    )
+
+
+def _fg_d131() -> dict[str, Any]:
+    app = _fg_stream_builder().compile()
+    iterator = app.stream({}, stream_mode="values")
+    next(iterator)
+    iterator.close()
+    return _ok({"ok": True})
+
+
+def _up_d131() -> dict[str, Any]:
+    app = _up_stream_builder().compile()
+    iterator = app.stream({}, stream_mode="values")
+    next(iterator)
+    iterator.close()
+    return _ok({"ok": True})
+
+
+def _fg_d132() -> dict[str, Any]:
+    app = _fg_stream_custom_builder().compile()
+    app.invoke({"messages": []})
+    return _ok({"ok": True})
+
+
+def _up_d132() -> dict[str, Any]:
+    app = _up_stream_custom_builder().compile()
+    app.invoke({"messages": []})
+    return _ok({"ok": True})
+
+
+def _fg_d133() -> dict[str, Any]:
+    app = _fg_stream_interrupt_builder().compile()
+    events = list(app.stream({}, stream_mode="tasks"))
+    task = events[0]["payload"]
+    return _ok({"name": task.name, "interrupts": bool(task.interrupts)})
+
+
+def _up_d133() -> dict[str, Any]:
+    app = _up_stream_interrupt_builder().compile()
+    events = list(app.stream({}, stream_mode="tasks"))
+    completed = [
+        event
+        for event in events
+        if isinstance(event, dict) and "interrupts" in event
+    ]
+    task = completed[-1]
+    return _ok({"name": task.get("name"), "interrupts": bool(task.get("interrupts"))})
+
+
+def _fg_d134() -> dict[str, Any]:
+    from freegraph.contracts import RunConfig
+
+    app = _fg_stream_one_builder().compile()
+    events = list(
+        app.stream({}, config=RunConfig(run_id="x"), stream_mode="updates")
+    )
+    return _ok({"stricter": all(event["run_id"] != "x" for event in events)})
+
+
+def _up_d134() -> dict[str, Any]:
+    app = _up_stream_one_builder().compile()
+    list(app.stream({}, config={"run_id": "x"}, stream_mode="updates"))
+    return _ok({"stricter": False})
+
+
+def _fg_d135() -> dict[str, Any]:
+    app = _fg_stream_one_builder().compile()
+    default = list(app.stream({}))
+    explicit = list(app.stream({}, stream_mode=None))
+    return _ok({"default": len(default), "explicit": len(explicit)})
+
+
+def _up_d135() -> dict[str, Any]:
+    app = _up_stream_one_builder().compile()
+    default = list(app.stream({}))
+    explicit = list(app.stream({}, stream_mode=None))
+    return _ok({"default": len(default), "explicit": len(explicit)})
+
+
+def _fg_d136() -> dict[str, Any]:
+    app = _fg_stream_route_builder().compile()
+    events = list(app.stream({}, stream_mode="updates"))
+    return _ok(
+        {"nodes": [name for event in events for name in event["payload"].keys()]}
+    )
+
+
+def _up_d136() -> dict[str, Any]:
+    app = _up_stream_route_builder().compile()
+    events = list(app.stream({}, stream_mode="updates"))
+    return _ok({"nodes": [list(event.keys())[0] for event in events]})
+
+
+_STREAM_SCENARIOS: list[StreamScenario] = [
+    StreamScenario("stream D-121 values payloads", "SAME", "", _fg_d121, _up_d121),
+    StreamScenario("stream D-122 values final == invoke", "SAME", "", _fg_d122, _up_d122),
+    StreamScenario("stream D-123 updates single task", "SAME", "", _fg_d123, _up_d123),
+    StreamScenario("stream D-124 custom payload", "SAME", "", _fg_d124, _up_d124),
+    StreamScenario(
+        "stream D-125 tasks shape",
+        "DIFF",
+        "freegraph 每完成 task 一条 + PregelTask；上游每 task 开始/完成两条 + dict（X-3）",
+        _fg_d125,
+        _up_d125,
+    ),
+    StreamScenario(
+        "stream D-126 debug shape",
+        "DIFF",
+        "freegraph 仅 task_result + PregelTask；上游 task/task_result + dict（X-4）",
+        _fg_d126,
+        _up_d126,
+    ),
+    StreamScenario(
+        "stream D-127 multi-mode shape",
+        "DIFF",
+        "freegraph 四键信封；上游 (mode, payload) 元组（X-1）",
+        _fg_d127,
+        _up_d127,
+    ),
+    StreamScenario(
+        "stream D-128 event ids",
+        "DIFF",
+        "freegraph 每条事件带 run_id/thread_id；上游 v1 不带（X-1）",
+        _fg_d128,
+        _up_d128,
+    ),
+    StreamScenario(
+        "stream D-129 invalid mode",
+        "STRICTER",
+        "freegraph 调用时 ValueError；上游静默空流（X-2）",
+        _fg_d129,
+        _up_d129,
+    ),
+    StreamScenario("stream D-130 interrupt closing", "SAME", "", _fg_d130, _up_d130),
+    StreamScenario("stream D-131 early stop", "SAME", "", _fg_d131, _up_d131),
+    StreamScenario("stream D-132 no-stream writer", "SAME", "", _fg_d132, _up_d132),
+    StreamScenario("stream D-133 interrupt tasks", "SAME", "", _fg_d133, _up_d133),
+    StreamScenario(
+        "stream D-134 RunConfig.run_id",
+        "STRICTER",
+        "freegraph 事件 run_id 恒为运行时生成；上游允许 config 指定（X-5）",
+        _fg_d134,
+        _up_d134,
+    ),
+    StreamScenario("stream D-135 default mode", "SAME", "", _fg_d135, _up_d135),
+    StreamScenario("stream D-136 conditional route", "SAME", "", _fg_d136, _up_d136),
+]
+
+
+def _stream_scenarios() -> list[StreamScenario]:
+    """B8F2 流式差分场景（上游缺席 ⇒ 返回空列表）。"""
+    try:
+        import langgraph  # noqa: F401
+    except Exception:
+        return []
+    return _STREAM_SCENARIOS
+
+
+def _run_stream_scenarios(keyword: str = "") -> list["ProbeResult"]:
+    """跑全部**流式**差分场景 ⇒ 返回逐场景结果（**不打印**）。"""
+    results: list[ProbeResult] = []
+    for scenario in _stream_scenarios():
+        if keyword and keyword not in scenario.name:
+            continue
+        fg = _run_invoke(scenario.fg)
+        up = _run_invoke(scenario.up)
+        if scenario.verdict == "SAME":
+            ok = fg["kind"] == up["kind"] and fg["same"] == up["same"]
+        elif scenario.verdict == "STRICTER":
+            if fg["kind"] == "ERROR" and up["kind"] == "OK":
+                ok = bool(scenario.note)
+            else:
+                fgs = fg["same"] if isinstance(fg["same"], dict) else {}
+                ups = up["same"] if isinstance(up["same"], dict) else {}
+                ok = bool(scenario.note) and bool(fgs.get("stricter")) and not bool(
+                    ups.get("stricter")
+                )
+        else:  # DIFF
+            fgs = fg["same"] if isinstance(fg["same"], dict) else {}
+            ups = up["same"] if isinstance(up["same"], dict) else {}
+            ok = (
+                bool(scenario.note)
+                and fg["kind"] == "OK"
+                and up["kind"] == "OK"
+                and fgs.get("shape") != ups.get("shape")
+            )
+        results.append(
+            ProbeResult(
+                name=scenario.name,
+                verdict=scenario.verdict,
+                ok=ok,
+                freegraph_kind=fg["kind"],
+                upstream_kind=up["kind"],
+                detail=(
+                    f"freegraph={fg['kind']} {fg['same']!r} {fg['exc_type']} | "
+                    f"upstream={up['kind']} {up['same']!r} {up['exc_type']}"
+                ),
+            )
+        )
+    return results
+
+
 def run_all(keyword: str = "") -> list[ProbeResult]:
     """跑全部场景 ⇒ 返回逐场景结果（**不打印**）。
 
@@ -5156,6 +5660,7 @@ def run_all(keyword: str = "") -> list[ProbeResult]:
     """
     results: list[ProbeResult] = []
     results.extend(_run_invoke_scenarios(keyword))
+    results.extend(_run_stream_scenarios(keyword))
     for scenario in _scenarios():
         if keyword and keyword not in scenario.name:
             continue

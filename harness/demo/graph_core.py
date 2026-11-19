@@ -582,20 +582,21 @@ def case_node_alias() -> None:
     out = app.invoke({"messages": [], "llm_calls": 0})
     eq(out.get("messages"), ["x"], "C25 带别名的节点正常执行")
 
-    # 别名应在流式事件 / 图结构中可见（用于用户的 stream 过滤器）
-    # ⚠️ **流式事件段降级为软断言**（T040 · **实测依据 = T011 的首次执行红点**）——
-    # **`stream()` 归 B8F2**（M2）⇒ ⇒ 该段不判失败（缺口**具名**承接）。
-    _B8F2_NOTE = "stream() 未交付 —— 归 B8F2"
+    # 别名应在流式事件 / 图结构中可见（用于用户的 stream 过滤器）。
+    # B8F2 已交付：事件为四键信封 ⇒ 节点名在 ``payload`` 的键上。
+    _B8F2_NOTE = "B8F2 已交付 · 四键信封"
     try:
         events = list(app.stream({"messages": [], "llm_calls": 0}, stream_mode="updates"))
         names = set()
         for ev in events:
             if isinstance(ev, dict):
-                names.update(ev.keys())
+                payload = ev.get("payload", {})
+                if isinstance(payload, dict):
+                    names.update(payload.keys())
         soft(
             bool(names & {"model", "agent"}),
             "C25 别名（或原名）出现在流式事件中",
-            f"事件键 = {sorted(names)} —— {_B8F2_NOTE}",
+            f"事件 payload 键 = {sorted(names)} —— {_B8F2_NOTE}",
         )
     except Exception as exc:  # noqa: BLE001
         soft(False, "C25 别名（或原名）出现在流式事件中", f"{type(exc).__name__}: {exc} —— {_B8F2_NOTE}")

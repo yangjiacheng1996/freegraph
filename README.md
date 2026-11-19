@@ -100,11 +100,12 @@ uv run --no-project --python .venv python harness/scripts/gates/gate_G21_depende
 | `GraphInterrupt` | `langgraph.errors.GraphInterrupt` | 行为等价 | 同名、同触发条件；`.payload` 是**中断序列**（**上游同款** · 2026-11-12 上游对齐 P3 · 上游 `langgraph/errors.py:102-107`），异常实参 `args[0]` 即该序列（上游同款）；元素为 `Interrupt`（带 `.value` / `.id` · 契约 C17）；两者均可被 `except Exception` 捕获 |
 | `Interrupt` | `langgraph.types.Interrupt` | 行为等价 | **上游同款**（2026-11-12 上游对齐 P3 · 上游 `langgraph/types.py:575-620`）：`.value` / `.id` **同名同义** ⇒ 契约 C17 的「元素须带 `.value` 与 `.id`」有了**类型载体**；`.id` 的**自动生成**归 **B10F1**（上游按 checkpoint 命名空间派生） |
 | `PregelTask` | `langgraph.types.PregelTask` | 行为等价 | **上游同款**（2026-11-12 上游对齐 P3 · 上游 `langgraph/types.py:637-646`）：七字段**同名同义**（`id` / `name` / `path` / `error` / `interrupts` / `state` / `result`）⇒ 快照的 `tasks` 元素类型与上游**一致** |
+| `StreamWriter` | `langgraph.types.StreamWriter` | 行为等价 | **上游同款**（B8F2）：`Callable[[Any], None]` 类型别名（上游 `langgraph/types.py:138`）；由 `get_stream_writer()` 取得 · 无流时 no-op · 节点签名声明 `writer` 时按关键字注入 |
 | `NodeFunc` | 无上游对应（自由设计） | 不支持 | 契约条目 **C5 / C6**（节点函数签名 / 节点返回值合并）——上游以普通 `dict` 调用节点函数，**无同名协议类**；返回**形态**已冻结（部分状态字典 / 命令原语 / **命令列表** / **`Send` / `list[Send]` / `tuple[Send, ...]`** / 空值），逐 key 归约语义**已落地**（B4F1 / B5F1）——**`Command` 的运行期语义已落地**（B9F1 · **命令列表**形态与上游 `ToolNode` 自身即用的形态同款） |
 | `Checkpointer` | `langgraph.checkpoint.base.BaseCheckpointSaver` | 行为等价 | **八**方法的**方法名与参数名**逐字对齐（**上游同款** · 2026-11-12 上游对齐 P3 · 由六增八：新增 `delete_for_runs` / `copy_thread` —— 二者在**上游是必须实现**的 ⇒ **上游形状的 saver 直接满足本协议**）；freegraph **纯抽象、无默认实现**，上游是带实现的基类；**未含**上游的**异步变体**（v1 无 async）；**返回类型与载荷形状挂起 B14F1**；上游来源 `langgraph/checkpoint/base/__init__.py:239`（`get_tuple`）/ `:253`（`list`）/ `:277`（`put`）/ `:300`（`put_writes`）/ `:320`（`delete_thread`）/ `:331`（`delete_for_runs`）/ `:350`（`copy_thread`）/ `:692`（`get_next_version`） |
 | `TraceSink` | 无上游对应（自由设计） | 不支持 | 契约条目 **C23 / C24**（可观测挂钩 / 当前 span 上下文）——上游**无 span 推送协议**，其 `callbacks` / `tracers` 是**非同名**物 |
 | `Store` | `langgraph.store.base.BaseStore` | 行为等价 | 六方法与**参数名**逐字镜像上游（`search` 的 `namespace_prefix` 是位置参数、`list_namespaces` 的 `prefix` 是关键字参数——上游的这个命名分歧**照抄不统一**）；**命名空间类型收紧为 `tuple[str, ...]`**（**上游同款** · 2026-11-12 上游对齐 P3 · 上游 `langgraph/store/base/__init__.py:311` 的 `NamespacePath`）⇒ **上游形状的 store 直接满足本协议**；**未含**上游的**异步变体**（v1 无 async）；`batch` 操作表示挂起 v2；上游来源 `langgraph/store/base/__init__.py:733`（`batch`）/ `:756`（`get`）/ `:779`（`search`）/ `:856`（`put`）/ `:937`（`delete`）/ `:946`（`list_namespaces`） |
-| `CompiledGraph` | `langgraph.pregel.Pregel` | 部分等价 | 六方法的**返回类别**与**参数名（占位名）**已对齐（`invoke` → 完整状态字典 / `stream` → `dict[str, Any]` 事件迭代器 / `get_state` 查不到返回空值）；**行为细节挂起** B8F2 / B15F1 / B16F1；上游来源 `langgraph/pregel/main.py:3783`（`invoke`）/ `:2655`（`stream`）/ `:845`（`get_graph`）/ `:1392`（`get_state`）/ `:1480`（`get_state_history`）/ `:2515`（`update_state`） |
+| `CompiledGraph` | `langgraph.pregel.Pregel` | 部分等价 | 六方法的**返回类别**与**参数名（占位名）**已对齐（`invoke` → 完整状态字典 / `stream` → `dict[str, Any]` 事件迭代器 / `get_state` 查不到返回空值）；**`stream` 已交付**（B8F2 · 七种 mode · 四键信封 · `custom` 轮末批量 X-6）· **行为细节挂起** B15F1 / B16F1；上游来源 `langgraph/pregel/main.py:3783`（`invoke`）/ `:2655`（`stream`）/ `:845`（`get_graph`）/ `:1392`（`get_state`）/ `:1480`（`get_state_history`）/ `:2515`（`update_state`） |
 | `Graph` | `langchain_core.runnables.graph.Graph` | 部分等价 | **同名但自有实现**——不复用、不复制上游代码；freegraph 的节点 / 边集合是**不可变元组**（上游是 `dict[str, Node]` / `list[Edge]`）；上游来源 `langchain_core/runnables/graph.py:255` |
 | `Node` | `langchain_core.runnables.graph.Node` | 部分等价 | **同名但自有实现**；freegraph 的 `name` 缺省**归一为 `id`**、`metadata` 是纯映射（上游 `Node.data` 装的是可调用对象 / pydantic 对象）；上游来源 `langchain_core/runnables/graph.py:95` |
 | `Edge` | `langchain_core.runnables.graph.Edge` | 部分等价 | **同名但自有实现**；freegraph 多一个 `conditional` 位并显式**不可哈希**（上游是 `NamedTuple`，可哈希）；上游来源 `langchain_core/runnables/graph.py:65` |
@@ -114,6 +115,7 @@ uv run --no-project --python .venv python harness/scripts/gates/gate_G21_depende
 | `START` | `langgraph.constants.START` | 行为等价 | 值与语义均一致（`'__start__'`）；上游来源 `langgraph/constants.py:30`（核实环境 `langgraph 1.2.11`） |
 | `END` | `langgraph.constants.END` | 行为等价 | 值与语义均一致（`'__end__'`）；上游来源 `langgraph/constants.py:28`（核实环境 `langgraph 1.2.11`） |
 | `Send` | `langgraph.types.Send` | 部分等价 | 形状等价（`node` / `arg`）；**freegraph 侧不可变**（上游可变）；**fan-out 行为已落地**（B11F1 · `Command.goto` 可装 `Send` · 类型定义在 L1）；上游来源 `langgraph/types.py:704`（核实环境 `langgraph 1.2.11`） |
+| `get_stream_writer` | `langgraph.config.get_stream_writer` | 行为等价 | **上游同名函数**（B8F2）：返回当前 `StreamWriter`；无流时为 no-op；上游来源 `langgraph/config.py:126` |
 | `interrupt` | `langgraph.types.interrupt` | 部分等价 | 形状等价（`value`，**位置或关键字**皆可）；**中断 / 恢复行为已落地**（B10F1）—— 节点内首次调用抛 `GraphInterrupt`（载荷 = **1-元组**）· 恢复时**返回** resume 值（**从节点起点重跑** · **不**保存局部变量）· **恢复 MUST 挂 checkpointer**（未挂 ⇒ `InterruptError`，**不**静默降级）；⚠️ **失败信号**的**类型**与上游不同（上游内置 `RuntimeError` ⇒ freegraph `InterruptError` · 属内核异常族 · **消息要点**逐字同款）⇒ **`.id` 的摘要算法**不同（上游 `xxh3_128` ⇒ freegraph 标准库 `blake2b-128` · **同长 32 位十六进制** ⇒ **零第三方依赖**）；上游来源 `langgraph/types.py:851`（核实环境 `langgraph 1.2.11`） |
 
 > ⚠️ **B8F1 的公开面增量 == 0 行**（2026-11-18）—— 条件边路由求值落在 **L2 内部**
@@ -121,6 +123,11 @@ uv run --no-project --python .venv python harness/scripts/gates/gate_G21_depende
 > ⇒ ⇒ **契约层仍 21 个符号 · 门面仍 7 个符号 · `freegraph.runtime` 仍 23 个符号 ·
 > `vars(compiled)` 仍 11 键** ⇒ ⇒ ⇒ **本表零新增行**（**兼容矩阵零新增行** ⇒ 门禁 **G8 / G19** 恒绿）
 > ⇒ ⇒ ⇒ `THIRD_PARTY_NOTICES` **零新增**（**零新增依赖** ⇒ **零新增许可证**）。
+>
+> ⚠️ **B8F2 的公开面增量 == 2 行**（2026-11-20）—— 契约层 `StreamWriter` +
+> 门面 `get_stream_writer` ⇒ 契约层 **22** · 门面 **8** · `freegraph.runtime` 仍 **23**
+> · `vars(compiled)` 仍 **11** 键；`stream()` 已交付（七种 mode · 四键信封 ·
+> `custom` 轮末批量 X-6）；`THIRD_PARTY_NOTICES` 仍零新增。
 
 > ⚠️ **`invoke()` 的返回值是「只读快照」· 不要原样回喂给下一次 `invoke`**（B7F3）——
 > `invoke()` 返回**完整状态**：键集 == **schema 全部 key**（按 schema 声明顺序），

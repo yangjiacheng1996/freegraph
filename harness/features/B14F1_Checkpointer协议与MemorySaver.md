@@ -275,3 +275,7 @@
 
 - **D-4（B7F2 → B14F1 · M3 · checkpointer 的编译期校验补齐）**：B7F2 在编译期**接受并记录** `checkpointer=`，但**不做类型校验**（v1 的 checkpointer 实现归 B14F1 ⇒ 「尚未就绪」不应被误报为用户错误）。B14F1 MUST 补上上游同款的**编译期类型校验**（上游 `ensure_valid_checkpointer` ⇒ `TypeError` · 实测 E-29）；校验口径由 B14F1 冻结；`CompiledGraph.checkpointer` 是只读交接面，B14F1 MUST NOT 要求 B7F2 改写其记录方式。
 
+## 下游承接（B8F2 → 本 feature · 2026-11-20 · 只接线）
+
+- **D-2（B8F2 → B14F1 · M3 · `checkpoints` 档的真实数据源）**：B8F2 的 `checkpoints` 档在 v1 **恒为空序列**（无伪造事件）⇒ B14F1 交付 `MemorySaver` / checkpointer 后 MUST 提供「每创建一个 checkpoint 一条事件」的数据源，并复用上游 `_loop.py:631-636` / `debug.py:144`（`map_debug_checkpoint`）的「checkpoint 事件 vs `get_state()` 同形」口径。
+- 同时注意：B8F2 的 `StreamSession` 在 v1 **忽略** `checkpointer`（不读/写快照、不触发恢复）；真实 checkpoint 语义归本 feature。

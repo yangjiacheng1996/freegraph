@@ -92,6 +92,29 @@ def test_invoke_parity_scenarios_meet_their_verdicts(upstream_version: str) -> N
     )
 
 
+def test_stream_parity_scenarios_meet_their_verdicts(upstream_version: str) -> None:
+    """B8F2 流式差分（D-121…D-136）MUST 符合各自判词（上游缺席 ⇒ skip）。"""
+    results = parity_probe._run_stream_scenarios()
+    if not results:
+        pytest.skip("上游 langgraph 缺席 —— 差分场景不可执行（沿用 B5F2 的「缺席即 skip」纪律）")
+    failures = [result for result in results if not result.ok]
+    assert not failures, "\n".join(
+        f"  ✘ {result.name}: {result.detail}" for result in failures
+    )
+
+
+def test_stream_parity_verdict_distribution(upstream_version: str) -> None:
+    """D-121…D-136 的判词分布 MUST 为 SAME 10 / DIFF 4 / STRICTER 2。"""
+    scenarios = parity_probe._stream_scenarios()
+    if not scenarios:
+        pytest.skip("上游 langgraph 缺席 —— 差分场景不可执行")
+    counts = {verdict: 0 for verdict in ("SAME", "DIFF", "STRICTER")}
+    for scenario in scenarios:
+        counts[scenario.verdict] += 1
+    assert counts == {"SAME": 10, "DIFF": 4, "STRICTER": 2}, counts
+    assert len(scenarios) == 16
+
+
 def test_the_verdict_vocabulary_is_closed(upstream_version: str) -> None:
     """**判词取值域 MUST 封闭** —— 只允许 ``SAME`` / ``STRICTER`` / ``DIFF``。
 
@@ -124,6 +147,10 @@ def test_the_verdict_vocabulary_is_closed(upstream_version: str) -> None:
             assert invoke_scenario.note, (
                 f"场景 {invoke_scenario.name!r} 的判词 {invoke_scenario.verdict!r} MUST 带理由（note）"
             )
+    for stream_scenario in parity_probe._stream_scenarios():
+        assert stream_scenario.verdict in allowed
+        if stream_scenario.verdict in {"STRICTER", "DIFF"}:
+            assert stream_scenario.note
 
 
 @pytest.mark.parametrize(
