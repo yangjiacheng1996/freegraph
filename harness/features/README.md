@@ -47,7 +47,7 @@
 | 20 | **B22F1** | [B22F1_get_graph与draw_mermaid.md](B22F1_get_graph与draw_mermaid.md) | L3 | M2 | B7F2 | 1,140 | `draw_mermaid()` 离线必然成功、零出站 | ★ |
 | 21 | **B23F1** | [B23F1_draw_mermaid_png离线不阻断.md](B23F1_draw_mermaid_png离线不阻断.md) | L3 | M2 | B22F1 | 1,080 | PNG 路径离线不抛阻断性异常 | ★ |
 | 22 | **B8F3** | [B8F3_节点别名与context通道.md](B8F3_节点别名与context通道.md) | L3 | M2 | B7F3 | 580 | C21（`context` 通道）/ C22（`RunConfig` 标识）落地；**C25 已于 2026-11-20 正式作废、alias 移除**（历史提示词保留，当前以 spec 为准） | ✅ **已交付（2026-11-20）** |
-| 23 | **B18F1** | [B18F1_Span数据类生产.md](B18F1_Span数据类生产.md) | L5 | M3 | B7F3 | 1,140 | span 属性命名符合 OTel GenAI semconv；未注入 tracer 时零副作用、零开销 | |
+| 23 | **B18F1** | [B18F1_Span数据类生产.md](B18F1_Span数据类生产.md) | L5 | M3 | B7F3 | 1,140 | span 属性命名符合 OTel GenAI semconv；未注入 tracer 时零副作用、零开销 | ✅ **已交付（2026-11-21）** |
 | 24 | **B19F1** | [B19F1_TraceSink与current_span.md](B19F1_TraceSink与current_span.md) | L5 | M3 | B18F1 | 840 | 嵌套 span 父子关系正确；不注入 tracer 时零副作用 | |
 | 25 | **B20F1** | [B20F1_本地Trace存储JSONL.md](B20F1_本地Trace存储JSONL.md) | L5 | M3 | B19F1 | 820 | trace 落盘，零出站 | |
 | 26 | **B20F2** | [B20F2_Trace查询API与SQLite后端.md](B20F2_Trace查询API与SQLite后端.md) | L5 | M3 | B20F1 | 1,020 | 可按 thread / 时间 / 节点名检索 | |
@@ -63,6 +63,10 @@
 > **状态更新（2026-11-20）**：**B8F3 已交付**（`context` 独立通道 + `RunConfig`
 > 运行期接线；alias / C25 正式作废）⇒ **M2 收口**；下一步 **B18F1**（M3 起点）。
 > 固定脚本六项最小交付集（**B6F1 · B7F2 · B7F3 · B8F1 · B22F1 · B23F1**）此前已齐备。
+>
+> **状态更新（2026-11-21）**：**B18F1 已交付**（节点 / 工具 / 模型三级 span；
+> 未注入 tracer 时零副作用、零开销）⇒ **M3 起点完成**；下一步 **B19F1**
+> （`TraceSink` 接入 + `current_span()`）。
 
 > **B17（`Store` 长期记忆）已于 2026-11-05 砍掉**——理由：freegraph 是**通用图框架**
 > （智能体 / RPA 自动化 / 脚本编排 / 在一定程度上替代 `main` 函数 / 可视化工作流编排），

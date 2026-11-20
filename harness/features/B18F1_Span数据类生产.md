@@ -8,7 +8,7 @@
 > | feature ID | `B18F1` |
 > | 所属 功能块 | B18（Span 数据类生产） |
 > | 架构层 | L5 可观测层 |
-> | 里程碑 | M3 可诊断（第 22 个） |
+> | 里程碑 | M3 可诊断（第 23 个） |
 > | 前置依赖 | **B7F3** |
 > | 规模 | 1,140 行（实现 620 / 测试 520）· 3 人日 |
 > | 建议 short-name | `b18f1-span-production` |
@@ -169,7 +169,7 @@ semconv；未注入 tracer 时零副作用、零开销**。
 
 - **D-3（B8F2 → B18F1 · M3 · 两条事件通道独立、按 id 合并）**：`stream()` 的事件与 `TraceSink` 的 span **不互为前置**；二者 MUST 共享同一 `run_id` / `thread_id`（D11 已冻结）。
 - **载体 = L2 私有 contextvar** `_STREAM_RUN_ID` / `_STREAM_THREAD_ID`（由 `StreamSession` 绑定）；B18F1 MUST 读取同一对值。
-- **ARCH-3 例外（plan R-6）**：只读取运行期 `str | None` 元数据；MUST NOT 扩展为任意 L5 → L2 私有依赖，亦 MUST NOT 把 trace 数据塞进 `stream()` 信封。
+- **ARCH-3 例外（B8F2 plan R-6）**：只读取运行期 `str | None` 元数据；MUST NOT 扩展为任意 L5 → L2 私有依赖，亦 MUST NOT 把 trace 数据塞进 `stream()` 信封。
 
 ## 下游承接（B8F3 → 本 feature · 2026-11-20 · 只接线）
 

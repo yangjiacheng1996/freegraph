@@ -76,6 +76,23 @@ uv run --no-project --python .venv python -m pytest tests/ -ra
 uv run --no-project --python .venv python harness/scripts/gates/gate_G21_dependencies.py
 ```
 
+## 可观测属性（B18F1）
+
+> 本 feature 只生产 span，不接入 `TraceSink`（B19F1）、不落盘（B20）、不导出 OTLP（B21F1）。
+> 属性命名对齐 OpenTelemetry GenAI semconv（`open-telemetry/semantic-conventions-genai`，
+> Apache-2.0）；v1 只写下列**最小集**，内容类属性（`gen_ai.input.messages` 等）默认不采集。
+
+| span 层级 | v1 写入的属性 | 说明 |
+|---|---|---|
+| 节点级 | **空映射** | 节点身份由 `name` / `node` 字段表达；不写 `freegraph.*` 结构属性 |
+| 模型级 | `gen_ai.operation.name`（恒 `chat`）· `gen_ai.request.model`（可读时） | 模型名来源：对象 `model_name` → `model`；读不到则省略 |
+| 工具级 | `gen_ai.operation.name`（`execute_tool`）· `gen_ai.tool.name`（空串也写）· `gen_ai.tool.call.id`（调用方显式提供且非空时） | 名称格式：`execute_tool <tool.name>` |
+| 通用 | `error.type`（仅模型 / 工具失败时 MUST 写；值为 `type(exc).__name__` / `_OTHER`） | 节点 span 即使失败也不写 `error.type` |
+
+> 模型 span 名称：`chat <model>`（可读模型名时）或 `chat`；节点 span 名称 = 节点内部名。
+> 本 feature **不写** `gen_ai.system`（已弃用）；provider 标识如未来写入只使用
+> `gen_ai.provider.name`。
+
 ## API 兼容矩阵
 
 > **兼容意图为互操作，不构成 affiliation** —— freegraph 与 LangChain / LangGraph / LangSmith

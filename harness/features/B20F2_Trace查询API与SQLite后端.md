@@ -150,7 +150,7 @@
 
 ### 10. 交付物与后续
 
-- **交付物**：Trace 查询 API（三类过滤 + 组合 + 稳定排序）、SQLite 后端、
+- **交付物**：Trace 查询 API（四类过滤 + 组合 + 稳定排序）、SQLite 后端、
   后端可替换性适配、单元测试 + 人工验证记录。
 - **后续解锁**：**B21F1**（OTLP 导出插件 + 后端对接文档）→ **B14F1**（持久化层）。
 - **风险提示**：SQLite 在 **Windows 上的文件锁差异**（立项书 §3.5）——并发写用例
@@ -166,3 +166,9 @@
 - 契约权威：`harness/reports/Q8-图运行时最小契约.md` §3.4。
 - 验收脚本约定：`harness/demo/README.md`（M3 可诊断性脚本待随各 feature 补齐）。
 - 宪法 `.specify/memory/constitution.md`：原则 IV（可诊断性 · 可视化不阻断执行）。
+
+## 下游承接（B18F1 → 本 feature · 2026-11-21 · 只接线）
+
+- **D-2（B18F1 → B20F2 · M3 · 查询维度）**：B18F1 的 span 记录提供 `run_id` / `thread_id` / `node` / `checkpoint_id`；**C27 / DF6 的查询过滤器 = `run_id` / `thread_id` / 时间范围 / 节点名**，**v1 不含 `checkpoint_id` 过滤器**。本 feature MUST 按此实现，MUST NOT 自行增加 `checkpoint_id` 过滤维度（如需增加走 C27 契约修订）。
+- **D-6（B18F1 → B19F1 / B20 · M3 · invoke 路径逐节点记录）**：`invoke()` 路径的逐节点输入 / 输出 / 错误 MUST 由 B19F1 或本 feature / B20F1 提供等价记录；**承接机制 MUST 在本 feature / B20F1 的 spec 写死**：本 feature MUST 查询 B19F1 通过 L2 既有节点接缝（或其扩展 hook）捕获的 `(node, input_state, output_state, error)` record，或从 `PregelTask` / `SuperStepResult` 快照取等价记录；**错误载体 = 原样抛出的异常（+ `add_note`）**。
+- 落点：`specs/b18f1-span-production/spec.md` 的 **D-2 / D-6** · tasks **T057**。

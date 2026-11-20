@@ -156,3 +156,8 @@
   trace 数据层）、`harness/reports/Q7-开源边界地图与许可证合规.md`（Phoenix = ELv2）。
 - 宪法 `.specify/memory/constitution.md`：原则 IV（后端对接政策 · MUST）、
   原则 IX（Elastic-2.0 组件禁令）、原则 X（第三方归属登记 → `THIRD_PARTY_NOTICES`）。
+
+## 下游承接（B18F1 → 本 feature · 2026-11-21 · 只接线）
+
+- **D-3（B18F1 → B21F1 · M4 · OTLP 映射 1:1）**：B18F1 的模型 / 工具 span 属性键（除失败时的 `error.type`）全部来自 `gen_ai.*` 允许清单；本 feature 的 OTLP exporter MUST 逐键直映射，MUST NOT 解析 freegraph 私有格式，MUST NOT 要求 B18F1 增删 `Span` 字段。
+- 落点：`specs/b18f1-span-production/spec.md` 的 **D-3** · tasks **T057**。

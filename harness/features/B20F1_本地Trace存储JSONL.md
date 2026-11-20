@@ -147,3 +147,9 @@ span 落盘成一行一条的 JSON 记录。本 feature 的判定是：**trace �
 - 契约权威：`harness/reports/Q8-图运行时最小契约.md` §3.4。
 - 验收脚本约定：`harness/demo/README.md`（M3 待锁定形态清单 + 「M3 可诊断性脚本暂缺」说明）。
 - 宪法 `.specify/memory/constitution.md`：原则 IV（可诊断性 · 可视化不阻断执行）。
+
+## 下游承接（B18F1 → 本 feature · 2026-11-21 · 只接线）
+
+- **D-2（B18F1 → B20F1 · M3 · JSON 记录）**：B18F1 产出的 span 字段经 `dataclasses.asdict(span)` 后 100% 可被标准库 `json.dumps` 序列化；本 feature 的 JSONL 记录 MUST 原样包含 `run_id` / `thread_id` / `node` / `checkpoint_id`（C23），MUST NOT 要求 B18F1 重新定义 span 字段。
+- **D-6（B18F1 → B19F1 / B20 · M3 · invoke 路径逐节点记录）**：`invoke()` 路径的逐节点输入 / 输出 / 错误 MUST 由 B19F1 或本 feature / B20F2 提供等价记录；**承接机制 MUST 在本 feature / B20F2 的 spec 写死**：本 feature MUST 接收 B19F1 通过 L2 既有节点接缝（或其扩展 hook）捕获的 `(node, input_state, output_state, error)` record，或从 `PregelTask` / `SuperStepResult` 快照取等价记录；**错误载体 = 原样抛出的异常（+ `add_note`）**（节点名 / 耗时已由 B18F1 节点 span 承担）。
+- 落点：`specs/b18f1-span-production/spec.md` 的 **D-2 / D-6** · tasks **T057**。

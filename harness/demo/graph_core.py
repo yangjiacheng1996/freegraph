@@ -556,6 +556,73 @@ def case_run_config_and_context() -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+def case_span_production() -> None:
+    """B18F1 · 节点 / 模型 / 工具三级 span 可生产（可选验收场景）。"""
+
+    section("B18F1 · Span 数据类生产")
+
+    from freegraph.observability import SpanProducer, invoke_model, invoke_tool
+    from freegraph.observability._producer import bind_tracer
+    from freegraph.runtime._span_hook import bind_span_tracer
+
+    class _SpanState(TypedDict, total=False):
+        result: int
+
+    class _Model:
+        model_name = "demo-model"
+
+        def invoke(self, value: object) -> object:
+            return value
+
+    class _Tool:
+        name = "multiply"
+        description = "Multiply two numbers"
+
+        def invoke(self, args: dict[str, int]) -> int:
+            return args["a"] * args["b"]
+
+    def _node(state: _SpanState) -> _SpanState:
+        invoke_model(_Model(), "hello")
+        result = invoke_tool(_Tool(), {"a": 3, "b": 4})
+        return {"result": result}
+
+    class _Receiver:
+        def __init__(self) -> None:
+            self.started: list[object] = []
+            self.ended: list[object] = []
+
+        def on_span_start(self, span: object) -> None:
+            self.started.append(span)
+
+        def on_span_end(self, span: object) -> None:
+            self.ended.append(span)
+
+    graph = StateGraph(_SpanState)
+    graph.add_node("demo_node", _node)
+    graph.add_edge(START, "demo_node")
+    graph.add_edge("demo_node", END)
+    compiled = graph.compile()
+
+    receiver = _Receiver()
+    producer = SpanProducer(receiver)
+    with bind_span_tracer(producer), bind_tracer(producer):
+        state = compiled.invoke({})
+
+    names = [getattr(span, "name", "") for span in receiver.started]
+    check(state.get("result") == 12, "B18F1 节点执行结果正确", f"state={state!r}")
+    check(
+        names == ["demo_node", "chat demo-model", "execute_tool multiply"],
+        "B18F1 节点 / 模型 / 工具三级 span 各一例",
+        f"实际 names={names!r}",
+    )
+    check(
+        len(receiver.ended) == 3 and all(getattr(span, "end_time", None) for span in receiver.ended),
+        "B18F1 三级 span 均已成对结束",
+        f"ended={len(receiver.ended)}",
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 def _invoke_ready() -> bool:
     """探测 ``invoke()`` 是否已就绪（B7F3）；MUST NOT 用「6 方法能力面」当判据。"""
 
@@ -610,6 +677,7 @@ def main() -> int:
         case_concurrency_and_errors,
         case_recursion_limit,
         case_run_config_and_context,
+        case_span_production,
     ):
         try:
             case()

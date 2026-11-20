@@ -165,7 +165,7 @@ from freegraph.contracts import (
 | 哈希语义 | `Node` / `Edge` / `Graph` / `Span` **统一不可哈希**（`Edge` 须显式 `__hash__ = None`）；`TraceQuery` 可哈希（**有意如此**） |
 | span 生命周期 | 不可变；开始收「`end_time` 为空」实例、结束收**同 `id`、已填 `end_time` 的新实例**，按 `id` 配对；开始快照**不被事后改写** |
 | 构造期校验 | **零值校验**——只做类型注解、缺省归一、容器浅拷贝；其余由生产者保证 |
-| JSON 可序列化 | `Span` 与 `TraceQuery` **100% 可 JSON 序列化**（C27 前提） |
+| JSON 可序列化 | `TraceQuery` **可直接 JSON 序列化**；`Span` 经 `dataclasses.asdict(span)` 后 **100% 可 JSON 序列化**（C27 前提） |
 | `get_state` 空值语义 | 查不到会话状态时返回**空值**，**MUST NOT** 抛异常 |
 | `Node.name` 缺省语义 | 归一后**恒为字符串**（未给别名时等于 `id`） |
 | `run_id` 的生成方 | **运行时**生成，MUST NOT 可由用户指定或覆盖，**不进** `RunConfig` 字段清单 |

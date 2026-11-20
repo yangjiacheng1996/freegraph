@@ -653,8 +653,8 @@ C1–C27 全部条目且无遗漏——即算独立交付。
 - **SC-010**: 公开符号面**无同名歧义**：契约层导出的符号中不存在两个含义不同的同名符号
   （名称冲突数 == 0；`Node` 只指图结构节点元素），且每个符号的类型注解可被标准类型
   自省工具完整解析。
-- **SC-011**: span 与 trace 查询请求 / 返回结构 **100% 可 JSON 序列化**（可被标准库
-  序列化器直接序列化，不抛错）——这是 C27 的落地前提。
+- **SC-011**: span 与 trace 查询请求 / 返回结构 **100% 可 JSON 序列化**（`TraceQuery` 可直接序列化；
+  `Span` 经 `dataclasses.asdict(span)` 后可被标准库序列化器直接序列化，不抛错）——这是 C27 的落地前提。
   **返回结构 = span 列表**（FR-009 ② / SC-001 注），故**一批 span 整体**亦 MUST 可序列化
   （断言口径：`json.dumps([<span 的纯数据形式>, ...])` 不抛错）。
 - **SC-012**: **人工验证记录**已产出（落 `harness/verification/<feature>/manual-verification.md`），
@@ -666,7 +666,7 @@ C1–C27 全部条目且无遗漏——即算独立交付。
 - **SC-014**: span 的**字段清单**与本 spec **逐字一致**（11 字段，可逐字段断言），
   其中**必带四项**（`thread_id` / `run_id` / `node` / `checkpoint_id`）均可读；
   `parent` 为**标识字符串**（非对象引用）、起止时刻为 **UTC ISO-8601 字符串**
-  （序列化断言：整个 span 可被标准库序列化器直接序列化）。
+  （序列化断言：`dataclasses.asdict(span)` 可被标准库序列化器直接序列化）。
 - **SC-015**: 编译产物协议六个方法的**返回类别**与本 spec **逐条一致**（可断言）：
   `invoke` → 完整状态字典；`stream` → 可迭代的事件序列（**元素类型 = `dict[str, Any]`**，
   **非** `Any`）；`get_graph` → `Graph`；`get_state` / `get_state_history` / `update_state` → 状态快照；

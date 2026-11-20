@@ -130,6 +130,12 @@ SIGNED_SOURCE_FILES = (
     "tests/contracts/test_span.py",
     "tests/contracts/fixtures/__init__.py",
     "tests/contracts/fixtures/external_impl.py",
+    # B18F1 新增源文件（宪法原则 X / G5）
+    "src/freegraph/runtime/_span_hook.py",
+    "src/freegraph/observability/__init__.py",
+    "src/freegraph/observability/_time.py",
+    "src/freegraph/observability/_producer.py",
+    "src/freegraph/observability/_invoke.py",
 )
 
 
@@ -1992,3 +1998,67 @@ class TestGateSelfCheck:
         for name in ("protocols.py", "graph.py", "trace.py"):
             assert name in scanned, name
         assert scan_runtime_baseline(package) == []
+
+
+class TestB18F1LayeringAndLaziness:
+    """B18F1 · L2/L5 依赖方向 + L5 惰性（T031 扩展）。"""
+
+    @staticmethod
+    def _absolute_imports(path: Path) -> list[str]:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        modules: list[str] = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                modules.extend(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                modules.append(node.module)
+        return modules
+
+    def test_l5_observability_imports_only_stdlib_and_l1(self, src_dir: Path) -> None:
+        observability = src_dir / "freegraph" / "observability"
+        violations: list[str] = []
+        for path in sorted(observability.glob("*.py")):
+            for module in self._absolute_imports(path):
+                root = module.split(".")[0]
+                if root in sys.stdlib_module_names:
+                    continue
+                if module.startswith("freegraph.contracts"):
+                    continue
+                violations.append(f"{path.name}: {module}")
+        assert violations == [], violations
+
+    def test_l2_runtime_does_not_import_l5(self, src_dir: Path) -> None:
+        runtime = src_dir / "freegraph" / "runtime"
+        violations = [
+            f"{path.name}: {module}"
+            for path in sorted(runtime.glob("*.py"))
+            for module in self._absolute_imports(path)
+            if module.startswith("freegraph.observability")
+        ]
+        assert violations == [], violations
+
+    def test_b18f1_modules_have_no_forbidden_third_party_imports(
+        self, src_dir: Path
+    ) -> None:
+        violations = scan_third_party_imports(
+            [
+                src_dir / "freegraph" / "runtime",
+                src_dir / "freegraph" / "observability",
+            ]
+        )
+        assert violations == [], "\n".join(violations)
+
+    def test_b18f1_modules_have_no_env_or_egress(self, src_dir: Path) -> None:
+        violations = scan_forbidden_usage(
+            [
+                src_dir / "freegraph" / "runtime",
+                src_dir / "freegraph" / "observability",
+            ]
+        )
+        assert violations == [], "\n".join(violations)
+
+    def test_importing_freegraph_is_lazy_for_b18f1_modules(
+        self, src_dir: Path, tmp_path: Path
+    ) -> None:
+        loaded = _loaded_freegraph_modules("import freegraph", src_dir, tmp_path)
+        assert loaded == ["freegraph"]

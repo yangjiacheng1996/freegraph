@@ -307,3 +307,33 @@ class TestSnapshotTextCompliance:
                 continue
             if line.startswith("#"):
                 assert not seen_entry, f"条目之间出现注释行：{line!r}"
+
+
+# ── B18F1 · 公开面零扩张（T048）────────────────────────────────────────
+
+
+class TestB18F1PublicFace:
+    """B18F1 helpers / SpanProducer MUST NOT 进入公开门面或 L2 ``__all__``。"""
+
+    NEW_SYMBOLS = {"invoke_model", "invoke_tool", "SpanProducer"}
+
+    def test_new_symbols_are_not_in_public_facades(self) -> None:
+        import freegraph.graph as graph
+        import freegraph.runtime as runtime
+
+        assert self.NEW_SYMBOLS.isdisjoint(set(graph.__all__))
+        assert self.NEW_SYMBOLS.isdisjoint(set(runtime.__all__))
+
+    def test_observability_module_exports_only_its_own_symbols(self) -> None:
+        import freegraph.observability as observability
+
+        assert set(observability.__all__) == {
+            "SpanProducer",
+            "invoke_model",
+            "invoke_tool",
+        }
+
+    def test_api_snapshot_does_not_contain_new_symbols(self) -> None:
+        text = SNAPSHOT_PATH.read_text(encoding="utf-8")
+        for symbol in self.NEW_SYMBOLS:
+            assert f"] {symbol}" not in text

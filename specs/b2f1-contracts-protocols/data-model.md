@@ -241,7 +241,7 @@
 - **必带四项（C23 · D11）**：`thread_id` / `run_id` / `node` / `checkpoint_id` —— 四项
   **均可读**；**缺 `run_id` 的 span 视为实现缺陷**（宪法原则 VII）。
 - **JSON 可序列化（C27 前提）**：`parent` 为**标识字符串**、时间为 **ISO 字符串**，
-  `attributes` / `context` 为纯映射 —— 整个 span 可被标准库序列化器直接序列化。
+  `attributes` / `context` 为纯映射 —— `dataclasses.asdict(span)` 可被标准库序列化器直接序列化。
 - **不可变（D-07 / D-14）**：`attributes` / `context` 在 `__post_init__` 中**浅拷贝**。
 - **对应契约**：C23 / C24；数据格式 **DF4**。
 

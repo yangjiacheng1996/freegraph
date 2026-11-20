@@ -202,3 +202,9 @@
 ## 下游承接（B8F3 → 本 feature · 2026-11-20 · 只接线）
 
 - **D-2 / D-3（B8F3 → B19F1 · M3 · `context` 与 trace 的关系 / 不得回退）**：C21 的 `context` 是节点只读运行期上下文，**不是** `TraceSink` / `Span.context` 的字段；本 feature MUST NOT 复用 `Span.context` 承载 C21 的 `context`（`Span.context` 仍按 C23 / B2F1 冻结面定义）。MUST 以「`context` 已接线、alias 已移除」为前提；MUST NOT 回退到 `configurable` 承载 `context`，MUST NOT 重新引入节点别名。
+
+## 下游承接（B18F1 → 本 feature · 2026-11-21 · 只接线）
+
+- **D-1（B18F1 → B19F1 · M3 · 生产接缝可消费 + 双绑定）**：B18F1 的 span 生产结果（开始 / 结束两个同 id 快照）MUST 被本 feature 原样消费；本 feature **MUST NOT** 重新实现 span 生产、MUST NOT 改 `Span` 的 11 字段。本 feature 的公开注入点 MUST 构造 `SpanProducer`（接收端 = 用户 `TraceSink`），并把**同一个 `SpanProducer`** 同时绑定 L2 `runtime._span_hook.bind_span_tracer` 与 L5 `observability._producer.bind_tracer`（双绑定）。B18F1 不代做公开注入。绑定 MUST 是 run-scoped（作用域结束即失效；同一作用域内所有 span 共享一个 `run_id`，FR-003 / T059）。
+- **D-6（B18F1 → B19F1 / B20 · M3 · invoke 路径逐节点记录）**：`invoke()` 路径的逐节点输入状态 / 输出状态 / 错误 MUST 由本 feature（`TraceSink` / `current_span`）或 B20（trace 存储 / 查询）提供等价记录；**承接机制 MUST 在本 feature / B20 的 spec 写死**：本 feature MUST 通过 L2 既有节点接缝（或其扩展 hook）捕获 `(node, input_state, output_state, error)` 并转换为 `TraceSink` / record，或 B20 MUST 从 `PregelTask` / `SuperStepResult` 快照取等价记录；**错误载体 = 原样抛出的异常（+ `add_note`）**（节点名 / 耗时已由 B18F1 节点 span 承担）。
+- 落点：`specs/b18f1-span-production/spec.md` 的 **D-1 / D-6** · plan **R-4 / R-7** · tasks **T057**。

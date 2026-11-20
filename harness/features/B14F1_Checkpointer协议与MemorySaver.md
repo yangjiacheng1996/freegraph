@@ -284,3 +284,8 @@
 
 - **D-1（B8F3 → B14F1 · M3 · `context` 不持久化）**：B8F3 已接线 `RunConfig.context`，但 **MUST NOT** 把 `context` 写入 checkpoint、**MUST NOT** 在恢复时从快照还原 `context`；本 feature 的 checkpoint 契约 MUST NOT 为 `context` 预留持久化字段或「内存态恢复」旁路。
 - **D-3（B8F3 → M3 · 不得回退）**：本 feature MUST 以「`context` 已接线、alias 已移除」为前提；MUST NOT 回退到 `configurable` 承载 `context`，MUST NOT 重新引入节点别名。
+
+## 下游承接（B18F1 → 本 feature · 2026-11-21 · 只接线）
+
+- **D-4（B18F1 → B14F1 · M3 · `checkpoint_id` 补值）**：B18F1 的节点 span 接受运行期 `checkpoint_id`（v1 `None`），模型 / 工具 span 从节点 span 继承；本 feature 挂接 checkpointer 后 MUST 通过既有运行期接缝把当前 checkpoint 标识填入**节点 span**，**MUST NOT** 回改 `Span` 的 11 字段，MUST NOT 要求 B18F1 重新实现子 span 的继承逻辑。
+- 落点：`specs/b18f1-span-production/spec.md` 的下游承接 **D-4** · plan **D-05** · tasks **T057**。

@@ -48,9 +48,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Container, Mapping, Sequence
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 from functools import partial
 from typing import Any
+import uuid
 
 from freegraph.contracts.errors import GraphInterrupt, GraphRecursionError, InvalidUpdateError
 from freegraph.contracts.types import (
@@ -85,8 +87,14 @@ from ._fanout import (
     make_fanout,
 )
 from ._recursion import resolve_config, resolve_limit
-from ._stream_context import bind_current_task, record_round_tasks
+from ._stream_context import (
+    bind_current_task,
+    bind_run_ids,
+    current_stream_ids,
+    record_round_tasks,
+)
 from ._routing import evaluate_routes, validate_conditional_payload
+from ._span_hook import current_span_tracer, end_node_span, start_node_span
 from ._static import (
     STATIC_AFTER,
     STATIC_BEFORE,
@@ -1363,7 +1371,20 @@ def _run_round(
             with bind_current_task(task_id), bind_task(
                 task_key, run_table, node_name=target
             ):
-                return fn()
+                tracer = current_span_tracer()
+                if tracer is None:
+                    return fn()
+                run_id, thread_id = current_stream_ids()
+                start = start_node_span(tracer, target, run_id, thread_id, None)
+                if start is None:
+                    return fn()
+                try:
+                    result = fn()
+                except BaseException:
+                    end_node_span(tracer, start)
+                    raise
+                end_node_span(tracer, start)
+                return result
 
         return _inner
 
@@ -2250,7 +2271,11 @@ def run_graph(
     _validate_max_concurrency(effective_concurrency)
     effective_limit = resolve_limit(run_config.recursion_limit, max_steps)
     table = new_run_table()
-    with bind_run(table), bind_context(run_config.context):
+    if current_span_tracer() is not None and current_stream_ids()[0] is None:
+        run_ids_cm = bind_run_ids(uuid.uuid4().hex, run_config.resolved_thread_id())
+    else:
+        run_ids_cm = nullcontext()
+    with run_ids_cm, bind_run(table), bind_context(run_config.context):
         if isinstance(input, Command):
             return _resume_graph(
                 spec,

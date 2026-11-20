@@ -23,7 +23,10 @@
   （上游 ``langgraph/config.py:13-14``）；MUST NOT 抛异常；
 * **运行标识** —— ``_STREAM_RUN_ID`` / ``_STREAM_THREAD_ID`` 由
   :class:`~freegraph.runtime._stream.StreamSession` 绑定；B18F1 / B19F1
-  的 span MUST 读取同一对值（D-3 / H-9 · ARCH-3 已登记例外 R-6）。
+  的 span MUST 读取同一对值（D-3 / H-9 · ARCH-3 已登记例外 R-6）；
+* **invoke 路径 id 绑定** —— B18F1 的私有助手 :func:`bind_run_ids` 只设置
+  ``_STREAM_RUN_ID`` / ``_STREAM_THREAD_ID``；``bind_stream`` 仍是
+  ``StreamSession`` 的唯一绑定入口。
 
 **签名头**（宪法原则 X）：本文件带署名头且模块 docstring 是首个语句。
 """
@@ -120,6 +123,24 @@ def get_stream_writer() -> StreamWriter:
 def current_stream_ids() -> tuple[str | None, str | None]:
     """返回当前绑定的 ``(run_id, thread_id)``（供 B18F1 / B19F1 读取）。"""
     return _STREAM_RUN_ID.get(), _STREAM_THREAD_ID.get()
+
+
+@contextmanager
+def bind_run_ids(run_id: str, thread_id: str | None) -> Iterator[None]:
+    """只绑定 ``_STREAM_RUN_ID`` / ``_STREAM_THREAD_ID``（B18F1 invoke 路径私有助手）。
+
+    * MUST NOT 触碰 writer / custom sink / round capture；
+    * ``bind_stream`` 仍是 :class:`~freegraph.runtime._stream.StreamSession`
+      的唯一绑定入口；
+    * **不新增第二套载体**：与 stream 路径使用同一对 contextvar。
+    """
+    run_token = _STREAM_RUN_ID.set(run_id)
+    thread_token = _STREAM_THREAD_ID.set(thread_id)
+    try:
+        yield
+    finally:
+        _STREAM_THREAD_ID.reset(thread_token)
+        _STREAM_RUN_ID.reset(run_token)
 
 
 @contextmanager
