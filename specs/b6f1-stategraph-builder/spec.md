@@ -8,6 +8,12 @@
 
 **Input**: User description: "B6F1 · `StateGraph` 构建器 —— 交付与 LangGraph **同名同签名**的图定义 API：`StateGraph(schema)` / `add_node(name, fn)` / `add_edge(src, dst)` / `add_conditional_edges(src, path_fn, path_map)`。构建器只**记录并校验**节点、静态边、条件边与 schema 适配结果，产出可供 B7F2 `compile()` 消费的内部规格；本 feature **不执行**任何节点、**不实现** `compile()` / `invoke()` / `stream()`。判定 = `harness/demo/target.py` 第 142–155 行建图代码原样可用，且 `path_map` 的 list 与 dict 两形态各一例通过。"
 
+> **2026-11-20 后续修订（C25 正式作废）**：B8F3 已正式作废 C25；`add_node` **不再接受 `alias`**，
+> `_NodeRecord` **不再含 `alias`**。本 spec 中所有 `alias` 相关文字保留为**历史**（B6F1 当时
+> 只记录、不实现），当前契约以 B8F3 spec / B2F2 facade / 本 spec 的后续修订块为准。
+> 另：差分场景 **D-74**（alias）已**迁移到 B8F3 D-142**，不再由 `tests/differential/parity_probe.py`
+> 承载；本 spec 的 D-74 行保留为历史墓碑，active 差分范围 = **D-50…D-73**。
+
 ---
 
 ## 承接条款（上游 feature → 本 feature）
@@ -33,9 +39,9 @@
 
 | # | 承接方 | 里程碑 | 动作 | 本 spec 落点 |
 |---|---|---|---|---|
-| **D-1** | **B6F1 → B7F2** | **M2** | **`compile()` MUST 消费 `_build_spec()`**：B7F2 MUST 从 `StateGraph._build_spec()` 取得 `_BuilderSpec`，再适配为 L2 的 `GraphSpec` / `NodeSpec`；MUST NOT 重新解析 schema、MUST NOT 重造节点表 / 边表、MUST NOT 另立第三套图规格。`_BuilderSpec.edges` 中，**仅单源键（`str`）**指向 `END` 的边由 B7F2 在构造 `GraphSpec` 前过滤（B7F1 的 V-2 不接受 `END` 作为目标）；**多源键（`tuple[str, ...]`）**的 **V-16 形态（目标为 `END` 或目标数 ≠ 1）** MUST NOT 被过滤 / 提前拒绝，MUST 原样交给 `GraphSpec` 的 **V-16** 显式失败（B7F4 的「多源目标 MUST NOT 为 `__end__`」与「多源目标 MUST 恰为一个」）。`_BuilderSpec.nodes` / `node_records` 中的 `__parent__` 节点名同理由 B7F2 的 `GraphSpec` 构造期 **B9F1 FR-005 `__parent__` 保留名检查**最终失败。<br>**别名交接载体（D-3）**：B7F2 MUST 在 `CompiledGraph` 的私有字段保留**完整 `_BuilderSpec`**（至少 `node_records`），供 B8F3 读取 `_NodeRecord.alias`；该保留 MUST NOT 改写快照内容。 | FR-007 · 裁定 2 / 6 · SC-005 |
+| **D-1** | **B6F1 → B7F2** | **M2** | **`compile()` MUST 消费 `_build_spec()`**：B7F2 MUST 从 `StateGraph._build_spec()` 取得 `_BuilderSpec`，再适配为 L2 的 `GraphSpec` / `NodeSpec`；MUST NOT 重新解析 schema、MUST NOT 重造节点表 / 边表、MUST NOT 另立第三套图规格。`_BuilderSpec.edges` 中，**仅单源键（`str`）**指向 `END` 的边由 B7F2 在构造 `GraphSpec` 前过滤（B7F1 的 V-2 不接受 `END` 作为目标）；**多源键（`tuple[str, ...]`）**的 **V-16 形态（目标为 `END` 或目标数 ≠ 1）** MUST NOT 被过滤 / 提前拒绝，MUST 原样交给 `GraphSpec` 的 **V-16** 显式失败（B7F4 的「多源目标 MUST NOT 为 `__end__`」与「多源目标 MUST 恰为一个」）。`_BuilderSpec.nodes` / `node_records` 中的 `__parent__` 节点名同理由 B7F2 的 `GraphSpec` 构造期 **B9F1 FR-005 `__parent__` 保留名检查**最终失败。<br>**别名交接载体（D-3 · 已撤回）**：B7F2 仍保留完整 `_BuilderSpec` 供其他用途；**C25 正式作废后，B8F3 不再读取 `_NodeRecord.alias`**（该字段已由 B8F3 移除）。 | FR-007 · 裁定 2 / 6 · SC-005 |
 | **D-2** | **B6F1 → B7F2 / B8F1** | **M2** | **条件边规格的跨层消费**：`_BuilderSpec.conditional_edges` 的字段（`source` / `branch` / `path` / `path_map` / `targets` / `route_channels`）逐字冻结。**B7F2（L3）MUST 保留 `_BuilderSpec.conditional_edges`（或其机械翻译出的普通映射）作为唯一 L3 交接载体**；在 B8F1 放宽 V-8 之前，B7F2 **MUST NOT** 填充 `GraphSpec.conditional_edges`。**B8F1（L2）MUST 只消费 L2 侧的 `GraphSpec.conditional_edges`，MUST NOT import `freegraph._stategraph` 或 `_ConditionalEdgeSpec`**，MUST NOT 重新归一化 `path_map`；B8F1 落地时把该映射填入 `GraphSpec.conditional_edges` 并承接 V-8 放宽。路由通道 `branch:to:<target>` 已由构建器建好，B8F1 MUST NOT 另起命名。<br>**普通映射形状（B6F1 内冻结）**：B7F2 MUST 把 `_BuilderSpec.conditional_edges` 机械翻译为**纯内建类型**的 `dict[str, tuple[dict[str, Any], ...]]`：外层 key = `source`；内层每个 dict 的 key / value 逐字为 `{"branch": str, "path": Callable[..., Any], "path_map": dict[Hashable, str] \| None, "targets": tuple[str, ...], "route_channels": tuple[str, ...]}`；顺序 = 登记顺序；`path_map` 已是归一化结果；内层 `"branch"` MUST 取自 `_ConditionalEdgeSpec.branch`（= `_branch_name(path)` 的登记结果），B7F2 MUST NOT 重新推断。B7F2 MUST 将该普通映射存放在 `CompiledGraph` 的私有字段（如 `_conditional_edges`）；B8F1 MUST 只读取该普通映射（或由 B7F2 以同形状参数传入），MUST NOT import `freegraph._stategraph` / `_ConditionalEdgeSpec` | FR-004 / FR-007 · 裁定 3 / 5 · SC-002 / SC-005 |
-| **D-3** | **B6F1 → B8F3** | **M2** | **别名已记录**：`_BuilderSpec.node_records[name].alias` 已保存 `add_node(..., alias=...)` 的值；B8F3 MUST 从 **B7F2 按 D-1 保留的 `_BuilderSpec.node_records`** 读取并实现别名语义，MUST NOT 要求用户重新声明 | FR-010 · 裁定 7 · SC-014 |
+| **D-3** | **B6F1 → B8F3** | **M2** | **已撤回（C25 正式作废）**：B8F3 不再读取 `_NodeRecord.alias`；`add_node` 不再接受 `alias`，`_NodeRecord` 不再含 `alias`。历史 B6F1 的「只记录」语义保留为历史文字。 | FR-010（历史）· 裁定 7（历史）· SC-014（历史） |
 
 ---
 
@@ -82,8 +88,9 @@
   ⇒ 落点：FR-003 / FR-016 · 裁定 6 · SC-011。
 - **Q7（`add_node` 的单 callable 形态与附加关键字）**：是否支持 `add_node(fn)`？
   → **A：支持**（上游 `state.py:778-799` 同款：节点名取 `fn.__name__`，无 `__name__` 时取
-  类型名；普通 callable 的 `.name` 不参与）。`alias` 接受并原样记录；`defer` / `metadata` 接受并记录，但 `defer=True` 的
-  **节点专用屏障不在本 feature 实现**（B7F4 的 X-03）。`alias` 的冲突 / 寻址语义归 B8F3。
+  类型名；普通 callable 的 `.name` 不参与）。`defer` / `metadata` 接受并记录，但 `defer=True` 的
+  **节点专用屏障不在本 feature 实现**（B7F4 的 X-03）。**`alias` 已于 2026-11-20 随 C25 正式作废；
+  `add_node` 不再接受 `alias`。**
   ⇒ 落点：FR-002 / FR-010 / FR-011 · 裁定 7 · SC-014。
 - **Q8（静态断点关键字）**：`interrupt_before` / `interrupt_after` 放构建器还是 `compile()`？
   → **A：仍是 `compile()` 的关键字**（B7F2 收紧形态并填入 `GraphSpec`）；构建器**不新增**
@@ -127,7 +134,7 @@
 | **裁定 4** | 两层校验：立即层 / 构建期末层；只用 `ValueError` / `TypeError`（schema 用 B4F1 异常） | Q4 · FR-006 |
 | **裁定 5** | `path_map` 统一归一化为 `dict[Hashable, str] \| None` | Q5 · FR-004 |
 | **裁定 6** | 静态边按源聚合；单源 `str`、多源 `tuple`；目标保序去重；相同边幂等 | Q6 · H-5 · D-1 |
-| **裁定 7** | 支持 `add_node(fn)`；`alias` / `defer` / `metadata` 记录；`defer` 屏障不实现；返回形态透传 | Q7 · H-3 / H-4 · D-3 |
+| **裁定 7** | 支持 `add_node(fn)`；`defer` / `metadata` 记录；**`alias` 已随 C25 正式作废**；`defer` 屏障不实现；返回形态透传 | Q7 · H-3 / H-4 · D-3（已撤回） |
 | **裁定 8** | 静态断点关键字仍属 `compile()`；构建器不新增 / 不改名 / 不丢弃 | Q8 · H-6 |
 | **裁定 9** | 只交付 4 个核心方法与 `validate()`；其余上游同款构建方法保持显式未实现 | Q9 · Out of Scope |
 | **裁定 10** | 构建期不执行任何用户函数；`path` / 节点函数 / 归约器均只在 `_build_spec()` 中被**持有**，不被调用 | FR-008 / FR-009 |
@@ -137,7 +144,7 @@
 
 | # | 差异 | 处置 |
 |---|---|---|
-| **引文差异 1** | 提示词 §4 FR-002 只写 `add_node(name, action)`，但 `_stategraph.py` 的冻结签名与上游同款还含 `defer` / `metadata`，且支持单 callable 形态 | **裁定 7 / Q7**：签名按已冻结的上游同款保留；核心验收只要求 `(str, Callable)` + `alias`；新增能力不取消任何既有参数 |
+| **引文差异 1** | 提示词 §4 FR-002 只写 `add_node(name, action)`，但 `_stategraph.py` 的冻结签名与上游同款还含 `defer` / `metadata`，且支持单 callable 形态 | **裁定 7 / Q7**：签名按已冻结的上游同款保留；核心验收只要求 `(str, Callable)`；`alias` 已于 2026-11-20 随 C25 正式作废 |
 | **引文差异 2** | 提示词 §4 FR-006 要求「缺少起点」在构建期报错，但未指定入口方法；`target.py` 不调用 `validate()` | **裁定 4 / Q4**：`validate()` 是构建期校验入口；`_build_spec()` 复用同一校验，B7F2 调 `compile()` 时必然触发 ⇒ 错误仍早于运行期 |
 | **引文差异 3** | 提示词 §7 把「路由通道」列为关键实体，但未指定通道命名 | **裁定 3 / Q3**：命名冻结为上游同款 `branch:to:<target>`；`END` 与 `None` 不建通道 |
 | **引文差异 4** | 提示词 §10 写「4 个方法 + 构建期校验」，而 `_stategraph.py` 把其余上游同款方法也标注为「由 B6F1 交付」 | **裁定 9 / Q9**：本 feature 只交付 4 个核心方法与 `validate()`；其余保持显式未实现，并在 Out of Scope 登记 |
@@ -301,7 +308,7 @@ list 被归一化为 `{"tool_node": "tool_node", "__end__": "__end__"}`，dict �
 - **单 callable 形态**：`add_node(fn)` 使用 `fn.__name__`；无 `__name__` 时使用类型名
   （普通 callable 的 `.name` **不参与**取名，上游同款）；两者都取不到时抛 `ValueError`；
   若同时传了非 `None` 的 `action`，抛 `TypeError`。
-- **`alias` 冲突 / 与节点名冲突**：本 feature **不校验**（归 B8F3）；只原样记录。
+- **`alias`（已作废）**：C25 已于 2026-11-20 正式作废；`add_node` 不再接受 `alias`，`_NodeRecord` 不再含 `alias`。
 - **`defer=True`**：接受并记录；**不实现**节点专用屏障（B7F4 的 X-03），
   MUST NOT 因此改变边 / 触发语义。B6F1 的路由通道对 defer 目标仍用 `EphemeralValue`；
   上游对 defer 目标用 `LastValueAfterFinish`，该差异登记为 **X-7**（已知不支持），
@@ -366,7 +373,7 @@ list 被归一化为 `{"tool_node": "tool_node", "__end__": "__end__"}`，dict �
 |---|---|---|---|---|---|
 | P-01 | `StateGraph` 类与构造参数名 | `langgraph/graph/state.py:131`（class）· `:216-225`（`state_schema` / `context_schema` / `input_schema` / `output_schema`） | 同名同签名；`state_schema` 是唯一必填位置参数；其余可选 | SAME | 宪法原则 III 第 2 项 |
 | P-02 | `add_node(node, action, *, defer, metadata, ...)` 与单 callable 形态 | `langgraph/graph/state.py:667-682`（签名）· `:778-799`（单 callable 取名） | 同名同签名；支持单 callable | SAME | 宪法原则 III 第 3 项 · 实测 E-21 |
-| P-02b | `add_node(..., alias=...)` | `langgraph/graph/state.py:667-682`（`add_node` 签名无 `alias`；运行时经 `**kwargs` 静默忽略） | `alias` 是 freegraph 自研增量，只记录不实现语义 | DIFF | C25 · B8F3 ⇒ X-1 · 实测 E-24 · D-74 |
+| P-02b | `add_node(..., alias=...)` | `langgraph/graph/state.py:667-682`（`add_node` 签名无 `alias`；运行时经 `**kwargs` 静默忽略） | **C25 已于 2026-11-20 正式作废**；freegraph 的 `add_node` 不再接受 `alias` ⇒ `TypeError` | STRICTER | B8F3 · 实测 E-24 · D-74 |
 | P-02c | 普通 callable 的 `.name` **不参与**取名 | `langgraph/graph/state.py:778-799`（实测 E-21） | 同款：`__name__` → 类型名；`.name` 忽略 | SAME | 上游首段已把 `node` 固定为 `str` ⇒ 第二段不再取 `.name` |
 | P-03 | 重复节点名 / 保留节点名 / 保留字符失败信号 | `langgraph/graph/state.py:802-811`（`Node ... already present` / `... is reserved` / 保留字符）· `langgraph/_internal/_constants.py:87-89`（`\|` / `:`）· 实测 E-18 | `add_node` 立即抛 `ValueError`，消息点名节点 | SAME | 早失败且与上游类型一致 |
 | P-03b | 缺 `action` / 单 callable 形态同时传 `action` | `langgraph/graph/state.py:800-801`（上游缺 `action` 抛 `RuntimeError`）· `:782-799`（单 callable 时忽略 `action`） | 缺 `action` / 多传 `action` ⇒ 立即 `TypeError` | STRICTER | 用统一的用户输入错误类型替代上游 `RuntimeError`，且不静默忽略 `action` ⇒ X-4 |
@@ -392,7 +399,7 @@ list 被归一化为 `{"tool_node": "tool_node", "__end__": "__end__"}`，dict �
 | P-14 | 空节点表 / `START -> END` 空图 | `langgraph/graph/state.py:1138-1168`（实测 E-20） | 空节点表 ⇒ `ValueError` | STRICTER | 与 L2 `GraphSpec` V-3 一致 ⇒ X-5 |
 
 > **实测覆盖说明**：P-03 / P-05 分别由 E-18 / E-19 支撑；P-02c / P-08 的「普通 callable
-> 的 `.name` 不参与取名」由 E-21 支撑；P-02b / D-74 的 alias 接受形态由 E-24 支撑；
+> 的 `.name` 不参与取名」由 E-21 支撑；P-02b / D-74 的 alias 拒绝形态由 E-24 支撑（C25 作废后 freegraph `TypeError`）；
 > P-06c 的 Runnable 行为由 E-23 支撑；P-14 由 E-20 支撑；P-13 的非 defer 行为面由 B5F1
 > 覆盖，P-13b 的 defer 差异登记 X-7。换版本时 MUST 一并重跑。
 
@@ -428,13 +435,13 @@ list 被归一化为 `{"tool_node": "tool_node", "__end__": "__end__"}`，dict �
 | D-71 | 缺入口 + 未知目标 | 两侧均先报入口错误（消息含 `entrypoint` / `START`） | SAME（FR-006 新顺序） |
 | D-72 | 空节点 + `START -> END` | 上游通过；freegraph `ValueError` | STRICTER（X-5 · E-20） |
 | D-73 | 非 callable `Runnable` 作为 `path` | 上游接受并使用 `.name`；freegraph 立即 `TypeError` | DIFF（X-6 · 范围边界 · E-23） |
-| D-74 | `add_node(..., alias="model")` | 两侧均接受；上游经 `**kwargs` 静默忽略，freegraph 记录到 `_NodeRecord.alias` | DIFF（X-1 · E-24） |
+| D-74 | `add_node(..., alias="model")` | **2026-11-20 起 tombstone**：C25 作废后该场景迁移到 **B8F3 D-142**，不再由 `parity_probe.py` 承载；上游仍静默忽略（E-24） | STRICTER（X-3 · E-24 · 已迁移） |
 
 ### 偏离登记 *(三类 + 已知不支持（DIFF）· 其余一律照抄)*
 
 | # | 类别 | 被偏离的判据 | 理由 | 承接方 / 追认 |
 |---|---|---|---|---|
-| **X-1** | 必须自研区（上游没有） | `add_node(..., alias=...)` | C25 / B8F3 的节点别名是 freegraph 自有增量；上游签名无 `alias`，运行时经 `**kwargs` 静默忽略（实测 E-24） | B8F3 · 本 feature 只记录 · 差分 D-74 |
+| **X-1** | 必须自研区（上游没有） | `add_node(..., alias=...)` | C25 已于 2026-11-20 正式作废（编号不复用）；freegraph 不再接受 `alias`；上游签名无 `alias`、运行时静默忽略（E-24） | B8F3 · C25 tombstone · 差分 D-74 |
 | **X-2** | 更严失败信号 | `path_map` 非 list / dict / None、list 元素 / dict value 非 `str` ⇒ `TypeError`；条件边 `source` 非 `str`、单源边 `end_key` 非 `str` ⇒ `TypeError`；空多源列表 ⇒ `ValueError` | 上游对非 dict/list 的 `path_map` **不报错**（无 `Literal` 时保持 `None`；有 `Literal` 时反而按注解推断），对非 `str` 的 source / end_key / path_map 元素**静默接受**并把错误推迟到 `validate()` / `compile()`，会让拼错的图「看起来建好了」；freegraph 选择显式早失败 | 本 feature 内闭合 · **Q12 发起者确认选项 A（含同类非法输入）** · 差分 D-56 / D-59 / D-62 / D-63 / D-64 |
 | **X-3** | 形态优化（原则 XII） | `_build_spec() -> _BuilderSpec` 内部规格 | 上游 `compile()` 直接读自身字段（`langgraph/graph/state.py:1242-1247` / `:1374-1399`）；freegraph 的 L3 构建器与 L2 运行时物理分层 ⇒ 必须有冻结的内部规格载体，否则 B7F2 会重造第三套形态 ⇒ 这是**形态最优**而非「上游缺失能力」；Q10 发起者 2026-11-15 已确认选项 A | B7F2（B8F1 经 L2）· 本 spec D-1 / D-2 |
 | **X-4** | 更严失败信号 | `add_node` 缺 `action` / 单 callable 形态同时传 `action` ⇒ `TypeError` | 上游缺 `action` 抛 `RuntimeError`，单 callable 时静默忽略 `action`；freegraph 统一用 `TypeError` 明确拒绝，避免「参数被静默忽略」 | 本 feature 内闭合 · **Q12 发起者确认选项 A** · 差分 D-58 / D-66 |
@@ -478,7 +485,7 @@ list 被归一化为 `{"tool_node": "tool_node", "__end__": "__end__"}`，dict �
   ③ 构造期 MUST NOT 抛因 schema 内容导致的异常。
 
 - **FR-002（节点登记）**：系统 MUST 提供
-  `add_node(node, action=None, *, alias=None, defer=False, metadata=None) -> Self`。
+  `add_node(node, action=None, *, defer=False, metadata=None) -> Self`（`alias` 已随 C25 正式作废）。
   ① `node` 为 `str` 时，`action` MUST 可调用且不是 `None`；否则 `TypeError`。
   `node` 为 callable 时，`action` MUST 为 `None`（否则 `TypeError`），节点名取
   `node.__name__`，无 `__name__` 时取类型名；均取不到 ⇒ `ValueError`（上游
@@ -487,11 +494,11 @@ list 被归一化为 `{"tool_node": "tool_node", "__end__": "__end__"}`，dict �
   ③ 重复节点名 ⇒ 立即 `ValueError`（消息含节点名）；`node == START` 或 `node == END`
   ⇒ 立即 `ValueError`（保留名）；节点名含 `|` 或 `:` ⇒ 立即 `ValueError`
   （上游保留字符 · `langgraph/_internal/_constants.py:87-89`）。
-  ④ MUST 原样记录 `action` / `alias` / `defer` / `metadata`（`metadata` 按 FR-018 做
+  ④ MUST 原样记录 `action` / `defer` / `metadata`（`metadata` 按 FR-018 做
   浅拷贝）；MUST NOT 调用 `action`、
-  MUST NOT 检查其返回注解。本 feature **不校验** `alias` / `defer` / `metadata` 的运行时
-  类型（如 `alias=123`、`defer="yes"`、非 Mapping 的 `metadata`）⇒ 只原样记录；
-  类型收紧归后续 feature / 另行立项。
+  MUST NOT 检查其返回注解。本 feature **不校验** `defer` / `metadata` 的运行时
+  类型（如 `defer="yes"`、非 Mapping 的 `metadata`）⇒ 只原样记录；
+  `alias` 已随 C25 正式作废，不再接受。
   ⑤ 返回 `Self`（链式）。
 
 - **FR-003（静态边）**：系统 MUST 提供
@@ -566,7 +573,7 @@ list 被归一化为 `{"tool_node": "tool_node", "__end__": "__end__"}`，dict �
       edges: dict[str | tuple[str, ...], tuple[str, ...]],
       conditional_edges: tuple[_ConditionalEdgeSpec, ...],
   )
-  _NodeRecord(name: str, action: Callable, alias: str | None,
+  _NodeRecord(name: str, action: Callable,
               defer: bool, metadata: Mapping[str, Any] | None)
   _ConditionalEdgeSpec(source: str, branch: str, path: Callable,
                        path_map: dict[Hashable, str] | None,
@@ -603,8 +610,8 @@ list 被归一化为 `{"tool_node": "tool_node", "__end__": "__end__"}`，dict �
   函数 MUST 接受任意可调用对象；MUST NOT 依据返回注解或运行时返回值拒绝 `dict` /
   `Command` / `list[Command | dict]` / `None` / `Send` / `list[Send]`（H-3 / H-4）。
 
-- **FR-010（别名）**：`add_node(..., alias=...)` MUST 接受 `str | None` 并原样记录到
-  `_NodeRecord.alias`；本 feature MUST NOT 实现别名的寻址 / 冲突 / 图导出语义（归 B8F3）。
+- **FR-010（别名 · 已作废）**：C25 已于 2026-11-20 正式作废；`add_node` MUST NOT 接受 `alias`，
+  `_NodeRecord` MUST NOT 含 `alias`。历史 B6F1 的「只记录」文字保留为历史。
 
 - **FR-011（`defer` 的边界）**：`add_node(..., defer=True)` MUST 被接受并记录，但
   节点专用屏障（`NamedBarrierValueAfterFinish`）**不在本 feature 实现**；MUST NOT 因
@@ -669,7 +676,7 @@ list 被归一化为 `{"tool_node": "tool_node", "__end__": "__end__"}`，dict �
 |---|---|---|
 | **`StateGraph`** | 图构建器；持有 schema、节点、边、条件边；不执行 | C1 / C9 / C10 |
 | **`_BuilderSpec`** | 构建器 → B7F2 的冻结内部规格；`channels` / `nodes` / `node_records` / `edges` / `conditional_edges` | FR-007 · D-1 |
-| **`_NodeRecord`** | 节点登记项：名字、函数、别名、`defer`、`metadata` | FR-002 / FR-010 / FR-011 |
+| **`_NodeRecord`** | 节点登记项：名字、函数、`defer`、`metadata`（**C25 作废后无别名**） | FR-002 / FR-010（历史） / FR-011 |
 | **`_ConditionalEdgeSpec`** | 条件边登记项：源、分支名、路由函数、归一化 `path_map`、静态目标、路由通道 | FR-004 / FR-020 · D-2 |
 | **节点规格 `NodeSpec`** | B7F1 的节点规格：订阅集 + 节点函数 | C5 · H-2 |
 | **静态边规格** | 单源 `str` / 多源 `tuple[str, ...]` → 目标元组 | C7 / C9 · H-5 |
@@ -708,7 +715,7 @@ list 被归一化为 `{"tool_node": "tool_node", "__end__": "__end__"}`，dict �
 - 条件边求值与 fresh 读 —— 属 **B8F1**。
 - `stream()` —— 属 **B8F2**。
 - `get_graph()` / `draw_mermaid()` —— 属 **B22F1** / **B23F1**。
-- 节点别名的完整语义 —— 属 **B8F3**；本 feature 只接受并记录 `alias`。
+- **C25 已正式作废** —— `add_node` 不再接受 `alias`；本 feature 不再记录 `alias`。
 - `defer=True` 的节点专用屏障 —— B7F4 的 X-03；本 feature 只接受并记录，路由通道对
   defer 目标仍用 `EphemeralValue`（与上游 `LastValueAfterFinish` 的差异登记为 **X-7**，
   由 B7F4 X-03 在 defer 落地时一并处理）。
@@ -742,9 +749,10 @@ list 被归一化为 `{"tool_node": "tool_node", "__end__": "__end__"}`，dict �
   两次调用产生结构等价但彼此独立的快照（判定口径见 FR-007 ⑥）。
 - **SC-006**：`StateGraph` / `add_node` / `add_edge` / `add_conditional_edges`
   的**方法名、必填位置参数 / 顺序、返回语义**三项与 `langgraph 1.2.11` 逐项一致；
-  每条断言附 `路径:行号`；差分场景 D-50…D-74 的判词与 Upstream Parity 表一致。
+  每条断言附 `路径:行号`；差分场景 D-50…D-73 的判词与 Upstream Parity 表一致
+  （D-74 已迁移到 B8F3 D-142，不再由 `parity_probe.py` 承载）。
   **MUST NOT** 把「一致」解释为全部 keyword-only 参数、默认值或注解逐字相同：
-  `alias` 为 freegraph 增量；上游可选 `add_node` 关键字不承载；非 callable `Runnable`
+  **C25 已正式作废**；freegraph 不再接受 `alias`；上游可选 `add_node` 关键字不承载；非 callable `Runnable`
   不承载（X-6）。
 - **SC-007**：构建期节点函数、路由函数、归约器调用计数全部为 0；返回形态
   `dict` / `Command` / 命令列表 / `None` / `Send` 列表均不被拒绝。
@@ -763,9 +771,8 @@ list 被归一化为 `{"tool_node": "tool_node", "__end__": "__end__"}`，dict �
   `compile()` 的这两个关键字仍可被 B7F2 接收；`validate(interrupt=...)` 接受并按上游
   校验节点存在性（未知节点 ⇒ `ValueError`）；本 feature 仅做静态断言 + 接口检查，
   **正向透传判据归 B7F2（D-1 / H-6）**。
-- **SC-014**：`add_node(..., alias="model", defer=True, metadata=...)` 的别名 / `defer` /
-  元数据值出现在 `_NodeRecord`；不触发别名冲突校验（归 B8F3），不实现 `defer` 屏障
-  （归 B7F4 X-03）。
+- **SC-014**：`add_node(..., defer=True, metadata=...)` 的 `defer` / 元数据值出现在 `_NodeRecord`；
+  `add_node(..., alias="model")` 在 C25 作废后抛 `TypeError`；不实现 `defer` 屏障（归 B7F4 X-03）。
 - **SC-015**：最小图（2 节点 + `START` / `END` 边）可被构造并通过 `validate()`；
   运行期断言留给 B7F3（承接 H-7）。
 
@@ -791,9 +798,10 @@ list 被归一化为 `{"tool_node": "tool_node", "__end__": "__end__"}`，dict �
   `_ConditionalEdgeSpec.branch`）并存放在 `CompiledGraph` 私有字段；B8F1 只消费 L2 侧的
   `GraphSpec.conditional_edges` 与 `branch:to:<target>` 路由通道，
   MUST NOT import `freegraph._stategraph` 或 `_ConditionalEdgeSpec`。
-- B7F2 将按 D-1 在 `CompiledGraph` 私有字段保留完整 `_BuilderSpec`（至少 `node_records`），
-  供 B8F3 读取 alias；B8F3 MUST NOT 要求用户重新声明别名。
-- B8F3 将按 D-3 从 B7F2 保留的 `_BuilderSpec.node_records` 读取 `_NodeRecord.alias` 实现别名语义。
+- B7F2 仍按 D-1 在 `CompiledGraph` 私有字段保留完整 `_BuilderSpec`（至少 `node_records`）供其他用途；
+  **C25 正式作废后，B8F3 不再读取 `_NodeRecord.alias`**。
+- **C25 已于 2026-11-20 正式作废**：`add_node` 不再接受 `alias`，`_NodeRecord` 不再含 `alias`；
+  未来若重启 alias，使用新契约编号（如 C28）并重新论证。
 - `path_map=None` 的 `Literal[...]` 注释推断按上游复制；推断不到时 `targets=()`、
   `route_channels=()` 且只记录 `None`，实际求值归 B8F1。
 - `defer=True` 的节点屏障不在 v1 本 feature 实现；用户需要时另行立项。`defer=True` 目标的
@@ -815,7 +823,7 @@ list 被归一化为 `{"tool_node": "tool_node", "__end__": "__end__"}`，dict �
 ## 依据
 
 - 立项书 §4.3（18 项 API 裁定 · 7 项同名同签名）、§5.1（分层拍板）、§5.2（B6F1 行）、
-  §5.3（C1 / C5 / C7 / C9 / C10 / C25）、§6.2（M2 里程碑）、§9.1（门禁）。
+  §5.3（C1 / C5 / C7 / C9 / C10；C25 已正式作废）、§6.2（M2 里程碑）、§9.1（门禁）。
 - 宪法 `.specify/memory/constitution.md`：原则 III（7 项 MUST 同名同签名）· 原则 VI（可追溯性）·
   原则 IX（依赖许可证红线）· 原则 X（文档合规）· 原则 XI（上游优先）。
 - 上游源码（`langgraph 1.2.11`）：`langgraph/graph/state.py:131`（`StateGraph`）·

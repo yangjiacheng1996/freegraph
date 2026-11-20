@@ -1,3 +1,6 @@
+> **2026-11-20 后续修订（C25 正式作废）**：`add_node` 不再接受 `alias`，`_NodeRecord` 不再含 `alias`。本计划中 alias 记录文字保留为历史。
+> 差分场景 **D-74** 已迁移到 **B8F3 D-142**，`parity_probe.py` 不再承载；本计划中的 `D-50…D-74` 为历史范围。
+
 # Implementation Plan: B6F1 · `StateGraph` 构建器
 
 **Branch**: `b6f1-stategraph-builder` | **Date**: 2026-11-15 | **Spec**: [spec.md](./spec.md)
@@ -25,14 +28,14 @@
 |---|---|
 | **公开 API** | `StateGraph` 的构造签名与 4 个核心方法签名**逐字不变**（B2F2 快照）；`validate()` 只补实现、不改签名 |
 | **登记载体** | `_nodes` / `_edges` / `_conditional_edges` / `_branch_names` 全部为私有属性；构造期只初始化空容器 |
-| **节点** | `_NodeRecord(name, action, alias, defer, metadata)`；支持 `add_node(fn)` 单 callable 形态；取名 `__name__` → 类型名（普通 callable 的 `.name` 不参与） |
+| **节点** | `_NodeRecord(name, action, defer, metadata)`（**C25 作废后无 alias**）；支持 `add_node(fn)` 单 callable 形态；取名 `__name__` → 类型名（普通 callable 的 `.name` 不参与） |
 | **静态边** | 单源键 `str`、多源键 `tuple[str, ...]`；按源聚合、目标保序去重、相同边幂等；非法 `start_key` / `end_key` ⇒ `TypeError` |
 | **条件边** | `_ConditionalEdgeDraft` 记录源 / 路由函数 / 归一化 `path_map` / 分支名；list → dict、dict 浅拷贝、`None` 按上游 `Literal[...]` 返回注解推断；分支名 `__name__`（`.name` 不参与）；`None` 推断不到 ⇒ `targets=()` / `route_channels=()` |
 | **内部规格** | 私有 `_build_spec() -> _BuilderSpec`；`channels` / `nodes` / `edges` 与 B7F1 的 `GraphSpec` / `NodeSpec` 同构；`conditional_edges` 为 `_ConditionalEdgeSpec` 元组（含 `branch`） |
 | **路由通道** | 每个静态非 `END` 目标一个 `EphemeralValue("branch:to:<target>", Any, guard=False)`，直接放进 `_BuilderSpec.channels` |
 | **校验** | 立即层（节点重复 / 保留名 / 边源合法性 / `path_map` 类型 / 同名分支）+ 构建期末层（schema → 源 → 入口 → 目标 → 空节点表）；只用 `ValueError` / `TypeError`（schema 用 B4F1 `InvalidSchemaError`）；空节点表登记 X-5 |
 | **不执行** | 节点函数、路由函数、归约器一律只持有、不调用；不实现 `compile()` / `invoke()` / `stream()` |
-| **不越界** | `alias` 只记录（B8F3）· `defer=True` 屏障不做（B7F4 X-03）· 静态断点关键字仍属 `compile()`（B7F2）· 其余上游同款构建方法保持显式未实现 |
+| **不越界** | **C25 已正式作废（alias 不再接受）** · `defer=True` 屏障不做（B7F4 X-03）· 静态断点关键字仍属 `compile()`（B7F2）· 其余上游同款构建方法保持显式未实现 |
 | **可验证出口** | 新增 facade 构建器测试 + 差分构建探针 D-50…D-74 + `harness/verification/B6F1/acceptance.py` + 五段式人工验证 |
 
 **范围边界**：本 feature 是 **M2 第 1 个 feature**，只交付「建图」环节。`target.py` 的端到端
@@ -69,7 +72,7 @@
 - 零环境变量、零出站、零文件 I/O；
 - ARCH-1：L3 只依赖 L1 / L2；MUST NOT 反向 import；
 - `freegraph.graph` 仍恰 7 个导出符号；`StateGraph` 公开方法签名快照逐字节不变；
-- 不新增 L1 符号 / 契约条目 C1–C27 / 门禁编号 G1–G30；
+- 不新增 L1 符号 / 契约条目（active = C1–C24 + C26–C27；C25 已作废） / 门禁编号 G1–G30；
 - `harness/demo/target.py` 只读；
 - 新增源码 / 测试行覆盖率达到仓库既有门禁要求。
 
@@ -112,7 +115,7 @@
 | **IV 可诊断性** | 通过 | 构建期错误消息点名节点 / 源 / 分支 / 目标 / `entrypoint`；私有快照字段可读 |
 | **V 人工验收** | 通过 | `harness/verification/B6F1/manual-verification.md`（五段式 + EV-1） |
 | **VI 规格驱动 / 判据级追溯** | 通过 | spec 21 FR / 15 SC；tasks 每条 SC 挂可执行判据，并以 T050 建立双向追溯 |
-| **VII 契约 C1–C27** | 通过 | 不新增 L1 符号 / 契约条目；复用 C1 / C5 / C7 / C9 / C10 / C25 |
+| **VII 契约 C1–C24 + C26–C27** | 通过 | 不新增 L1 符号 / 契约条目；复用 C1 / C5 / C7 / C9 / C10；C25 已正式作废 |
 | **VIII 证据与术语纪律** | 通过 | 上游 `langgraph 1.2.11` + `路径:行号` + 实测 E-01…E-24；术语与 spec 一致 |
 | **IX 许可证 / 商标** | 通过 | 零新增依赖、零新增第三方代码 |
 | **X 署名头 / 文档合规** | 通过 | 新测试 / 验收脚本带署名头；README 兼容矩阵 `StateGraph` 行事实性更新 |
@@ -207,7 +210,7 @@ harness/verification/B6F1/
 |---|---|---|---|
 | A1 | `__init__` 增加私有空容器 `_nodes` / `_edges` / `_conditional_edges` / `_branch_names`；只保存 `_schema` 参数并初始化空容器，忽略其余构造参数，不解析 schema；`vars(graph)` 的 key 集合恰为 `{"_schema", "_nodes", "_edges", "_conditional_edges", "_branch_names"}` | `_stategraph.py` | FR-001 |
 | A2 | 新建 `_NodeRecord`；实现 `add_node` 的 str / 单 callable 形态、`__name__` → 类型名取名（`.name` 不参与）、重复 / 保留名 / 保留字符 / `action` 形态校验 | `_stategraph.py` | FR-002 / FR-005 / FR-010 / FR-011 |
-| A3 | `alias` / `defer` / `metadata` 原样记录；`metadata` 做浅拷贝；不调用用户函数 | `_stategraph.py` | FR-002 / FR-009 / FR-018 |
+| A3 | `defer` / `metadata` 原样记录；`metadata` 做浅拷贝；`alias` 已随 C25 作废；不调用用户函数 | `_stategraph.py` | FR-002 / FR-009 / FR-018 |
 | A4 | **T032a**：与 A1–A3 / T008–T010 同批更新 `tests/facade/test_facade.py`：收窄 `TestNotWired`、更新 `vars(graph)` 断言；Phase A 结束 MUST 保持 `pytest -q` 绿 | `tests/facade/test_facade.py` | SC-010 |
 
 ### Phase B · 静态边与条件边登记
@@ -238,7 +241,7 @@ harness/verification/B6F1/
 | D3 | 新建 `test_stategraph_validation.py`：3 类核心错误（未知目标用例带有效入口）+ schema / 空节点表 / 条件边源与目标 / 多源 / 保留字符 / `path_map` 非法类型 / 非法 `start_key` / 普通 callable `.name` 不参与取名 | `tests/facade/` | SC-003 / SC-012 |
 | D4 | **T032b**：为 `tests/facade/test_facade.py` 增加静态断点透传断言（`compile` 签名含 `interrupt_before` / `interrupt_after`；构建器无同名公开字段；`validate(interrupt=["nope"])` ⇒ `ValueError`）；`TestNotWired` 的收窄已在 A4 完成 | `tests/facade/` | SC-010 / SC-013 |
 | D5 | 扩展 `parity_probe.py`：新增 builder-only 场景模型 + D-50…D-74（场景名含 `builder` 前缀），并接入 `run_all()` 使 `diff_parity.py -k builder` 可跑；`test_parity_probe.py` 新增包装测试；核对并复用 `research.md` 已登记的 E-18…E-24（不重复新增） | `tests/differential/` | SC-006 |
-| D6 | 新增**宪法签名**兼容测试（只比较方法名 + 必填位置参数 / 顺序 + 返回语义；**MUST NOT** 比较完整 keyword-only 集合、默认值或注解；`alias` 与上游可选关键字白名单；缺席 skip；附 `state.py:line`）（T046） | `tests/facade/test_stategraph_builder.py` | SC-006 |
+| D6 | 新增**宪法签名**兼容测试（只比较方法名 + 必填位置参数 / 顺序 + 返回语义；**MUST NOT** 比较完整 keyword-only 集合、默认值或注解；C25 已作废（alias 不再是关键字）；缺席 skip；附 `state.py:line`）（T046） | `tests/facade/test_stategraph_builder.py` | SC-006 |
 | D7 | 新增最小图测试（2 节点 + START / END 边，T047）；条件边 START 入口测试由 T020 覆盖 | `tests/facade/test_stategraph_builder.py` / `tests/facade/test_stategraph_validation.py` | SC-015 / SC-003 |
 
 ### Phase E · 验收 / 文档
@@ -316,7 +319,7 @@ harness/verification/B6F1/
 |---|---|---|---|---|
 | **D-1** | B7F2 | `compile()` MUST 消费 `_build_spec()`；**仅过滤单源 `END` 目标**后构造 `GraphSpec`（多源 **V-16 形态**：`END` / 目标数 ≠ 1 原样保留给 V-16；`__parent__` 由 B9F1 保留名检查失败）；**保留 `_BuilderSpec.conditional_edges`，并机械翻译为纯内建类型 `dict[str, tuple[dict[str, Any], ...]]`（内层 key / value 逐字为 `{"branch": str, "path": Callable, "path_map": dict[Hashable, str] \| None, "targets": tuple[str, ...], "route_channels": tuple[str, ...]}`，`branch` 取自 `_ConditionalEdgeSpec.branch`）存放在 `CompiledGraph` 私有字段（如 `_conditional_edges`）**；并保留**完整 `_BuilderSpec`（至少 `node_records`）**供 B8F3；B7F2 阶段不填 `GraphSpec.conditional_edges`；不重新解析 schema / 不重造节点边 | `harness/features/B7F2_compile编译.md` 的 `## 下游承接` 块 | 待接线（tasks 中落一条最小改动） |
 | **D-2** | B8F1 | 把 B7F2 保留的 plain mapping 填入 `GraphSpec.conditional_edges` 并承接 V-8 放宽；之后只消费 L2 的 `GraphSpec.conditional_edges` 与 `branch:to:<target>` 路由通道；**MUST NOT import `_stategraph` / `_ConditionalEdgeSpec`**；不重新归一化 `path_map`；`path_map=None` MUST 原样保留并走动态求值 | `harness/features/B8F1_条件边路由与fresh读.md` 的 `## 下游承接` 块 | 待接线（tasks 中落一条最小改动） |
-| **D-3** | B8F3 | 从 B7F2 按 D-1 保留的 `_BuilderSpec.node_records` 读取 `_NodeRecord.alias`；不要求用户重新声明 | `harness/features/B8F3_节点别名与context通道.md` 的 `## 下游承接` 块 | 待接线（tasks 中落一条最小改动） |
+| **D-3** | B8F3 | **已撤回（C25 正式作废）**：B8F3 不再读取 `_NodeRecord.alias`；不要求用户重新声明 | `harness/features/B8F3_节点别名与context通道.md` 的 `## 下游承接` 块 | 历史 |
 
 > spec 已冻结上述接口；目标提示词初稿尚未逐字写入 B6F1 → 目标的承接条目 ⇒ 本 feature 的
 > tasks MUST 包含三条「只接线 · 逐条最小改动」任务；**MUST NOT** 越界实现下游行为。
@@ -344,7 +347,7 @@ harness/verification/B6F1/
 
 > 无未登记的宪法违规。EV-1a / EV-1b / EV-1c 属宪法 v1.6.0 的**门禁分阶段**，已具名承接
 > B7F2 / B7F3 / B8F1 / B22F1 / B23F1 / B25F1；本 feature 的判据未放宽。
-> X-1 / X-6 属必须自研区（alias 增量 / 非 callable Runnable 的零依赖边界）；
+> X-6 属必须自研区（非 callable Runnable 的零依赖边界）；X-1（alias 增量）随 C25 正式作废。
 > X-3 属原则 XII 的**形态优化**（Q10 发起者确认 · 上游锚点见 P-11）；
 > X-2 / X-4 / X-5 属更严失败信号，均已登记；X-7 属已知不支持（defer 路由通道，承接 B7F4 X-03）；X-2 / X-4 已获 Q12 发起者确认。
 

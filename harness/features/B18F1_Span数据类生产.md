@@ -170,3 +170,7 @@ semconv；未注入 tracer 时零副作用、零开销**。
 - **D-3（B8F2 → B18F1 · M3 · 两条事件通道独立、按 id 合并）**：`stream()` 的事件与 `TraceSink` 的 span **不互为前置**；二者 MUST 共享同一 `run_id` / `thread_id`（D11 已冻结）。
 - **载体 = L2 私有 contextvar** `_STREAM_RUN_ID` / `_STREAM_THREAD_ID`（由 `StreamSession` 绑定）；B18F1 MUST 读取同一对值。
 - **ARCH-3 例外（plan R-6）**：只读取运行期 `str | None` 元数据；MUST NOT 扩展为任意 L5 → L2 私有依赖，亦 MUST NOT 把 trace 数据塞进 `stream()` 信封。
+
+## 下游承接（B8F3 → 本 feature · 2026-11-20 · 只接线）
+
+- **D-2 / D-3（B8F3 → B18F1 · M3 · `context` 与 trace 的关系 / 不得回退）**：C21 的 `context` 是节点只读运行期上下文，**不是** `Span.context` 字段；本 feature MUST NOT 复用 `Span.context` 承载 C21 的 `context`（`Span.context` 仍按 C23 / B2F1 冻结面定义）。MUST 以「`context` 已接线、alias 已移除」为前提；MUST NOT 回退到 `configurable` 承载 `context`，MUST NOT 重新引入节点别名。

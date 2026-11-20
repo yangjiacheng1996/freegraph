@@ -29,6 +29,7 @@ from typing import Any
 
 from freegraph.contracts.types import Command, RunConfig, StateDict
 
+from ._context import bind_context
 from ._interrupt import bind_run, new_run_table
 from ._recursion import resolve_config, resolve_limit
 from ._stream_context import (
@@ -69,6 +70,7 @@ class StreamSession:
         self._sink: _CustomSink | None = None
         self._capture: _RoundCapture | None = None
         self._run_cm: Any = None
+        self._context_cm: Any = None
         self._stream_cm: Any = None
 
     def __enter__(self) -> "StreamSession":
@@ -100,15 +102,21 @@ class StreamSession:
         self._run_cm = bind_run(new_run_table())
         self._run_cm.__enter__()
         try:
-            self._sink = _CustomSink()
-            self._capture = _RoundCapture()
-            self._stream_cm = bind_stream(
-                self.run_id,
-                self.thread_id,
-                sink=self._sink,
-                capture=self._capture,
-            )
-            self._stream_cm.__enter__()
+            self._context_cm = bind_context(run_config.context)
+            self._context_cm.__enter__()
+            try:
+                self._sink = _CustomSink()
+                self._capture = _RoundCapture()
+                self._stream_cm = bind_stream(
+                    self.run_id,
+                    self.thread_id,
+                    sink=self._sink,
+                    capture=self._capture,
+                )
+                self._stream_cm.__enter__()
+            except BaseException:
+                self._context_cm.__exit__(None, None, None)
+                raise
         except BaseException:
             self._run_cm.__exit__(None, None, None)
             raise
@@ -126,8 +134,12 @@ class StreamSession:
             if self._stream_cm is not None:
                 self._stream_cm.__exit__(exc_type, exc, tb)
         finally:
-            if self._run_cm is not None:
-                self._run_cm.__exit__(exc_type, exc, tb)
+            try:
+                if self._context_cm is not None:
+                    self._context_cm.__exit__(exc_type, exc, tb)
+            finally:
+                if self._run_cm is not None:
+                    self._run_cm.__exit__(exc_type, exc, tb)
 
     @property
     def route_config(self) -> Any:

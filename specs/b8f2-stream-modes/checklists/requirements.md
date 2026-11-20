@@ -23,7 +23,7 @@
   中断 · 真实异常 · 惰性 · 提前停止 · `checkpoints`/`messages` 空序列 · `thread_id` 解析 ·
   `RunConfig.run_id` 不生效 · 大小写敏感 · `run_id` 唯一性 · L2 符号数不变
 - [x] Out of Scope 明确点名归属 feature（`astream` / trace span / `TraceSink` /
-  `checkpoints` 源 / `messages` 抽取 / `Command` 恢复 / 别名 / UI / 图导出）
+  `checkpoints` 源 / `messages` 抽取 / `Command` 恢复 / C25 已作废的别名 / UI / 图导出）
 - [x] 承接条款 **H-1…H-10** 与下游承接 **D-1…D-4** 逐条可追溯（来源 + 本 spec 落点）
 
 ## 2. 判据级可判定性（宪法原则 VI）

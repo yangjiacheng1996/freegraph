@@ -186,7 +186,7 @@
   且 dict 容器引入顺序语义；② 只冻结语义、字段名留到 B22F1 ——冻结面留到那时，
   本 feature 的「契约冻结」只覆盖到语义层。
 - **依据**：spec FR-006 + 澄清 Q4；上游核实 `langchain_core/runnables/graph.py:65`（`Edge`）/
-  `:95`（`Node`）/ `:255`（`Graph`）；Q8 §3.4 C13 / C25。
+  `:95`（`Node`）/ `:255`（`Graph`）；Q8 §3.4 C13 / C14（C25 已正式作废）。
 
 ## D-10 · `Node.name` 的缺省归一（`__post_init__` 填成 `id`）
 

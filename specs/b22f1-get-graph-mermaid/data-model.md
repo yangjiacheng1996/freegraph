@@ -1,3 +1,5 @@
+> **2026-11-20 后续修订（C25 正式作废）**：节点别名已移除；图导出继续使用内部节点名。本文件 alias 相关文字保留为历史。
+
 # Data Model · B22F1 `get_graph(xray=)` + 自有 `Graph` + `draw_mermaid()`
 
 **Feature**: `specs/b22f1-get-graph-mermaid/` · **Date**: 2026-11-20
@@ -14,12 +16,12 @@
 | 字段 | 类型 | 缺省 | 语义 |
 |---|---|---|---|
 | `id` | `str` | — | 图中唯一的节点标识（含 `__start__` / `__end__`） |
-| `name` | `str \| None` | `None` → 归一为 `id` | 展示名 / 别名（本 feature 不解析 B8F3 别名） |
+| `name` | `str \| None` | `None` → 归一为 `id` | **图展示名**（不是 C25 节点注册别名；C25 已正式作废） |
 | `metadata` | `Mapping[str, Any]` | 空映射 | 由图导出填入（见 §3.2） |
 
 - `frozen=True, slots=True, kw_only=True`；**不可哈希**。
 - `__post_init__`：`name is None ⇒ id`；`metadata` 浅拷贝（**既有行为不变**）。
-- 生产规则：`__start__` / `__end__` 的 `id == name`；业务节点 `name == id`（v1 无别名）。
+- 生产规则：`__start__` / `__end__` 的 `id == name`；业务节点 `name == id`（C25 已作废，无别名）。
 
 ### 1.2 `Edge`（`freegraph.contracts.graph.Edge`）
 
@@ -115,7 +117,7 @@ else:
 |---|---|---|
 | `name` | `str` | 节点名 |
 | `action` | `Callable[..., Any]` | 节点函数（**get_graph 不调用**） |
-| `alias` | `str \| None` | B8F3 保留（本 feature 不解析） |
+| ~~`alias`~~ | — | C25 已正式作废；`_NodeRecord` 不再含 `alias` |
 | `defer` | `bool` | 延迟节点标记 |
 | `metadata` | `Mapping[str, Any] \| None` | 用户 metadata |
 | **`destinations`** | `tuple[tuple[str, str \| None], ...]` | **追加**：归一后的图渲染目标；空元组 = 无声明 |
@@ -244,7 +246,7 @@ id = "".join(ch if ch in allowed else "\\" + format(ord(ch), "x") for ch in labe
 | I-01 | `get_graph` 返回 `freegraph.contracts.graph.Graph` | `isinstance` / `type.__module__` |
 | I-02 | `nodes` 含全部业务节点 + `__start__` + `__end__` | 集合相等 |
 | I-03 | `__start__` / `__end__` 的 `id == name` | 逐项 |
-| I-04 | 业务节点 `name == id`（不解析别名） | 逐项 |
+| I-04 | 业务节点 `name == id`（C25 已作废；无别名） | 逐项 |
 | I-05 | 边端点都在 `nodes` | 逐项 |
 | I-06 | 条件边 `conditional=True`；分支边 `condition` 非空 | 逐项 |
 | I-07 | 同端点只一条边；条件优先 | 逐项 |

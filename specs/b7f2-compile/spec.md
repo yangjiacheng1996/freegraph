@@ -1,3 +1,5 @@
+> **2026-11-20 后续修订（C25 正式作废）**：B7F2 保留的 `_BuilderSpec` 不再供 alias 读取；节点别名已正式作废（C25 编号不复用）。本 spec 中 alias 相关文字保留为历史。
+
 # Feature Specification: B7F2 · `compile()` → `CompiledGraph` ★
 
 **Feature Branch**: `b7f2-compile`
@@ -35,7 +37,7 @@
 |---|---|---|---|---|
 | **D-1** | **B7F2 → B7F3** | **M2** | **`invoke()` 的执行语义**：`CompiledGraph.invoke(input, config=None)` MUST 驱动 L2 的 `run_graph(spec, input, *, checkpointer=..., config=..., ...)`（B10F1 的图级入口）并把 `SuperStepResult` / `InterruptResult` 归一成**完整状态字典**（C11）；每次 `invoke` MUST **新建**通道实例（多会话隔离的另一半 · H-3）；MUST NOT 另写一条「编译 → 执行」的路径。**编译产物持规格**这一半由本 feature 交付 ⇒ 两侧**共同**落成「一次编译、多会话隔离」 | FR-012 · 裁定 10 · SC-011 / SC-012 |
 | **D-2** | **B7F2 → B8F1** | **M2** | **条件边分支规格的交接载体**：B7F2 已在 `CompiledGraph` 的私有字段持有条件边的 plain mapping（外层 key = 源节点名；内层每项 = `{"branch", "path", "path_map", "targets", "route_channels"}`；顺序 = 登记顺序；`"branch"` 取自 `_ConditionalEdgeSpec.branch`）⇒ **B8F1 MUST 从 `compiled._conditional_edges` 读取**并填入 `GraphSpec.conditional_edges`（落地时承接 V-8 放宽）；**路由求值 MUST 只消费 L2 的 `GraphSpec.conditional_edges`**；MUST NOT import `freegraph._stategraph` / `_ConditionalEdgeSpec`，MUST NOT 重新归一化 `path_map`，MUST NOT 另起路由通道命名（沿用 `branch:to:<target>`）；B7F2 阶段 `GraphSpec.conditional_edges` **恒空** | FR-009 / FR-010 · 裁定 12 / 13 · SC-010 |
-| **D-3** | **B7F2 → B8F3** | **M2** | **别名交接载体**：B7F2 已在 `CompiledGraph` 的私有字段保留**完整 `_BuilderSpec`**（含 `node_records`）⇒ **B8F3 MUST 从该保留读取 `_NodeRecord.alias`** 实现别名寻址语义，MUST NOT 要求用户重新声明别名，MUST NOT 要求 B7F2 改写快照内容 | FR-008 · 裁定 3 · SC-010 |
+| **D-3** | **B7F2 → B8F3** | **M2** | **已撤回（C25 正式作废）**：B7F2 仍保留完整 `_BuilderSpec`（含 `node_records`）供其他用途；**C25 正式作废后，B8F3 不再读取 `_NodeRecord.alias`**，也不要求用户重新声明别名。 | FR-008（历史）· 裁定 3（历史）· SC-010（历史） |
 | **D-4** | **B7F2 → B14F1** | **M3** | **checkpointer 的编译期校验补齐**：上游在编译期对非法 checkpointer 抛 `TypeError`（`ensure_valid_checkpointer`）⇒ **B14F1 MUST 补上上游同款的编译期类型校验**（freegraph 的 `Checkpointer` 是**结构化协议** ⇒ 校验口径由 B14F1 冻结）；本 feature 只做「接受 + 记录 + 不报错」 | FR-016 · 裁定 7 · 偏离登记 X-4 · SC-015 |
 | **D-5** | **B7F2 → B22F1** | **M3** | **图结构导出的数据来源**：`CompiledGraph.get_graph(*, xray=False)`（B22F1 实现）MUST 从本 feature 交付的 `GraphSpec`（节点表 / 边表 / 通道表）与条件边映射**导出**结构；MUST NOT 重新解析构建器状态；`draw_mermaid` / `draw_mermaid_png` 归 B23F1 | FR-010 · 裁定 3 · SC-013 |
 
@@ -592,7 +594,7 @@ store=None)`、`compile(checkpointer=object(), store=object())` ⇒ 三次都**�
   `_BuilderSpec` ⇒ MUST NOT 重新解析 schema、MUST NOT 重造节点表 / 边表 / 通道表、
   MUST NOT 另立第三套图规格；MUST 保留**完整** `_BuilderSpec`（至少 `node_records`）
   于编译产物的私有字段（**字段名 MUST 冻结为 `_builder_spec`** —— 跨 feature 接口，
-  供 B8F3 读取别名），且 MUST NOT 改写其内容。
+  **C25 正式作废后，B8F3 不再读取别名**），且 MUST NOT 改写其内容。
 
 - **FR-009（条件边的机械翻译）**：系统 MUST 把 `_BuilderSpec.conditional_edges`
   **机械翻译**为 plain mapping `dict[str, tuple[dict[str, Any], ...]]`：外层 key =
@@ -707,7 +709,7 @@ store=None)`、`compile(checkpointer=object(), store=object())` ⇒ 三次都**�
 
 - **FR-024（不越界到下游语义）**：本 feature MUST **NOT** 实现 `invoke()` 的执行
   语义、`stream()`、条件边求值、`get_graph` / `draw_mermaid`、checkpointer / store 的
-  **行为**、节点别名语义 ⇒ 相应能力 MUST 保持显式「未实现」信号。
+  **行为**、~~节点别名语义~~（C25 已正式作废） ⇒ 相应能力 MUST 保持显式「未实现」信号。
 
 - **FR-025（`checkpointer` 的 v1 语义与下游补齐）**：MUST NOT 在编译期对
   `checkpointer` 做协议校验（见 FR-006 N-05）⇒ **B14F1** MUST 补上上游同款的
@@ -768,7 +770,7 @@ store=None)`、`compile(checkpointer=object(), store=object())` ⇒ 三次都**�
 - `cache=` 的**行为** —— v2 extras（`specs/b3f1-scaffold-ci-gates/contracts/extras-v2.toml`）。
 - `transformers=` 的**行为** —— 属 **B8F2**（流式转换器）。
 - `debug=` 的**行为** —— 属可观测层（B19F1 及以后）。
-- 节点**别名**语义 —— 属 **B8F3**（本 feature 只保留 `_BuilderSpec.node_records`）。
+- **C25 已正式作废** —— 本 feature 保留 `_BuilderSpec.node_records` 供其他用途；B8F3 不再读取 alias。
 - `defer=True` 的节点专用屏障 —— **B7F4** 的 X-03（本 feature 只透传）。
 - 多源汇合的**屏障语义** —— **B7F4**（本 feature 只透传边表）。
 - 子图 —— v2（C26）。
@@ -858,7 +860,7 @@ store=None)`、`compile(checkpointer=object(), store=object())` ⇒ 三次都**�
   一套元素校验（只做容器形态门）。
 - B8F1 落地时会把条件边映射填入 `GraphSpec.conditional_edges` 并承接 V-8 放宽；
   在那之前该字段恒空。
-- B8F3 从本 feature 保留的 `_BuilderSpec.node_records` 读取 `_NodeRecord.alias`。
+- **C25 已正式作废**：B8F3 不再从 `_BuilderSpec.node_records` 读取 `_NodeRecord.alias`。
 - B14F1 补上上游同款的 checkpointer 编译期类型校验（下游承接 D-4）。
 - 「同名同签名」的签名比较口径 = 方法名 + **必填位置参数 / 顺序** + 返回语义 +
   关键字**接受面**；MUST NOT 要求默认值或注解逐字相同（本 feature 未改任何默认值）。

@@ -18,9 +18,9 @@
 - [x] CHK007 Success criteria are measurable — 通过：SC-001…SC-018 均含可数判据（退出码 0 / 集合相等 / 语句数 == 0 / 差异行数 ≥ 1 / 逐字节相同 / 子模块数 == 0 / 无来源项数 == 0 / 墙钟 < 120 ms）。
 - [x] CHK008 Success criteria are technology-agnostic (no implementation details) — **部分豁免（记注）**：SC-004 / SC-009 的「AST 扫描」「`sys.modules` 快照」是本项目**宪法红线**（原则 I / II / ARCH-2）的唯一可判定口径，无法技术无关化；其余 SC 均以「对外可观察的结果」表述。
 - [x] CHK009 All acceptance scenarios are defined — 通过：4 个用户故事共 16 条 Given/When/Then 场景，每条 ≥3 条且各自独立可测。
-- [x] CHK010 Edge cases are identified — 通过：Edge Cases 段 **17 条**（门面只有导出没有实现 / 未接线必须显式失败 / 多传位置参数 / `alias` 位置传入 / `path_map` 双形态 / `compile()` 无参 / `interrupt` 无运行上下文 / `Send` 未接线时可构造 / 快照含内存地址导致 flaky / 禁止静默自动更新快照 / 多导出符号 / 顶层包被顺手 re-export / 门面误依赖 L4-L5 / 门面误读环境变量 / 上游版本漂移 / `graph_core.py` 用例全红是预期 / `target.py` 被改动）。
-- [x] CHK011 Scope is clearly bounded — 通过：Out of Scope **12 条** + FR-018；明确排除构建能力（B6F1）/ `compile` 行为（B7F2）/ `invoke` 行为（B7F3）/ 可视化（B22F1·B23F1）/ `Send`·`interrupt`·`Command` 行为（B11F1·B10F1·B9F1）/ 别名行为（B8F3）/ `recursion_limit`（B13F1）/ 契约层 18 符号面 / 顶层包 re-export / 完整兼容矩阵（B24F1）/ CI 挂载（B3F1）。
-- [x] CHK012 Dependencies and assumptions identified — 通过：Assumptions **14 条**（模块落位 / 契约层不变 / `Send`·`interrupt` 最小形状 / `StateGraph` 外壳最小形状 / `alias` keyword-only / 异常类型 / `invoke` 不进快照 / 上游核实环境与行号 / 快照生成方式 / 兼容矩阵载体 / 顶层包现状 / CI 归 B3F1 / freechain 复用为未来事项 / 3.11 与零依赖）+ 前置依赖（B1F1、B2F1）+ 后续解锁（B3F1 → M1 全部 feature）。
+- [x] CHK010 Edge cases are identified — 通过：Edge Cases 段 **17 条**（门面只有导出没有实现 / 未接线必须显式失败 / 多传位置参数 / `alias` 已随 C25 作废 / `path_map` 双形态 / `compile()` 无参 / `interrupt` 无运行上下文 / `Send` 未接线时可构造 / 快照含内存地址导致 flaky / 禁止静默自动更新快照 / 多导出符号 / 顶层包被顺手 re-export / 门面误依赖 L4-L5 / 门面误读环境变量 / 上游版本漂移 / `graph_core.py` 用例全红是预期 / `target.py` 被改动）。
+- [x] CHK011 Scope is clearly bounded — 通过：Out of Scope **12 条** + FR-018；明确排除构建能力（B6F1）/ `compile` 行为（B7F2）/ `invoke` 行为（B7F3）/ 可视化（B22F1·B23F1）/ `Send`·`interrupt`·`Command` 行为（B11F1·B10F1·B9F1）/ ~~别名行为（C25 已作废）~~/ `recursion_limit`（B13F1）/ 契约层 18 符号面 / 顶层包 re-export / 完整兼容矩阵（B24F1）/ CI 挂载（B3F1）。
+- [x] CHK012 Dependencies and assumptions identified — 通过：Assumptions **14 条**（模块落位 / 契约层不变 / `Send`·`interrupt` 最小形状 / `StateGraph` 外壳最小形状 / C25 已正式作废（alias 不再是关键字） / 异常类型 / `invoke` 不进快照 / 上游核实环境与行号 / 快照生成方式 / 兼容矩阵载体 / 顶层包现状 / CI 归 B3F1 / freechain 复用为未来事项 / 3.11 与零依赖）+ 前置依赖（B1F1、B2F1）+ 后续解锁（B3F1 → M1 全部 feature）。
 
 ## Feature Readiness
 

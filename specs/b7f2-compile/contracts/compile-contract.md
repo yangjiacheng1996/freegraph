@@ -65,7 +65,7 @@ def compile(
 | 字段 | 类型 | 消费方 |
 |---|---|---|
 | `_spec` | `freegraph.runtime.GraphSpec` | B7F3（执行）/ B22F1（导出） |
-| `_builder_spec` | `freegraph._stategraph._BuilderSpec` | B8F3（`node_records` / `alias`） |
+| `_builder_spec` | `freegraph._stategraph._BuilderSpec` | 其他用途；**C25 已正式作废，B8F3 不再读取 alias** |
 | `_conditional_edges` | `dict[str, tuple[dict[str, Any], ...]]` | B8F1（分支规格） |
 
 > ⚠️ **MUST NOT 改名、MUST NOT 删除、MUST NOT 换成 property**（下游按名读取）。
@@ -225,7 +225,7 @@ def compile(
 |---|---|---|---|
 | **B7F3** | `compiled._spec`（交给 `run_graph`）· `compiled.checkpointer` | 读 | 改写 `_spec`；另建执行路径 |
 | **B8F1** | `compiled._conditional_edges`（读取并填入 `GraphSpec.conditional_edges`）· `_spec.channels` 的 `branch:to:*`；**路由求值只消费 `GraphSpec.conditional_edges`** | 读 | import `freegraph._stategraph` / `_ConditionalEdgeSpec`；重算 `branch`；重归一化 `path_map` |
-| **B8F3** | `compiled._builder_spec.node_records[*].alias` | 读 | 要求用户重新声明别名；改写快照 |
+| **B8F3（历史 · 已撤回）** | ~~`compiled._builder_spec.node_records[*].alias`~~ | 不读 | C25 已正式作废；不改写快照 |
 | **B14F1** | `compiled.checkpointer`（行为落地） | 读 | —— （并 MUST 补编译期类型校验 · D-4） |
 | **B22F1** | `compiled._spec`（节点 / 边 / 通道）+ `compiled._conditional_edges` | 读 | 重新解析构建器状态 |
 | **B23F1** | 经 B22F1 的 `Graph` | —— | 直接读产物私有字段 |

@@ -4136,33 +4136,6 @@ def _up_runnable_path() -> tuple[Any, ...]:
     return _up_summary(builder)
 
 
-def _fg_alias() -> Any:
-    import sys
-    sys.path.insert(0, f"{ROOT}/src")
-    from freegraph.graph import StateGraph
-
-    from freegraph.graph import END, START
-
-    builder = StateGraph(_B6State)
-    builder.add_node("a", _b_node, alias="model")
-    builder.add_edge(START, "a")
-    builder.add_edge("a", END)
-    return builder._build_spec().node_records["a"].alias
-
-
-def _up_alias() -> Any:
-    from langgraph.graph import StateGraph
-
-    from langgraph.graph import END, START
-
-    builder = StateGraph(_B6State)
-    builder.add_node("a", _b_node, alias="model")
-    builder.add_edge(START, "a")
-    builder.add_edge("a", END)
-    builder.validate()
-    return None
-
-
 @dataclass
 class BuilderScenario:
     name: str
@@ -4217,7 +4190,6 @@ def _builder_scenarios() -> list[BuilderScenario]:
         BuilderScenario("builder D-71 entrypoint before target", "SAME", "", _fg_entry_vs_target, _up_entry_vs_target),
         BuilderScenario("builder D-72 empty graph", "STRICTER", "freegraph 空节点表 ValueError；上游接受 START->END", _fg_empty_graph, _up_empty_graph),
         BuilderScenario("builder D-73 runnable path", "DIFF", "零 langchain 依赖边界：freegraph 只承载普通 callable", _fg_runnable_path, _up_runnable_path),
-        BuilderScenario("builder D-74 alias", "DIFF", "freegraph 记录 alias；上游静默忽略", _fg_alias, _up_alias),
     ]
 
 
@@ -5652,6 +5624,297 @@ def _run_stream_scenarios(keyword: str = "") -> list["ProbeResult"]:
 
 
 
+# ── B8F3 · context 差分场景（D-137…D-144）──────────────────────────────────
+
+
+def _fg_d137() -> dict[str, Any]:
+    from freegraph.graph import RunConfig
+
+    app = _fg_stream_one_builder().compile()
+    out = app.invoke({}, RunConfig(context={"user": "u1"}))
+    return _ok(
+        {
+            "messages": list(out.get("messages") or []),
+            "has_context": "context" in out,
+        }
+    )
+
+
+def _up_d137() -> dict[str, Any]:
+    app = _up_stream_one_builder().compile()
+    out = app.invoke({}, context={"user": "u1"})
+    return _ok(
+        {
+            "messages": list(out.get("messages") or []),
+            "has_context": "context" in out,
+        }
+    )
+
+
+def _fg_d138() -> dict[str, Any]:
+    from freegraph.graph import END, START, RunConfig, StateGraph
+
+    def node(state: dict) -> dict:
+        return {"messages": [repr(getattr(state, "context", None))]}
+
+    builder = StateGraph(_InvState)
+    builder.add_node("a", node)
+    builder.add_edge(START, "a")
+    builder.add_edge("a", END)
+    out = builder.compile().invoke({}, RunConfig(context={"user": "u1"}))
+    return _ok({"shape": "state-context", "messages": list(out.get("messages") or [])})
+
+
+def _up_d138() -> dict[str, Any]:
+    from langgraph.graph import END, START, StateGraph
+    from langgraph.runtime import Runtime
+
+    def node(state: dict, runtime: Runtime) -> dict:
+        return {"messages": [repr(runtime.context)]}
+
+    builder = StateGraph(_InvState)
+    builder.add_node("a", node)
+    builder.add_edge(START, "a")
+    builder.add_edge("a", END)
+    out = builder.compile().invoke({}, context={"user": "u1"})
+    return _ok(
+        {"shape": "runtime-context", "messages": list(out.get("messages") or [])}
+    )
+
+
+def _fg_d139() -> dict[str, Any]:
+    from freegraph.graph import RunConfig
+
+    cfg = RunConfig(context={"user": "u1"})
+    app = _fg_stream_one_builder().compile()
+    out = app.invoke({}, cfg)
+    return _ok(
+        {
+            "has_configurable_context": "context" in cfg.configurable,
+            "messages": list(out.get("messages") or []),
+        }
+    )
+
+
+def _up_d139() -> dict[str, Any]:
+    app = _up_stream_one_builder().compile()
+    out = app.invoke({}, config={"configurable": {}}, context={"user": "u1"})
+    return _ok(
+        {
+            "has_configurable_context": False,
+            "messages": list(out.get("messages") or []),
+        }
+    )
+
+
+def _fg_d140() -> dict[str, Any]:
+    from freegraph.graph import RunConfig
+
+    cfg = RunConfig(
+        thread_id="t",
+        context={"user": "u1"},
+        metadata={"m": 1},
+        tags=["tag"],
+    )
+    return _ok(
+        {
+            "shape": "freegraph-RunConfig",
+            "thread_id": cfg.thread_id,
+            "context": cfg.context,
+            "metadata": dict(cfg.metadata),
+            "tags": list(cfg.tags),
+        }
+    )
+
+
+def _up_d140() -> dict[str, Any]:
+    return _ok(
+        {
+            "shape": "upstream-RunnableConfig",
+            "thread_id": "t",
+            "context": {"user": "u1"},
+            "metadata": {"m": 1},
+            "tags": ["tag"],
+        }
+    )
+
+
+def _fg_d141() -> dict[str, Any]:
+    app = _fg_stream_route_builder().compile()
+    events = list(app.stream({}, stream_mode="updates"))
+    nodes = [name for event in events for name in event["payload"]]
+    out = app.invoke({})
+    return _ok({"nodes": nodes, "messages": list(out.get("messages") or [])})
+
+
+def _up_d141() -> dict[str, Any]:
+    app = _up_stream_route_builder().compile()
+    events = list(app.stream({}, stream_mode="updates"))
+    nodes = [list(event.keys())[0] for event in events]
+    out = app.invoke({})
+    return _ok({"nodes": nodes, "messages": list(out.get("messages") or [])})
+
+
+def _fg_d142() -> dict[str, Any]:
+    from freegraph.graph import END, START, StateGraph
+
+    builder = StateGraph(_InvState)
+    try:
+        builder.add_node("a", _inv_append_a, alias="model")
+    except TypeError as exc:
+        return _err(exc)
+    builder.add_edge(START, "a")
+    builder.add_edge("a", END)
+    return _ok({"accepted": True})
+
+
+def _up_d142() -> dict[str, Any]:
+    from langgraph.graph import END, START, StateGraph
+
+    builder = StateGraph(_InvState)
+    builder.add_node("a", _inv_append_a, alias="model")
+    builder.add_edge(START, "a")
+    builder.add_edge("a", END)
+    return _ok({"accepted": True})
+
+
+def _fg_d143() -> dict[str, Any]:
+    app = _fg_stream_one_builder().compile()
+    updates = list(app.stream({}, stream_mode="updates"))
+    nodes = [name for event in updates for name in event["payload"]]
+    graph_nodes = sorted(node.id for node in app.get_graph().nodes)
+    return _ok({"update_nodes": nodes, "graph_nodes": graph_nodes})
+
+
+def _up_d143() -> dict[str, Any]:
+    app = _up_stream_one_builder().compile()
+    updates = list(app.stream({}, stream_mode="updates"))
+    nodes = [list(event.keys())[0] for event in updates]
+    graph_nodes = sorted(app.get_graph().nodes.keys())
+    return _ok({"update_nodes": nodes, "graph_nodes": graph_nodes})
+
+
+def _fg_d144() -> dict[str, Any]:
+    from freegraph.graph import END, START, RunConfig, StateGraph
+
+    captured: dict[str, Any] = {}
+
+    def route(state: dict) -> str:
+        captured["has_context"] = "context" in state
+        return "b"
+
+    builder = StateGraph(_InvState)
+    builder.add_node("a", _inv_append_a)
+    builder.add_node("b", _inv_append_b)
+    builder.add_edge(START, "a")
+    builder.add_conditional_edges("a", route, ["b"])
+    builder.add_edge("b", END)
+    builder.compile().invoke({}, RunConfig(context={"user": "u1"}))
+    return _ok({"has_context": captured["has_context"], "target": "b"})
+
+
+def _up_d144() -> dict[str, Any]:
+    from langgraph.graph import END, START, StateGraph
+
+    captured: dict[str, Any] = {}
+
+    def route(state: dict) -> str:
+        captured["has_context"] = "context" in state
+        return "b"
+
+    builder = StateGraph(_InvState)
+    builder.add_node("a", _inv_append_a)
+    builder.add_node("b", _inv_append_b)
+    builder.add_edge(START, "a")
+    builder.add_conditional_edges("a", route, ["b"])
+    builder.add_edge("b", END)
+    builder.compile().invoke({}, context={"user": "u1"})
+    return _ok({"has_context": captured["has_context"], "target": "b"})
+
+
+_CONTEXT_SCENARIOS: list[StreamScenario] = [
+    StreamScenario("context D-137 no context in final state", "SAME", "", _fg_d137, _up_d137),
+    StreamScenario(
+        "context D-138 node reads context",
+        "DIFF",
+        "上游经 Runtime.context；freegraph 经 state.context（X-1）",
+        _fg_d138,
+        _up_d138,
+    ),
+    StreamScenario("context D-139 not in configurable", "SAME", "", _fg_d139, _up_d139),
+    StreamScenario(
+        "context D-140 RunConfig four fields",
+        "DIFF",
+        "freegraph 自有 RunConfig；上游 RunnableConfig（X-2）",
+        _fg_d140,
+        _up_d140,
+    ),
+    StreamScenario("context D-141 no-alias naming/route", "SAME", "", _fg_d141, _up_d141),
+    StreamScenario(
+        "context D-142 alias keyword",
+        "STRICTER",
+        "freegraph 抛 TypeError；上游静默忽略（X-3）",
+        _fg_d142,
+        _up_d142,
+    ),
+    StreamScenario("context D-143 stream/graph names", "SAME", "", _fg_d143, _up_d143),
+    StreamScenario("context D-144 route view no context", "SAME", "", _fg_d144, _up_d144),
+]
+
+
+def _context_scenarios() -> list[StreamScenario]:
+    """B8F3 context 差分场景（上游缺席 ⇒ 返回空列表）。"""
+    try:
+        import langgraph  # noqa: F401
+    except Exception:
+        return []
+    return _CONTEXT_SCENARIOS
+
+
+def _run_context_scenarios(keyword: str = "") -> list["ProbeResult"]:
+    """跑全部 **context** 差分场景 ⇒ 返回逐场景结果（**不打印**）。"""
+    results: list[ProbeResult] = []
+    for scenario in _context_scenarios():
+        if keyword and keyword not in scenario.name:
+            continue
+        fg = _run_invoke(scenario.fg)
+        up = _run_invoke(scenario.up)
+        if scenario.verdict == "SAME":
+            ok = fg["kind"] == up["kind"] and fg["same"] == up["same"]
+        elif scenario.verdict == "STRICTER":
+            if fg["kind"] == "ERROR" and up["kind"] == "OK":
+                ok = bool(scenario.note)
+            else:
+                fgs = fg["same"] if isinstance(fg["same"], dict) else {}
+                ups = up["same"] if isinstance(up["same"], dict) else {}
+                ok = bool(scenario.note) and bool(fgs.get("stricter")) and not bool(
+                    ups.get("stricter")
+                )
+        else:  # DIFF
+            fgs = fg["same"] if isinstance(fg["same"], dict) else {}
+            ups = up["same"] if isinstance(up["same"], dict) else {}
+            ok = (
+                bool(scenario.note)
+                and fg["kind"] == "OK"
+                and up["kind"] == "OK"
+                and fgs.get("shape") != ups.get("shape")
+            )
+        results.append(
+            ProbeResult(
+                name=scenario.name,
+                verdict=scenario.verdict,
+                ok=ok,
+                freegraph_kind=fg["kind"],
+                upstream_kind=up["kind"],
+                detail=(
+                    f"freegraph={fg['kind']} {fg['same']!r} {fg['exc_type']} | "
+                    f"upstream={up['kind']} {up['same']!r} {up['exc_type']}"
+                ),
+            )
+        )
+    return results
+
+
 # ── B22F1 · 图导出差分（D-01…D-15）─────────────────────────────────────
 
 
@@ -6099,6 +6362,7 @@ def run_all(keyword: str = "") -> list[ProbeResult]:
     results: list[ProbeResult] = []
     results.extend(_run_invoke_scenarios(keyword))
     results.extend(_run_stream_scenarios(keyword))
+    results.extend(_run_context_scenarios(keyword))
     for scenario in _scenarios():
         if keyword and keyword not in scenario.name:
             continue

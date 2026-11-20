@@ -1,5 +1,8 @@
 # Tasks: B7F2 · `compile()` → `CompiledGraph`
 
+> **2026-11-20 后续修订（C25 正式作废）**：B7F2 → B8F3 的 alias 读取（D-3 / T050）已撤回；本文件相关文字保留为历史。
+
+
 **Input**: Design documents from `specs/b7f2-compile/`
 
 **Prerequisites**: `plan.md` · `spec.md` · `research.md` · `data-model.md` · `contracts/` (`compile-contract.md` / `upstream-parity.md`) · `quickstart.md` · `checklists/requirements.md`

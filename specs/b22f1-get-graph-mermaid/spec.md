@@ -1,3 +1,5 @@
+> **2026-11-20 后续修订（C25 正式作废）**：节点别名不再属于 v1；图导出继续使用内部节点名（`name == id`）。本 spec 中 alias 相关文字保留为历史。
+
 # Feature Specification: B22F1 · `get_graph(xray=)` + 自有 `Graph` 类型 + `draw_mermaid()`
 
 **Feature Branch**: `b22f1-get-graph-mermaid`
@@ -38,7 +40,7 @@
 | **H-5** | **B7F3 → B22F1** | **M3** | **就绪顺序**：只读基准脚本的调用顺序是「先 `get_graph(...).draw_mermaid_png()`，后 `invoke(...)`」⇒ B22F1 / B23F1 MUST 先于固定脚本端到端轮（EV-4）就绪；B7F3 MUST NOT 越界实现 `get_graph` / `draw_mermaid_png`。本 feature MUST 做到**任何运行之前** `get_graph()` 即可用（静态声明天然满足）。 | `specs/b7f3-invoke-full-state/spec.md` **下游承接 D-3** · 契约 **CF-03** | FR-019 · SC-009 |
 | **H-6** | **B7F1 → B22F1** | **M2** | **门禁 3 的固定脚本**：宪法质量门禁 3「`harness/demo/target.py` 原样可跑」在本 feature 与 B23F1 齐备前物理不可达成 ⇒ 本 feature MUST 交付其中的「图导出」环节（`get_graph()` / `draw_mermaid()`），**MUST NOT** 改动固定脚本的**任何一行**（`target.py` 是**只读基准**）。 | `specs/b3f1-scaffold-ci-gates/spec.md` **裁定 22** · `harness/proposals/立项书.md` §6.2 | Assumptions · SC-009 |
 | **H-7** | **B2F1 / B2F2 / B8F2 → B22F1** | **M1** | **自有类型与门面冻结**：`Graph` / `Node` / `Edge` 的类型名与导入路径已在 B2F1 冻结（`freegraph.contracts.graph`）；`freegraph.graph` 的 **8** 个公开符号是 B2F2 + B8F2 冻结面（`StateGraph` / `START` / `END` / `Send` / `interrupt` / `Command` / `RunConfig` / `get_stream_writer`）⇒ 本 feature MUST NOT 改名 / 迁移 / 新增公开顶层导出；B2F1 的 research 已指认「mermaid 文本导出」由本 feature 交付。⚠️ **本 feature 经发起者追认，修订 B2F1 的 `Edge` 不变式**：节点声明的动态边在无显式标签时 `condition` 可为 `None`（见 X-07）。 | `specs/b2f1-contracts-protocols/spec.md` · `research.md`（`B22F1 只碰 graph.py`）· `contracts/public-api.md` §6 / §8 | FR-001 · FR-016 · FR-017 · SC-004 · 破冻结面 **T-6** |
-| **H-8** | **B6F1 → B22F1** | **M2** | **节点名口径**：图结构里的节点名 MUST 与构建器 / `invoke` / `stream` 使用**同一套节点名口径**（业务节点名；别名语义归 B8F3）⇒ MUST NOT 为图导出自造命名映射。 | `specs/b6f1-stategraph-builder/spec.md` · `specs/b7f2-compile/spec.md` 裁定 12 / 13 | FR-002 · FR-012 |
+| **H-8** | **B6F1 → B22F1** | **M2** | **节点名口径**：图结构里的节点名 MUST 与构建器 / `invoke` / `stream` 使用**同一套节点名口径**（业务节点名；**C25 已正式作废**）⇒ MUST NOT 为图导出自造命名映射。 | `specs/b6f1-stategraph-builder/spec.md` · `specs/b7f2-compile/spec.md` 裁定 12 / 13 | FR-002 · FR-012 |
 | **H-9** | **B1F1 / B6F1 / B7F2 → B22F1** | **M2** | **上游最优设计的破冻结面承接**：`Command` MUST 泛型化以支持 `Command[Literal[...]]`；`add_node` MUST 接受 `destinations`（`tuple[str, ...]` 或 `dict[str, str]`，仅用于图渲染、不影响执行）；B7F2 的 `_NodeRecord` / 编译快照 MUST 携带该声明。三者 MUST 按上游 `langgraph/graph/state.py:810-861` 同款实现。发起者已追认（2026-11-20）；承接方 = **B22F1**。 | `langgraph/graph/state.py:810-861` · `:1780-1788`（`_control_static`）· 本 spec 裁定 2 | FR-010 · FR-011 · FR-026 · 破冻结面 **T-1 / T-2 / T-3** |
 
 ---
@@ -349,7 +351,7 @@ B7F2 的 `_spec.edges` 在编译期过滤了单源 `END` 目标（H-1 的裁定 
 - `__start__` / `__end__` 的 `Node.id == name`；
 - **边界（DIFF · X-08）**：任何「末步单源」场景（含单节点自环）且无显式 `END` 时，上游的模拟
   会补一条 `源→__end__` 条件边；freegraph 的静态导出**不补**。上游 `limit=250` 的模拟截断亦不复现。
-- 本 feature MUST NOT 引入业务节点别名解析（归 B8F3）。
+- 本 feature MUST NOT 引入业务节点别名解析（**C25 已正式作废**）。
 
 #### Q8（失败信号）
 
@@ -528,7 +530,7 @@ B7F2 的 `_spec.edges` 在编译期过滤了单源 `END` 目标（H-1 的裁定 
 - **`get_state` / `get_state_history` / `update_state`**（B14F1 / B15F1 / B16F1）。
 - **trace / span**（B18F1 / B19F1 / B20F1）。
 - **mermaid 渲染工具链**（`mermaid-cli` / Playwright 等）——v1 零依赖、零出站。
-- **节点别名解析**（B8F3）——图导出只用构建期 / 运行期同一套节点名。
+- ~~节点别名解析~~（**C25 已正式作废**）——图导出只用构建期 / 运行期同一套内部节点名。
 - **上游 `draw_mermaid` 的样式参数族**（`with_styles` / `curve_style` / `node_styles` /
   `frontmatter_config` 等）——v1 只交付确定性文本。
 - **运行期跳转记录（原 DR-1）**——已由 2026-11-20 发起者裁定作废，改为上游静态声明。

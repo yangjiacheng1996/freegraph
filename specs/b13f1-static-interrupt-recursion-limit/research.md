@@ -128,7 +128,7 @@
 | **T-4** | **F-4** | `superstep.py:1768-1840` 的 `run_graph`；B10F1 `interrupt-resume-contract.md` §2 · B10F1 spec 裁定 10 | `config` 注解**放宽**为 `RunConfig \| Mapping[str, Any] \| None`；**不新增** `recursion_limit=` 关键字 |
 | **T-5** | **F-5** | `superstep.py:1912-2010` 的 `_resume_graph`；B10F1 契约 §6.2 · B10F1 spec 裁定 4 | **拆分** `no_pending_interrupt`：静态标记（`static_before` / `static_after`）⇒ 继续（`next` 允许为空）；**非静态且无动态中断** ⇒ 仍抛（**不论 `next` 是否为空**） |
 | **T-6** | **F-6** | `harness/demo/graph_core.py:447-464` | `soft(...)` → `check(...)`；异常判定收紧为 `GraphRecursionError` |
-| **T-7** | **F-7** | `harness/demo/README.md:66-75` | 删除 `recursion_limit` 软断言行；保留 C25 行与规则文字 |
+| **T-7** | **F-7** | `harness/demo/README.md:66-75` | 删除 `recursion_limit` 软断言行；C25 行由后续 B8F3 正式作废移除；规则文字保留 |
 | **T-8** | **F-8** | `specs/b7f1-superstep-loop/contracts/superstep-contract.md` §1 / §5 · `spec.md` | **只增**一句：低层入口收到非空静态字段时显式拒绝 |
 | **T-9** | **F-9** | `superstep.py:1574-1599` 的 `_suspend_metadata` / `_write_suspend`；B10F1 契约 §4 · B10F1 spec 裁定 9 | **只增** `suspension_kind` / `static_ack` 两个 metadata 键；既有 `next` / `interrupts` / `tasks` / `scheduler` 的**既有键**不变；kind/ack **MUST** 镜像进 `scheduler` 子字典 |
 | **T-10** | **F-10** | `_clear_static_suspension`（`run_graph` 完成路径）；B10F1 契约 §4 · B10F1 spec 裁定 9 | **只增**一次性完成写：静态恢复返回 `SuperStepResult` ⇒ `checkpointer.put` 写完成快照（清 `suspension_kind` / `static_ack` / `next` / `fanout`）；**不是**每轮末快照（后者仍归 B14F1） |

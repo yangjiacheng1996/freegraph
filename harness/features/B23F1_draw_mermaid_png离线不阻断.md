@@ -146,7 +146,7 @@
 
 - **交付物**：`draw_mermaid_png()` + 最小 PNG 编码器 + PNG 合法性判据测试 +
   断网任务用例 + 人工验证记录。
-- **后续解锁**：**B8F3**（节点别名 + `context` 通道）→ M3 全部 feature。
+- **后续解锁**：**B8F3**（`context` 通道；**alias / C25 已于 2026-11-20 正式作废**）→ M3 全部 feature。
 - **★ MVP 达成点**：**本 feature 是六项最小交付集的最后一项**——完成即意味着
   `harness/demo/target.py` 的 **fake 模型轮**具备跑通条件（M2 里程碑的验收点，
   §5.2 行序串行口径 = 第 21 个 feature / 第 63 天）。

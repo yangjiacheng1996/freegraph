@@ -485,7 +485,7 @@ after 时，before 先挂起，恢复后 after 在**下一次**执行后挂起�
 | **F-4 · `run_graph` 签名** | `run_graph`；`specs/b10f1-interrupt-resume/contracts/interrupt-resume-contract.md` **§2**；`specs/b10f1-interrupt-resume/spec.md` **裁定 10** | `config` 注解**放宽**为 `RunConfig \| Mapping[str, Any] \| None`；**MUST NOT** 新增 `recursion_limit=` 关键字（内部直控仍用 `max_steps`）⇒ 既有位置 / 关键字调用零改动 | 同上 |
 | **F-5 · 恢复路径的「无挂起中断」判定** | `_resume_graph` / `_first_graph`；`specs/b10f1-interrupt-resume/contracts/interrupt-resume-contract.md` **§6.2**；`specs/b10f1-interrupt-resume/spec.md` **裁定 4** | **拆分**：`suspension_kind` 为 `static_before` / `static_after` ⇒ 合法**静态挂起**（`next` **允许为空**）⇒ 继续；**非静态**（`suspension_kind` 为空）且**无动态中断** ⇒ 仍按 B10F1 抛 `no_pending_interrupt`（**不论 `next` 是否为空**） | 同上 |
 | **F-6 · 验收脚本 `case_recursion_limit`** | `harness/demo/graph_core.py` | `soft(...)` → `check(...)`；异常判定收紧为 `GraphRecursionError`；**不删**既有「自环图」用例形态 | 追认落 `harness/verification/B13F1/manual-verification.md` |
-| **F-7 · README 软断言清单** | `harness/demo/README.md` | 删除 `recursion_limit` 的软断言行；保留 C25 一行；「形态一旦拍板即升级」的规则文字保留 | 同上 |
+| **F-7 · README 软断言清单** | `harness/demo/README.md` | 删除 `recursion_limit` 的软断言行；C25 一行由后续 B8F3 正式作废移除；「形态一旦拍板即升级」的规则文字保留 | 同上 |
 | **F-8 · B7F1 低层入口说明** | `specs/b7f1-superstep-loop/contracts/superstep-contract.md` **§1 / §5** · `specs/b7f1-superstep-loop/spec.md` | **只增** **V-26** + 一句：「静态断点属图级策略，`run_super_step` / `run_super_steps` 收到非空静态字段时显式拒绝」⇒ 既有签名 / 返回类型判据**一字不改** | 同上 |
 | **F-9 · 静态挂起检查点 metadata** | `_suspend_metadata` / `_write_suspend`；`specs/b10f1-interrupt-resume/contracts/checkpoint-contract.md` **§4**（写侧载荷）；`specs/b10f1-interrupt-resume/spec.md` **裁定 9** | **只增** `suspension_kind` / `static_ack` 两个 metadata 键（缺省 `None`；静态值 `static_before` / `static_after`；`static_ack` = 通道版本水位）⇒ 旧快照缺键时按 `None` 解码（宽容）；既有 `next` / `interrupts` / `tasks` / `scheduler` 的**既有键**逐字不变；**本 feature 的实现 MUST 把这两个键镜像进 `scheduler` 子字典**（供当前 `get_tuple` 读取；B14F1 同时持久化顶层 metadata） | 同上 |
 | **F-10 · 静态恢复完成快照** | `_clear_static_suspension`（`run_graph` 完成路径）；`specs/b10f1-interrupt-resume/contracts/checkpoint-contract.md` **§4**；`specs/b10f1-interrupt-resume/spec.md` **裁定 9** | **只增**一条**一次性完成写**：静态恢复返回 `SuperStepResult` 时 `checkpointer.put` 写完成快照（`next=()` / `interrupts=()` / `tasks=()` / `suspension_kind=None` / `static_ack=None` / `fanout={}`）⇒ **不是**「每轮末快照」（后者仍归 B14F1）⇒ **MUST NOT** 与 B14F1 的持久化策略重复 / 冲突 | 同上 |
@@ -627,7 +627,7 @@ after 时，before 先挂起，恢复后 after 在**下一次**执行后挂起�
 - **FR-031**：本 feature MUST 提供**纯 L2 单元测试**（不经由构建器 / `compile()` /
   `invoke()`），且新增代码的**行 / 分支覆盖率 MUST 为 100%**。
 - **FR-032**：`harness/demo/README.md` 的软断言清单 MUST 同步删除 `recursion_limit`
-  一行（载体已锁定）；「形态一旦拍板即升级」的规则文字与 C25 一行 MUST 保留；
+  一行（载体已锁定）；「形态一旦拍板即升级」的规则文字 MUST 保留；C25 行由 B8F3 另行移除；
   MUST NOT 新增 / 删除其它行。
 
 ### 需求 ↔ 成功标准 追溯表
@@ -668,7 +668,7 @@ after 时，before 先挂起，恢复后 after 在**下一次**执行后挂起�
 | FR-029 | 字段不可变 / 防御性拷贝 | SC-015 / SC-017 | 外部修改不影响规格 |
 | FR-030 | 公开 API 面不变 | SC-016 | 门面仍 7 符号 |
 | FR-031 | 纯 L2 测试 · 覆盖率 | SC-023 | 行 / 分支 100% |
-| FR-032 | README 软断言清单同步 | SC-005 | README 无 `recursion_limit` 行 · C25 保留 |
+| FR-032 | README 软断言清单同步 | SC-005 | README 无 `recursion_limit` 行 · C25 由 B8F3 移除 |
 
 > **反向覆盖**：SC-001 ← FR-001 / FR-004 / FR-005 · SC-002 ← FR-001 / FR-004 / FR-006 ·
 > SC-003 ← FR-014 / FR-027 · SC-004 ← FR-011 / FR-012 / FR-028 ·
@@ -753,7 +753,7 @@ after 时，before 先挂起，恢复后 after 在**下一次**执行后挂起�
   `GraphRecursionError` 的比率 == **100%**；L2 等价硬测试**当下通过**的比率 == **100%**；
   M1 门面未就绪时脚本以**退出码 2** 结束（不判 FAIL）的比率 == **100%**；
   端到端真跑的延期**具名**（B7F3 · D-3）且未写永久红 CI 的比率 == **100%**；
-  `README.md` 中 `recursion_limit` 软断言行被删除、C25 行保留的比率 == **100%**。
+  `README.md` 中 `recursion_limit` 软断言行被删除；C25 行由 B8F3 移除（不在本 feature 判据内）。
 - **SC-006（载体形态锁定）**：dict 形态 `{"recursion_limit": N}` 生效的比率 == **100%**；
   `RunConfig(recursion_limit=N)` 生效的比率 == **100%**；dict / `RunConfig` **互斥且各自优先于
   `max_steps`** 的比率 == **100%**；`run_graph` 出现显式 `recursion_limit=`

@@ -1,5 +1,8 @@
 # Tasks: B8F2 · `stream()`：多模式流式输出 + `StreamWriter`
 
+> **2026-11-20 后续修订（C25 正式作废）**：C25 流式别名软断言已移除；本文件 T055/T067 中的 alias 文字保留为历史。
+
+
 **Input**: Design documents from `/specs/b8f2-stream-modes/`
 
 **Prerequisites**: `plan.md`（required）· `spec.md`（required）· `research.md` ·

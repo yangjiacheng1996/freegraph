@@ -1,3 +1,5 @@
+> **2026-11-20 后续修订（C25 正式作废）**：节点别名已正式作废（C25 编号不复用）；`path_map` 查表继续使用内部节点名。本 spec 中 alias 相关文字保留为历史。
+
 # Feature Specification: B8F1 · 条件边路由求值 + `END` 终止 + fresh 读（C8 独立回归测试）★
 
 **Feature Branch**: `b8f1-conditional-edges-fresh-read`
@@ -38,7 +40,7 @@
 | # | 承接方 | 里程碑 | 动作 | 本 spec 落点 |
 |---|---|---|---|---|
 | **D-1** | **B8F1 → B8F2** | **M2** | **`stream()` 的路由口径**：`stream` 的每一档 MUST 与本 feature 的 `invoke` **逐字同款**（**同一份**路由求值实现点 ⇒ **MUST NOT** 另写一份）⇒ ⇒ 路由判定 MUST 在 `stream` 的**同一次**执行里可观察 ⇒ ⇒ 「稀疏视图 + 补齐」（B7F3 的 D-1）口径**继续**适用 | FR-002 · 裁定 1 · SC-002 |
-| **D-2** | **B8F1 → B8F3** | **M2** | **节点别名与 `context` 通道**：本 feature 的路由函数入参 = **fresh 视图** ⇒ ⇒ `context` 通道（**C21**）MUST **NOT** 进入该视图（它是**运行期载体**，不是状态通道）⇒ ⇒ 节点别名（B8F3）MUST **NOT** 影响 `path_map` 的查表（查表用**节点名**，不解析别名） | FR-007 · FR-009 · Edge Cases · SC-010 |
+| **D-2** | **B8F1 → B8F3** | **M2** | **`context` 通道 + 节点名口径**：本 feature 的路由函数入参 = **fresh 视图** ⇒ ⇒ `context` 通道（**C21**）MUST **NOT** 进入该视图（它是**运行期载体**，不是状态通道）⇒ ⇒ **C25 已正式作废**，不存在节点别名解析；`path_map` 查表继续用**内部节点名**。 | FR-007 · FR-009 · Edge Cases · SC-010 |
 | **D-3** | **B8F1 → B11F1** | **M1** | **`Send` fan-out 的调度归 B11F1**：本 feature **只**把路由函数返回的 `Send` / `list[Send]` **喂进** B11F1 既有的 fan-out 任务构造器 ⇒ ⇒ B11F1 MUST **NOT** 另写「路由来源」的 fan-out 路径 ⇒ ⇒ 两条来源（节点返回 / 路由返回）MUST 产出**同款**任务 | FR-011 · 裁定 10 · SC-008 |
 | **D-4** | **B8F1 → B22F1 / B23F1** | **M2** | **图导出里的条件边**：`get_graph` / `draw_mermaid_png` MUST 能表达**条件边**（源节点 → 可能的多个目标）⇒ ⇒ MUST 复用本 feature 的 `targets` / `route_channels` 口径 ⇒ ⇒ **MUST NOT** 另算一份目标集合 | FR-013 · FR-025 · Edge Cases |
 | **D-5** | **B8F1 → B25F1** | **M4** | **fake 模型注入**：本 feature 的路由函数是**用户函数**（非模型）⇒ ⇒ fake 注入（立项书 §9.2）**不涉及**本 feature ⇒ ⇒ 但路由函数**可以是**一个读状态的**假模型** ⇒ ⇒ B25F1 的注入机制 MUST 与路由函数**正交** | FR-003 · 裁定 12 · SC-014 |
@@ -982,7 +984,7 @@ D-107 / D-108 / D-109 / **D-112 / D-113 / D-115 / D-116 / D-117**）·
   ⇒ ⇒ ⇒ MUST **NOT** 改动 `harness/demo/target.py`（只读基准的 diff 断言常驻）
   ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ **破冻结面 T-6**。
 - **FR-036**：本 feature MUST **NOT** 实现 —— ① `stream()`（B8F2）② `Send` fan-out 的
-  **调度**（B11F1 · 本 feature **只复用**）③ 节点别名 / `context` 通道（B8F3）
+  **调度**（B11F1 · 本 feature **只复用**）③ `context` 通道（B8F3；C25 已正式作废）
   ④ `get_graph()` / `draw_mermaid_png()`（B22F1 / B23F1）⑤ checkpoint 落盘（B14F1）
   ⑥ `get_state()` / `get_state_history()`（B15F1）/ `update_state()`（B16F1）
   ⑦ async（v2）⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⚠️ **本条只约束「不实现」**⇒ ⇒ ⇒ ⇒ ⇒ ⇒ 其余 5 个 L1 协议
@@ -1056,8 +1058,8 @@ D-107 / D-108 / D-109 / **D-112 / D-113 / D-115 / D-116 / D-117**）·
 
 - `stream()`（B8F2）—— 本 feature 只交付**同步**执行路径上的路由求值。
 - `Send` fan-out 的**调度**（B11F1）—— 本 feature **只复用**既有构造器。
-- 节点别名 / `context` 通道（B8F3）—— 路由函数入参**不含** `context`；`path_map` 查表用
-  **节点名**，**不**解析别名。
+- `context` 通道（B8F3）—— 路由函数入参**不含** `context`；`path_map` 查表用**内部节点名**；
+  **C25 已正式作废**，不存在别名解析。
 - `get_graph()` / `draw_mermaid_png()`（B22F1 / B23F1）—— 图导出里的条件边表达归它们
   （下游承接 **D-4**）。
 - checkpoint 落盘与任何 saver 实现（B14F1）—— 本 feature **不**触碰。

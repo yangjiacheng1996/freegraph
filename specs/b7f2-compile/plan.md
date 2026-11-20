@@ -77,7 +77,7 @@
 - **ARCH-1**：L3 只依赖 L1 / L2；**L3 内部禁止横向 import**（G25 同层规则 · L2–L5 禁同层）
   ⇒ 编译产物**必须**与构建器同模块（DD-02 / R-11）；
 - `freegraph.graph` 仍恰 7 个导出符号；`StateGraph` 公开签名快照**逐字节不变**；
-- 不新增 L1 符号 / 契约条目 C1–C27 / 门禁编号 G1–G30；
+- 不新增 L1 符号 / 契约条目（active = C1–C24 + C26–C27；C25 已作废） / 门禁编号 G1–G30；
 - `harness/demo/target.py` **只读**；
 - 新源码 / 测试带署名头（G5 / G19 / G30）。
 
@@ -126,7 +126,7 @@
 | **IV 可诊断性** | 通过 | 编译期错误消息点名节点 / 源 / 分支 / 目标 / `entrypoint`；`store=` 的「未生效」当场可见（裁定 14）；未就绪方法消息点名归属 feature |
 | **V 人工验收** | 通过 | `harness/verification/B7F2/manual-verification.md`（五段式 + EV-1 承接） |
 | **VI 规格驱动 / 判据级追溯** | 通过 | spec 25 FR / 16 SC；tasks 每条 SC 挂**可执行判据**并建立双向追溯 |
-| **VII 契约 C1–C27** | 通过 | 不新增 L1 符号 / 契约条目；复用 C10 / C11 / C12 / C13 / C19 / C20；`store=` 的 v1 无实现**文档写明**（原则 VII） |
+| **VII 契约 C1–C24 + C26–C27** | 通过 | 不新增 L1 符号 / 契约条目；复用 C10 / C11 / C12 / C13 / C19 / C20；`store=` 的 v1 无实现**文档写明**（原则 VII） |
 | **VIII 证据与术语纪律** | 通过 | 上游 `langgraph 1.2.11` + `路径:行号` + 本 plan 的实测 E-25…E-55；术语与 spec 一致 |
 | **IX 许可证 / 商标** | 通过 | 零新增依赖、零新增第三方代码 |
 | **X 署名头 / 文档合规** | 通过 | 新测试 / 验收脚本带署名头；README 与 demo README 只做**事实性**更新 |
@@ -364,7 +364,7 @@ layer-registry.md`）把 `src/freegraph/_stategraph.py` 登记为**文件级 L3 
 |---|---|---|---|---|
 | **D-1** | B7F3 | `invoke()` MUST 驱动 L2 `run_graph(spec, input, *, checkpointer=..., config=...)` 并把结果归一成完整状态字典；每次 `invoke` MUST **新建**通道实例（多会话隔离的另一半）；MUST NOT 另写执行路径 | `harness/features/B7F3_invoke返回完整状态.md` 的 `## 下游承接` 块 | 待接线（tasks 落一条最小改动） |
 | **D-2** | B8F1 | MUST 从 `compiled._conditional_edges` 读取并填入 `GraphSpec.conditional_edges`（承接 V-8 放宽）；**路由求值只消费 L2 的 `GraphSpec.conditional_edges`**；**MUST NOT** import `freegraph._stategraph` / `_ConditionalEdgeSpec`；不重新归一化 `path_map`；沿用 `branch:to:<target>` | `harness/features/B8F1_条件边路由与fresh读.md` | 待接线 |
-| **D-3** | B8F3 | MUST 从**私有字段 `_builder_spec`**（完整 `_BuilderSpec`）读取 `_NodeRecord.alias`；不要求用户重新声明 | `harness/features/B8F3_节点别名与context通道.md` | 待接线 |
+| **D-3** | B8F3 | **已撤回（C25 正式作废）**：B8F3 不再读取 `_NodeRecord.alias`；不要求用户重新声明 | `harness/features/B8F3_节点别名与context通道.md` | 历史 |
 | **D-4** | B14F1 | MUST 补上上游同款的 **checkpointer 编译期类型校验**（上游 `ensure_valid_checkpointer` ⇒ `TypeError` · E-29）；校验口径由 B14F1 冻结 | `harness/features/B14F1_Checkpointer协议与MemorySaver.md` | 待接线 |
 | **D-5** | B22F1 | `get_graph(*, xray=False)` MUST 从 `_spec`（节点 / 边 / 通道）与 `_conditional_edges` 导出结构；MUST NOT 重新解析构建器状态 | `harness/features/B22F1_get_graph与draw_mermaid.md` | 待接线 |
 

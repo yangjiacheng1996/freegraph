@@ -1,3 +1,6 @@
+> **2026-11-20 后续修订（C25 正式作废）**：`add_node` 不再接受 `alias`，`_NodeRecord` 不再含 `alias`。本文件中 alias 记录文字保留为历史。
+> 差分场景 **D-74** 已迁移到 **B8F3 D-142**，`parity_probe.py` 不再承载；本文件中的 `D-50…D-74` 为历史范围。
+
 # 研究与技术决策（B6F1 · `StateGraph` 构建器）
 
 **Spec**: [spec.md](./spec.md) · **Plan**: [plan.md](./plan.md) · **Date**: 2026-11-15
@@ -39,7 +42,7 @@
 | **E-21** | 普通 callable 仅有 `.name`、无 `__name__` | `add_node` 取名**类型名**（`.name` 不参与）；branch 名 `condition` | SAME；`D-70` / `P-02c` / `P-08` |
 | **E-22** | `add_edge(123, "a")` 非法 `start_key` | `TypeError: 'int' object is not iterable` | SAME（异常类型）；`D-69` |
 | **E-23** | 非 callable `Runnable` 作为 `path` | 上游接受并使用 `.name`（RunnableLambda 实测） | DIFF；`X-6`；`D-73` / `P-06c` |
-| **E-24** | `add_node("a", fn, alias="model")` | 上游**接受**并经 `**kwargs`（`DeprecatedKwargs`）**静默忽略** `alias`；无 alias 语义 | DIFF（接受形态 SAME · 记录语义 freegraph 增量）；`X-1`；`D-74` / `P-02b` |
+| **E-24** | `add_node("a", fn, alias="model")` | 上游**接受**并经 `**kwargs`（`DeprecatedKwargs`）**静默忽略** `alias`；无 alias 语义 | C25 作废后 freegraph 抛 `TypeError` ⇒ **STRICTER**；`X-3`；`D-74` / `P-02b` |
 
 ### 1.1 实测脚本要点
 
@@ -99,11 +102,10 @@ PY
 
 ### DR-3 · 节点记录与单 callable 形态
 
-- **Decision**：`_NodeRecord(name, action, alias, defer, metadata)`；`add_node(fn)` 用
+- **Decision（历史）**：`_NodeRecord(name, action, alias, defer, metadata)`；**C25 已正式作废，当前 `_NodeRecord` 无 `alias`。** `add_node(fn)` 用
   `fn.__name__`，无 `__name__` 时用类型名（普通 callable 的 `.name` **不参与**）；重复 /
   保留名 / 保留字符立即失败。非 callable `Runnable` 不承载（X-6）。
-- **Rationale**：与上游 `state.py:778-811` 同款（实测 E-21/E-23）；`alias` 是 freegraph
-  增量（C25 / B8F3）；上游签名无 `alias`，运行时经 `**kwargs` 静默忽略（实测 E-24）。
+- **Rationale**：与上游 `state.py:778-811` 同款（实测 E-21/E-23）；**C25 已于 2026-11-20 正式作废**，freegraph 不再接受 `alias`；上游签名无 `alias`，运行时经 `**kwargs` 静默忽略（实测 E-24）。
 - **Alternatives**：只允许 `(str, Callable)`（不兼容上游单 callable 形态）；按 `.name`
   取名（与上游普通 callable 行为不一致）。
 
@@ -257,7 +259,7 @@ PY
 | `StateGraph.validate` | 调 `_build_spec()`；返回 `self`；`interrupt` 按上游校验节点存在性（BV-13） |
 | `StateGraph._build_spec` | 校验顺序 + schema / 通道 / 节点 / 边 / 分支 / 路由通道 / 快照 |
 | `_BuilderSpec` | 冻结 dataclass：`channels` / `nodes` / `node_records` / `edges` / `conditional_edges` |
-| `_NodeRecord` | 冻结 dataclass：`name` / `action` / `alias` / `defer` / `metadata` |
+| `_NodeRecord` | 冻结 dataclass：`name` / `action` / `defer` / `metadata`（C25 作废后无 `alias`） |
 | `_ConditionalEdgeSpec` | 冻结 dataclass：`source` / `branch` / `path` / `path_map` / `targets` / `route_channels` |
 | `_ConditionalEdgeDraft` | 构建期草稿：`source` / `path` / `path_map` / `branch_name` |
 
@@ -294,7 +296,7 @@ PY
 2. 复核 §2 全部行号；
 3. 重判 D-50…D-74 的三态；
 4. 复核 `path_map` 的 list / dict / None 接受形态（含非 dict/list 时的 `Literal` 推断差异）；
-5. 复核 `add_node` 的单 callable / 缺 action / 多传 action / `.name` 不参与取名 / `alias` 经 `**kwargs` 忽略；
+5. 复核 `add_node` 的单 callable / 缺 action / 多传 action / `.name` 不参与取名 / `alias` 已被 C25 正式作废（拒绝形态）；
 6. 复核 `validate(interrupt=...)` 的未知节点行为；
 7. 复核 `validate()` 的「源 → 入口 → 目标」顺序与空图接受行为；
 8. 复核保留字符集合（当前 `|` / `:`）。

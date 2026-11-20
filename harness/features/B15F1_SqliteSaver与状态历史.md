@@ -221,3 +221,7 @@
 
 - **D-6（B13F1 → B15F1 · M3 · 状态历史）**：历史快照 MUST 能把「静态挂起」表示为 `interrupts == ()` 且 `suspension_kind` / `static_ack` 为静态值（`next` 允许为空）；从历史静态快照恢复 MUST 不要求动态中断载荷；MUST NOT 继续假设「`next` 非空 ⇒ 必有中断」。
 
+## 下游承接（B8F3 → 本 feature · 2026-11-20 · 只接线）
+
+- **D-1 / D-3（B8F3 → B15F1 · M3 · `context` 不持久化 / 不得回退）**：历史快照 MUST NOT 包含 `context` 字段；`get_state` / `get_state_history` MUST NOT 从快照还原 `context`。本 feature MUST 以「`context` 已接线、alias 已移除」为前提；MUST NOT 回退到 `configurable` 承载 `context`，MUST NOT 重新引入节点别名。
+

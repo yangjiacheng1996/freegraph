@@ -1,3 +1,5 @@
+> **2026-11-20 后续修订（C25 正式作废）**：节点别名已正式作废（C25 编号不复用）；`stream()` 只使用内部节点名。本 spec 中 alias 相关文字保留为历史。
+
 # Feature Specification: B8F2 · `stream()`：多模式流式输出 + `StreamWriter`
 
 **Feature Branch**: `b8f2-stream-modes`
@@ -29,7 +31,7 @@
 | **H-7** | **B12F1 → B8F2** | **M2** | **并发执行器是 `StreamWriter` 的唯一传播载体**：`run_tasks_concurrently` 的**每任务** `copy_context()` MUST 与 B12F1 的「执行期零共享状态写 / 结果槽 / 每轮新建并关闭」**共存** ⇒ ⇒ MUST NOT 改变 `_TaskOutcome` 的五字段与「按节点名序返回」口径 ⇒ ⇒ MUST NOT 把 `StreamWriter` 的写入塞进 `_TaskOutcome`（那会把「可观测事件」混进「执行结果」· 原则 XII）⇒ ⇒ 写入 MUST 走**独立的运行级缓冲区**。 | `specs/b12f1-concurrency-errors/spec.md` **FR-010 / FR-013** · `contracts/concurrency-contract.md` §4 | FR-011 · FR-022 · 裁定 7 |
 | **H-8** | **B2F1 → B8F2** | **M2** | **L1 协议的 `stream` 入口**：返回类别 = **事件迭代器**（`Iterator[dict[str, Any]]`）· 参数名 `input` / `config` / `stream_mode` **冻结为占位名** ⇒ ⇒ 本 feature MUST 沿用**参数名**与**返回类别** ⇒ ⇒ `stream_mode` 的**枚举全集与默认档**由本 feature 落成（B2F1 当时挂起；默认档按上游 = **`updates`**，签名默认 **`None`**）⇒ ⇒ `config` 注解的放宽与 `stream_mode` 默认值的落定按 **H-2 / T-3** 走破冻结面流程。 | `specs/b2f1-contracts-protocols/spec.md` · `contracts/public-api.md` · `src/freegraph/contracts/protocols.py:278-286` | FR-001 · FR-023 · FR-030 · 破冻结面 **T-3** |
 | **H-9** | **B1F1 / D11 → B8F2** | **M2** | **`run_id` / `thread_id` 的标识职责**：`thread_id` = **会话**标识（由 `RunConfig` 承载）· `run_id` = **单次运行**标识（由运行时在每次 `stream` 开始时生成，**用户不设置**）⇒ ⇒ `stream()` 产出的**每一条**事件 MUST 携带 `run_id` 与 `thread_id`（形态在 **FR-013** 写死）⇒ ⇒ 与 **B19F1** 的 `TraceSink` span **共享同一 `run_id` / `thread_id`** ⇒ ⇒ **载体 = L2 私有 contextvar**（`_STREAM_RUN_ID` / `_STREAM_THREAD_ID` · 由 `StreamSession` 绑定 · 见 FR-027）⇒ ⇒ 两条通道**相互独立**、不互为前置。 | `harness/reports/Q8-图运行时最小契约.md` §3.4.1（C22 / C23）· `specs/b1f1-contracts-core/spec.md` Assumptions | FR-013 · FR-027 · SC-010 / SC-011 |
-| **H-10** | **B7F2 / B6F1 → B8F2** | **M2** | **节点别名与流式过滤**：`stream_mode="updates"` 的载荷键 MUST 是**节点名**（与路由查表同一口径）⇒ ⇒ B8F3 落地别名后，事件里的节点名 MUST 与 `invoke` / 图结构**一致**⇒ ⇒ 本 feature MUST NOT 预埋别名解析（别名归 B8F3）。 | `specs/b7f2-compile/spec.md` 裁定 12 / 13 · `specs/b6f1-stategraph-builder/spec.md` | FR-004 · FR-016 · 下游承接 **D-1** |
+| **H-10** | **B7F2 / B6F1 → B8F2** | **M2** | **节点名与流式过滤**：`stream_mode="updates"` 的载荷键 MUST 是**内部节点名**（与路由查表同一口径）⇒ ⇒ **C25 已正式作废**，不存在别名解析；事件里的节点名 MUST 与 `invoke` / 图结构一致。 | `specs/b7f2-compile/spec.md` 裁定 12 / 13 · `specs/b6f1-stategraph-builder/spec.md` | FR-004 · FR-016 · 下游承接 **D-1** |
 
 ---
 
@@ -40,7 +42,7 @@
 
 | # | 承接方 | 里程碑 | 动作 | 本 spec 落点 |
 |---|---|---|---|---|
-| **D-1** | **B8F2 → B8F3** | **M2** | **别名在流式事件中的可见性**：节点别名（C25）落地后，`stream_mode="updates"` 的载荷键 MUST 与 `invoke` / 图结构使用**同一套节点名口径**（沿用 B8F1 的 `path_map` 查表口径：**用节点名，不解析别名**）⇒ ⇒ B8F3 MUST NOT 为 `stream()` 另造一套命名映射。 | FR-004 · FR-016 · H-10 |
+| **D-1** | **B8F2 → B8F3** | **M2** | **收缩（C25 正式作废）**：`stream_mode="updates"` 的载荷键 MUST 与 `invoke` / 图结构使用**同一套内部节点名口径**（沿用 B8F1 的 `path_map` 查表口径）；**不存在别名解析**，B8F3 MUST NOT 为 `stream()` 另造命名映射。 | FR-004 · FR-016 · H-10 |
 | **D-2** | **B8F2 → B14F1** | **M3** | **`checkpoints` 档的真实数据源**：本 feature 的 `checkpoints` 档在 v1 **恒为空序列**（无伪造事件）⇒ ⇒ B14F1 交付 `MemorySaver` / checkpointer 后 MUST 提供「每创建一个 checkpoint 一条事件」的数据源，并复用 `_loop.py:631-636` / `debug.py:144`（`map_debug_checkpoint`）的「checkpoint 事件 vs `get_state()` 同形」口径。 | FR-017 · 裁定 5 |
 | **D-3** | **B8F2 → B18F1 / B19F1** | **M3** | **两条事件通道独立、按 id 合并**：`stream()` 的事件与 `TraceSink` 的 span **不互为前置**；二者 MUST 共享同一 `run_id` / `thread_id`（D11 已冻结）⇒ ⇒ **载体 = L2 私有 contextvar**（`_STREAM_RUN_ID` / `_STREAM_THREAD_ID` · 由 `StreamSession` 绑定；B18F1 / B19F1 MUST 读取同一对 contextvar）⇒ ⇒ B18F1 / B19F1 MUST NOT 反向要求 `stream()` 先落地，亦 MUST NOT 把 trace 数据塞进 `stream()` 的信封。 | FR-013 · FR-027 · H-9 · SC-010 |
 | **D-4** | **B8F2 → B22F1 / B23F1** | **M2** | **图导出与流式互不影响**：`get_graph` / `draw_mermaid_png` MUST NOT 依赖 `stream()` 的副作用；`stream()` MUST NOT 调用图导出 ⇒ ⇒ 两者只在「同一张编译产物」上共享只读规格。 | FR-006 · SC-013 · Out of Scope |
@@ -775,7 +777,7 @@ D-130 / D-131 / D-132 / D-133 / D-135 / D-136）+ **DIFF 4**（D-125 / D-126 / D
 - `messages` 档的 LangChain 消息抽取（freechain）；freegraph 只做**原样透传**的边界声明。
 - `stream(Command(...))` 的恢复路径 / 会话连续 / checkpoint 持久化（B14F1 / B15F1 / B16F1）。
 - 静态断点（`interrupt_before` / `interrupt_after`）在 `stream()` 下的行为（v1 显式拒绝 · V-26 口径）。
-- 节点别名解析（B8F3）；`stream()` 只消费节点名。
+- ~~节点别名解析~~（**C25 已正式作废**）；`stream()` 只消费内部节点名。
 - 前端 / UI 消费（B26）。
 - 图导出 `get_graph` / `draw_mermaid_png`（B22F1 / B23F1）。
 
@@ -926,7 +928,7 @@ D-130 / D-131 / D-132 / D-133 / D-135 / D-136）+ **DIFF 4**（D-125 / D-126 / D
   - `harness/verification/B8F2/manual-verification.md`（五段式 + 追认文字）。
 - **CI 常驻门禁**：一条 pytest **真跑** `acceptance.py`；脚本与实现漂移 ⇒ 立刻红。
 - **验收脚本联动**：`harness/demo/visualization.py` 的 `case_stream_modes`（七种模式）
-  MUST 转绿；`harness/demo/graph_core.py` 的 C25 流式别名软断言 MUST 改为读取
+  MUST 转绿；`harness/demo/graph_core.py` 的 C25 流式别名软断言已随 C25 作废移除；
   `event["payload"]` 的键（信封形态适配 · **不是**放宽判据）。
 - **人工门禁**：`harness/verification/B8F2/manual-verification.md` MUST 含
   「七种 mode 实测输出 + 差分结果 + T-1…T-5 追认 + R-5 / R-6 登记」。

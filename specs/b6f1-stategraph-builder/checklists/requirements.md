@@ -4,6 +4,9 @@
 **Created**: 2026-11-15
 **Feature**: [spec.md](../spec.md)
 
+> **2026-11-20 后续修订（C25 正式作废）**：本清单中的 alias / D-74 记录保留为历史；
+> 差分场景 **D-74** 已迁移到 **B8F3 D-142**，`parity_probe.py` 不再承载。
+
 ## Content Quality
 
 - [x] No implementation details (languages, frameworks, APIs)
@@ -83,7 +86,7 @@ T033 方法级 docstring / 未交付方法消息；无 checkbox 状态变化）�
 
 **Validation round 11 — 2026-11-15（`/speckit.analyze` 第六轮修复 · 发起者授权）· 结果：16 / 16 项保持通过**
 （修复 `_ConditionalEdgeSpec` 缺 `branch`（D-2 普通映射所需）；明确 B7F2 保留完整
-`_BuilderSpec` / `node_records` 供 B8F3 读取 alias；明确 `path_map` 公开注解冻结、
+`_BuilderSpec` / `node_records` 供其他用途；C25 已正式作废，B8F3 不再读取 alias；明确 `path_map` 公开注解冻结、
 运行时接受任意 Hashable；把“非 TypedDict”edge case 改为以 B4F1 接受面为准；
 在“破冻结面”节登记 `test_facade.py` 的既有测试口径更新；统一 metadata 浅拷贝措辞；
 澄清静态断点“构建器侧零动作、正向透传归 B7F2”；补 research / quickstart / parity 标题

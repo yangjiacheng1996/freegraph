@@ -11,6 +11,8 @@
 >
 > **⚠️ 2026-11-12 上游对齐 P3 回溯修订注记（只加注记 · 不改历史正文）**：当前**冻结面以 `contracts/public-api-snapshot.txt` 为准**——`StateGraph.__init__` 的参数名为 `state_schema` / `context_schema` / `input_schema` / `output_schema`（第二个位置参数可选，第三个位置参数失败）；`add_node(node, action, ...)`、`add_edge(start_key, end_key)`、`add_conditional_edges(source, path, path_map)`、`validate(interrupt=...)` 均已按上游对齐。下文 **裁定 4 / 6 / FR-007 / FR-008 / SC-010** 中旧的 `StateGraph(schema)` / `name, fn` / `src, dst` / `src, path_fn` / `compile(*, checkpointer=None, store=None)` 写法属于**历史记录**，不再作为当前冻结面；以快照与 `src/freegraph/_stategraph.py` 为准。
 
+> **2026-11-20 后续修订（C25 正式作废）**：`add_node` 不再接受 `alias`；契约层不再承诺 C25。本 spec 中 alias 相关文字保留为历史。
+
 ---
 
 ## Clarifications
@@ -330,7 +332,7 @@ L3 → L2，契约层「可独立消费」的收益随之**失效**——D1 决�
   `None` 或空对象——静默成功会让用户的图「看起来建好了」却永不执行，比报错更坏。
 - **`StateGraph` 多传一个位置参数**：MUST 失败（`TypeError`）——构造函数**只**接受
   `schema` 一个位置参数（宪法原则 III 第 2 项）。
-- **`add_node` 的第三个参数是位置传入**：冻结为 **keyword-only**（`alias=`）——传成位置参数
+- **`add_node` 的关键字参数**：C25 已正式作废，`alias` 不再是公开关键字；其余关键字仍为 keyword-only
   MUST 失败，避免与上游 `add_node(node, action, *, defer=...)` 的参数序混用。
 - **`path_map` 传 list 还是 dict**：两者**都**是合法形态（宪法原则 III 第 5 项）——本 feature
   只冻结**签名**（第三个参数名为 `path_map`），**取值校验**归 B8F1。
@@ -415,12 +417,12 @@ L3 → L2，契约层「可独立消费」的收益随之**失效**——D1 决�
   裁定 5 / 6）：
   | 方法 | 冻结签名 | 形态要点 |
   |---|---|---|
-  | `add_node` | `add_node(name, fn, *, alias=None)` | 位置参数 `(str, Callable)`（宪法原则 III 第 3 项）+ 关键字 `alias`（C25 · B8F3） |
+  | `add_node` | `add_node(name, fn)` | 位置参数 `(str, Callable)`（宪法原则 III 第 3 项）；C25 已正式作废，**不再有 `alias` 关键字** |
   | `add_edge` | `add_edge(src, dst)` | `(str \| list[str], str)`，返回注解 `Self`（链式语义 · 宪法原则 III 第 4 项） |
   | `add_conditional_edges` | `add_conditional_edges(src, path_fn, path_map)` | `path_map` **同时支持 list 与 dict** 两种形态（宪法原则 III 第 5 项） |
   | `compile` | `compile(*, checkpointer=None, store=None)` | **无参可调用** + 两个可选 keyword（C10 / C19 / C20） |
   三个构建方法的**返回注解 MUST 为 `Self`**（链式语义 · 裁定 5 / research D-12）；
-  `alias` MUST 为 **keyword-only**。
+  **C25 已正式作废**：`add_node` MUST NOT 接受 `alias`；传 `alias=` ⇒ `TypeError`。
   > **本 feature 的运行时口径**：链式语义是**签名面**的冻结（返回注解 = `Self`），
   > **不是**运行时行为——本 feature 尚未接线，四个方法按 **FR-009** 一律抛
   > `NotImplementedError`（本 feature **MUST NOT** 返回自身）。
@@ -614,7 +616,7 @@ L3 → L2，契约层「可独立消费」的收益随之**失效**——D1 决�
 - 不实现 `get_graph` / `draw_mermaid`——属 **B22F1**；不实现 `draw_mermaid_png`——
   属 **B23F1**。
 - 不实现 `Send` 的动态 fan-out（**B11F1**）、`interrupt` 的中断 / 恢复（**B10F1**）、
-  `Command` 的运行时语义（**B9F1**）、节点别名行为（**B8F3**）、`recursion_limit`（**B13F1**）。
+  `Command` 的运行时语义（**B9F1**）、`recursion_limit`（**B13F1**）。**C25 节点别名已正式作废，不再属于门面契约。**
 - 不让 `harness/demo/target.py` / `graph_core.py` 的**用例**跑通——本 feature 只保证
   `graph_core.py` 的**导入段**成立（用例在 M1/M2 逐条转绿）。
 - 不建立 `COMPAT.md` 的完整矩阵内容——终版归 **B24F1**；本 feature 只补本层 5 行。
@@ -706,7 +708,7 @@ L3 → L2，契约层「可独立消费」的收益随之**失效**——D1 决�
   （上游 `Send` 另有 `timeout=` 关键字、`interrupt` 无额外参数）。
 - **`StateGraph` 外壳的最小形状**：仅「构造 + 四个已冻结签名的方法」；MUST NOT 在本 feature
   追加任何**未在 §7 调用形态表内**的公开方法（否则快照会把未经裁定的形状钉死）。
-- **`alias` 为 keyword-only**：冻结为 `add_node(name, fn, *, alias=None)`；传成位置参数 MUST
+- **C25 已正式作废**：`alias` 不再是 `add_node` 的关键字；传 `alias=` MUST 抛 `TypeError`；传成位置参数 MUST
   失败（避免与上游 `add_node(node, action, *, defer=...)` 的参数序混用）。
 - **`interrupt` 的异常类型**：本 feature 的未接线调用 MUST 抛**内置 `NotImplementedError`**
   （Q2 裁定）——语义直白、**不新增任何公开错误类型**、契约层 18 符号面不动；
@@ -755,7 +757,7 @@ L3 → L2，契约层「可独立消费」的收益随之**失效**——D1 决�
   `harness/demo/target.py:122`（`from freegraph.graph import StateGraph, START, END` · 只读基准）。
 - 前置 feature 规格：`specs/b1f1-contracts-core/spec.md`（四个核心类型 · 异常体系 · 依赖纪律）、
   `specs/b2f1-contracts-protocols/spec.md` 与 `contracts/public-api.md`（**契约层 18 符号面**
-  · C1–C27 冻结对照表 · 门禁 G1–G13）与 `contracts/architecture-gates.md`（G1 顶层包惰性 ·
+  · active 契约清单 C1–C24 + C26–C27 冻结对照表（C25 已作废） · 门禁 G1–G13）与 `contracts/architecture-gates.md`（G1 顶层包惰性 ·
   G2 零内部 import · G4 零环境变量 · G5 署名头 · G7 公开符号面恰为 18 · G8 兼容矩阵 ·
   G12 公开符号面唯一权威）。
 - 上游同名能力对照（证据 · 核实环境 `langgraph 1.2.11`）：

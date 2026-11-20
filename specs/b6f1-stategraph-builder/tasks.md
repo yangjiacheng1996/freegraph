@@ -1,5 +1,9 @@
 # Tasks: B6F1 · `StateGraph` 构建器
 
+> **2026-11-20 后续修订（C25 正式作废）**：B8F3 已移除 `alias`；本文件 T008/T014/T027/T041/T046 中的 alias 记录文字保留为历史，当前契约以 B8F3 为准。
+> 另：差分场景 **D-74** 已**迁移到 B8F3 D-142**，`tests/differential/parity_probe.py` 不再承载；本文件的 D-74 引用保留为历史墓碑。
+
+
 **Input**: Design documents from `specs/b6f1-stategraph-builder/`
 
 **Prerequisites**: `plan.md` · `spec.md` · `research.md` · `data-model.md` · `contracts/` · `quickstart.md`
@@ -277,7 +281,7 @@ Task: "T026 [US5] GraphSpec compatibility test in tests/facade/test_stategraph_s
 | SC-003 | T020 · T021 · T017 · T037 | 3 类核心错误 + BV 矩阵（T017 负责 BV-8/9）+ acceptance |
 | SC-004 | T024 | 链式同一对象 |
 | SC-005 | T011 · T028 · T029 · T026 · T027 | `_BuilderSpec` 形状 / 副本 / GraphSpec 适配 |
-| SC-006 | T035 · T036 · T046 | 差分 D-50…D-74 + 宪法签名 parity（T046 只比较必填位置参数 / 顺序 / 返回语义） |
+| SC-006 | T035 · T036 · T046 | 差分 D-50…D-73 + 宪法签名 parity（T046 只比较必填位置参数 / 顺序 / 返回语义）；D-74 已迁移到 B8F3 D-142 |
 | SC-007 | T030 · T037 | 用户函数调用计数 0 + 返回形态接受 + acceptance |
 | SC-008 | T042 | 依赖 / env / I-O 门禁 |
 | SC-009 | T044 | `target.py` diff 为空 |
@@ -285,7 +289,7 @@ Task: "T026 [US5] GraphSpec compatibility test in tests/facade/test_stategraph_s
 | SC-011 | T027 | 顺序 / 结构等价 / 用户输入变更隔离 |
 | SC-012 | T020 · T021 · T037 | 校验幂等 / 失败不改状态 / 消息可定位 |
 | SC-013 | T012 · T021 · T032b · T033 · T044 | 静态断点透传（不新增 / 不丢弃；`validate(interrupt=...)` 按上游校验；compile 签名快照由 T044 复核） |
-| SC-014 | T014 | `alias` / `defer` / `metadata` 记录 |
+| SC-014 | T014 | `defer` / `metadata` 记录（`alias` 已随 C25 正式作废，不再作为 SC-014 判据） |
 | SC-015 | T013 · T047 · T037 | 最小图可构造 + acceptance |
 
 > 每条 SC 至少挂一条**测试 / 可执行判定**任务；实现任务不单独充当判据覆盖。
@@ -336,6 +340,6 @@ Task: "T026 [US5] GraphSpec compatibility test in tests/facade/test_stategraph_s
 - `graph_core.py` 在本 feature 后仍退出码 2（compile / invoke 未就绪）；**不是**失败。
 - 门禁 3 / 4 / 5 的端到端部分按 plan 的 EV-1a / EV-1b / EV-1c 承接 B7F2 / B7F3 / B8F1 / B22F1 / B23F1 / B25F1；本 feature 不写永久红 CI。
 - G22「场景②」的运行期断言不在本 feature 执行；由 B7F3 点亮（H-7 · 裁定 11）。T042 / T044 须记录「未点亮，承接 B7F3」。
-- 差分场景编号为 **D-50…D-74**；plan 的设计决策编号为 **DD-01…DD-15**，两者 MUST NOT 混用。
+- 差分场景编号为 **D-50…D-73**（D-74 已迁移到 B8F3 D-142）；plan 的设计决策编号为 **DD-01…DD-15**，两者 MUST NOT 混用。
 - 提交前必须完成 **T046–T049 → T042–T044** 的顺序，并把实际输出写入人工验证记录；T050 最后完成。
 - T032a 属 Foundational（与 T008–T010 同批完成，Phase 2 结束必须绿）；T032b 属 Polish。

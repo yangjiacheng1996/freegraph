@@ -1,5 +1,7 @@
 # Data Model · B6F1 · `StateGraph` 构建器
 
+> **2026-11-20 后续修订（C25 正式作废）**：`_NodeRecord` 不再含 `alias`；`add_node` 不再接受 `alias`。本文件 alias 相关文字保留为历史。
+
 **Spec**: [spec.md](./spec.md) · **Research**: [research.md](./research.md) · **Date**: 2026-11-15
 
 > 本文件只落实体 / 形状 / 校验 / 不变量（可自动判定的部分）；**MUST NOT** 改写 spec 的任何语义。
@@ -56,7 +58,6 @@ class StateGraph:
 class _NodeRecord:
     name: str
     action: Callable[..., Any]
-    alias: str | None = None
     defer: bool = False
     metadata: Mapping[str, Any] | None = None
 ```
@@ -65,12 +66,12 @@ class _NodeRecord:
 |---|---|---|
 | `name` | 节点内部名 | `str`；非 `START` / `END`；不含 `\|` / `:`；唯一；单 callable 形态取 `__name__` → 类型名（普通 callable 的 `.name` 不参与） |
 | `action` | 节点函数 | 可调用；构建期不调用、不检查返回注解 |
-| `alias` | 对外别名 | 接受 `str \| None` 并记录；冲突 / 寻址语义归 B8F3 |
+| ~~`alias`~~ | 已作废 | C25 于 2026-11-20 正式作废；`_NodeRecord` 不再含 `alias`；`add_node` 不再接受 `alias` |
 | `defer` | 上游同款关键字 | 接受并记录；`defer=True` 屏障不在本 feature 实现（B7F4 X-03） |
 | `metadata` | 上游同款元数据 | 接受并浅拷贝记录；本 feature 不消费 |
 
-> **类型校验边界**：本 feature **不校验** `alias` / `defer` / `metadata` 的运行时类型
-> （如 `alias=123`、`defer="yes"`、`metadata` 非 Mapping）；只按上述规则原样记录，
+> **类型校验边界**：本 feature **不校验** `defer` / `metadata` 的运行时类型
+> （如 `defer="yes"`、`metadata` 非 Mapping）；只按上述规则原样记录；`alias` 已作废、不再接受，
 > 类型收紧留给后续 feature 或另行立项。
 
 ### 3.2 静态边表
@@ -129,7 +130,7 @@ class _BuilderSpec:
 |---|---|---|---|
 | `channels` | `dict[str, Channel]` | 状态通道（schema 顺序）+ 路由通道（目标首次出现顺序） | B7F2 → `GraphSpec.channels` |
 | `nodes` | `dict[str, NodeSpec]` | 节点规格；`subscribes` = 全部状态通道 | B7F2 → `GraphSpec.nodes` |
-| `node_records` | `dict[str, _NodeRecord]` | 原始节点登记（含 alias / defer / metadata） | B7F2 按 D-1 在 `CompiledGraph` 私有字段保留；B8F3 读取 alias |
+| `node_records` | `dict[str, _NodeRecord]` | 原始节点登记（含 defer / metadata；**无 alias**） | B7F2 按 D-1 在 `CompiledGraph` 私有字段保留；C25 作废后 B8F3 不再读取 alias |
 | `edges` | `dict[str \| tuple[str, ...], tuple[str, ...]]` | 静态边；值 MAY 含 `END` | B7F2（仅过滤**单源** `END` 后 → `GraphSpec.edges`；多源 **V-16 形态**（`END` / 目标数 ≠ 1）保留给 V-16） |
 | `conditional_edges` | `tuple[_ConditionalEdgeSpec, ...]` | 条件边规格；登记顺序 | B7F2 机械翻译为纯内建类型 `dict[str, tuple[dict[str, Any], ...]]`（内层 `{"branch": str, "path": Callable, "path_map": dict[Hashable, str] \| None, "targets": tuple[str, ...], "route_channels": tuple[str, ...]}`，`branch` 取自 `_ConditionalEdgeSpec.branch`，形状以 spec D-2 为准）并存放于 `CompiledGraph` 私有字段；B8F1 经 L2 `GraphSpec.conditional_edges` 消费 |
 
@@ -250,7 +251,7 @@ SNAPSHOT_READY
 
 - 不实现 `compile()` / `invoke()` / `stream()` / `get_graph()` / `draw_mermaid()`。
 - 不实现条件边求值 / fresh 读（B8F1）。
-- 不实现别名寻址 / 冲突（B8F3）；B8F3 只从 B7F2 保留的 `_BuilderSpec.node_records` 读取 alias。
+- **C25 已正式作废**：不实现别名；B8F3 不再读取 `_NodeRecord.alias`；`add_node` 不再接受 `alias`。
 - 路由通道 `branch:to:<target>` 与用户 schema key 同名时，复制上游覆盖行为
   （`state.py:1525-1530`）；登记为已知边界，不新增 spec 判据（research **O-1**）。
 - 不实现 `defer=True` 的节点专用屏障（B7F4 X-03）。路由通道对 `defer=True` 目标仍用

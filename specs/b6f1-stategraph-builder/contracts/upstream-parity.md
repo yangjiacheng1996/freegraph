@@ -1,3 +1,6 @@
+> **2026-11-20 后续修订（C25 正式作废）**：`add_node` 不再接受 `alias`；本文件中 alias 记录文字保留为历史。
+> 差分场景 **D-74** 已迁移到 **B8F3 D-142**，`parity_probe.py` 不再承载；本文件中的 `D-50…D-74` 为历史范围。
+
 # 上游对照 · B6F1 · `StateGraph` 构建器
 
 **Spec**: [../spec.md](../spec.md) · **Research**: [../research.md](../research.md) · **Date**: 2026-11-15
@@ -16,7 +19,7 @@
 | P-01 | `StateGraph` 类与构造参数名 | `langgraph/graph/state.py:131` · `:216-225` | 同名同签名；`state_schema` 唯一必填位置参数；其余可选 | SAME | 宪法原则 III 第 2 项 |
 | P-02 | `add_node(node, action, *, defer, metadata, ...)` 与单 callable 形态 | `langgraph/graph/state.py:667-682` · `:778-799` | 同名同签名；支持单 callable；普通 callable `.name` 不参与取名 | SAME | 宪法原则 III 第 3 项 · E-21 |
 | P-02d | `add_node(..., destinations=...)` | `langgraph/graph/state.py:810-861` | 接受 `Sequence[str]` / `dict[str,str]`；显式覆盖返回注解推断；仅图渲染 | SAME（B22F1 追加） | T-2 / B22F1 |
-| P-02b | `add_node(..., alias=...)` | `langgraph/graph/state.py:667-682`（签名无 `alias`；运行时经 `**kwargs` 静默忽略 · 实测 E-24） | `alias` 为 freegraph 自研增量，只记录不实现语义 | DIFF | C25 · B8F3 ⇒ X-1 · D-74 |
+| P-02b | `add_node(..., alias=...)` | `langgraph/graph/state.py:667-682`（签名无 `alias`；运行时经 `**kwargs` 静默忽略 · 实测 E-24） | **C25 已正式作废**；freegraph 不再接受 `alias` ⇒ `TypeError` | STRICTER | B8F3 · D-74 |
 | P-02c | 普通 callable 的 `.name` 不参与取名 | `langgraph/graph/state.py:778-799`（实测 E-21） | 同款：`__name__` → 类型名；`.name` 忽略 | SAME | 上游首段已把 `node` 固定为 `str` ⇒ 第二段不再取 `.name` |
 | P-03 | 重复节点名 / 保留节点名 / 保留字符 | `langgraph/graph/state.py:802-811` · `langgraph/_internal/_constants.py:87-89` · 实测 E-18 | `add_node` 立即 `ValueError`，消息点名节点 | SAME | 早失败且异常类型一致 |
 | P-03b | 缺 `action` / 单 callable 同时传 `action` | `langgraph/graph/state.py:800-801`（缺 action ⇒ `RuntimeError`）· `:782-799`（单 callable 忽略 action） | 缺 action / 多传 action ⇒ 立即 `TypeError` | STRICTER | 统一用户输入错误类型，且不静默忽略 ⇒ X-4 |
@@ -43,7 +46,7 @@
 
 ### §1.1 三态一致性
 
-- DIFF：P-02b（alias 增量 → X-1）· P-06c（Runnable 范围边界 → X-6）· P-11（内部快照 → X-3）· P-13b（defer 路由通道 → X-7）；
+- STRICTER：P-02b（alias 已作废 ⇒ `TypeError`）· DIFF：P-06c（Runnable 范围边界 → X-6）· P-11（内部快照 → X-3）· P-13b（defer 路由通道 → X-7）；
 - STRICTER：P-03b（缺 action → X-4）· P-04b / P-04c / P-06b / P-07c / P-10
   （空多源 / 非 str 输入 / 非法 path_map 元素 → X-2）· P-14（空节点表 → X-5）；
 - SAME：P-01 / P-02 / P-02c / P-03 / P-03c / P-04 / P-04d / P-05 / P-06 / P-07 / P-07b / P-08 /
@@ -117,7 +120,7 @@
 | D-71 | 缺入口 + 未知目标 | 两侧均先报入口错误（消息含 `entrypoint` / `START`） | SAME（P-09 顺序） |
 | D-72 | 空节点 + `START -> END` | 上游通过；freegraph `ValueError` | STRICTER（X-5 · E-20） |
 | D-73 | 非 callable `Runnable` 作为 `path` | 上游接受；freegraph 立即 `TypeError` | DIFF（X-6 · E-23） |
-| D-74 | `add_node(..., alias="model")` | 两侧均接受；上游静默忽略 `alias`，freegraph 记录到 `_NodeRecord.alias` | DIFF（X-1 · E-24） |
+| D-74 | `add_node(..., alias="model")` | **2026-11-20 起 tombstone**：C25 作废后该场景迁移到 **B8F3 D-142**，不再由 `parity_probe.py` 承载；上游仍静默忽略 | STRICTER（X-3 · E-24 · 已迁移） |
 
 ---
 
@@ -125,7 +128,7 @@
 
 | # | 类别 | 被偏离的判据 | 理由 | 承接 / 追认 |
 |---|---|---|---|---|
-| X-1 | 必须自研区（上游没有） | `add_node(..., alias=...)` | C25 / B8F3 的节点别名是 freegraph 自有增量；上游签名无 `alias`，运行时经 `**kwargs` 静默忽略（E-24） | B8F3 · 本 feature 只记录 · D-74 |
+| X-1 | 必须自研区（上游没有） | `add_node(..., alias=...)` | C25 已于 2026-11-20 正式作废（编号不复用）；freegraph 不再接受 `alias`；上游签名无 `alias`、运行时静默忽略（E-24） | B8F3 · C25 tombstone · D-74 |
 | X-2 | 更严失败信号 | `path_map` 非 list / dict / None ⇒ `TypeError`；list 元素 / dict value 非 `str` ⇒ `TypeError`；条件边 `source` 非 `str`、单源边 `end_key` 非 `str` ⇒ `TypeError`；空多源列表 ⇒ `ValueError` | 上游对非 dict/list 的 `path_map` 不报错（无 Literal ⇒ None；有 Literal 则推断）；对非 str 的 source / end_key / path_map 元素静默接受并把错误推迟到 `validate()` / `compile()` | 本 feature 内闭合 · Q12 发起者确认选项 A（含同类非法输入） · D-56 / D-59 / D-62 / D-63 / D-64 |
 | X-3 | 形态优化（原则 XII） | 私有 `_build_spec() -> _BuilderSpec` | 上游 `compile()` 直接读自身字段（`state.py:1242-1247` / `:1374-1399`）；L3 构建器与 L2 运行时物理分层 ⇒ 冻结内部规格是「形态最优」而非「上游缺失能力」；Q10 发起者确认 | B7F2（B8F1 经 L2）· spec D-1 / D-2 |
 | X-4 | 更严失败信号 | 缺 `action` / 单 callable 同时传 `action` ⇒ `TypeError` | 上游 `RuntimeError` / 静默忽略；freegraph 统一明确拒绝 | 本 feature 内闭合 · Q12 发起者确认选项 A · D-58 / D-66 |
@@ -141,6 +144,6 @@
 2. 重跑 E-01…E-24；
 3. 重判 D-50…D-74 的三态；
 4. 复核 `path_map` 的 list / dict / None 接受形态（含非 dict/list 时的 `Literal` 推断差异）；
-5. 复核 `add_node` 的单 callable / 缺 action / 多传 action / `.name` 不参与取名 / `alias` 经 `**kwargs` 忽略；
+5. 复核 `add_node` 的单 callable / 缺 action / 多传 action / `.name` 不参与取名 / `alias` 已被 C25 正式作废（拒绝形态）；
 6. 复核 `validate()` 的「源 → 入口 → 目标」顺序与空图接受行为；
 7. 复核保留字符集合（当前 `|` / `:`）。

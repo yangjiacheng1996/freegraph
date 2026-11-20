@@ -1,3 +1,5 @@
+> **2026-11-20 后续修订（C25 正式作废）**：节点别名已移除；图导出继续使用内部节点名（`name == id`）。本契约中 alias 相关文字保留为历史。
+
 <!-- authority: yes -->
 
 # 图导出 / mermaid 契约（graph-export-contract.md）· B22F1
@@ -24,7 +26,7 @@
 6. `Command` 泛型化与 `destinations` 的登记 / 推断 / 校验口径；
 7. 上述面的失败信号与不变量。
 
-**不覆盖**：`draw_mermaid_png()`（B23F1）· 子图（C26）· 别名（B8F3）·
+**不覆盖**：`draw_mermaid_png()`（B23F1）· 子图（C26）· ~~别名~~（C25 已正式作废）·
 checkpointer / store（B14F1 / v2）· trace（B18F1 / B19F1）。
 
 ---
@@ -66,7 +68,7 @@ nodes = (
 |---|---|
 | 2.1.1 | `__start__` 恒在首位；`__end__` 恒在末位 |
 | 2.1.2 | 业务节点顺序 = `_spec.nodes` 的**声明顺序** |
-| 2.1.3 | 业务节点 `name == id`（v1 不解析 B8F3 别名；`_NodeRecord.alias` 不参与） |
+| 2.1.3 | 业务节点 `name == id`（**C25 已正式作废**；无节点别名；`_NodeRecord` 无 `alias`） |
 | 2.1.4 | **全部**业务节点都在表中（含不可达节点） |
 | 2.1.5 | 不含路由通道（`branch:to:<target>`） |
 | 2.1.6 | 不含 `_spec.channels` 中的非节点 key |
@@ -183,7 +185,6 @@ def add_node(
     node: str | Callable[..., Any],
     action: Callable[..., Any] | None = None,
     *,
-    alias: str | None = None,
     defer: bool = False,
     metadata: Mapping[str, Any] | None = None,
     destinations: dict[str, str] | tuple[str, ...] | None = None,
@@ -315,7 +316,7 @@ def draw_mermaid(self) -> str: ...
 | I-01 | 返回类型 | `type(g).__module__ == "freegraph.contracts.graph"` 且 `type(g).__name__ == "Graph"` |
 | I-02 | 节点集合 | == `{"__start__"} ∪ spec.nodes ∪ {"__end__"}` |
 | I-03 | 伪节点名 | `__start__` / `__end__` 的 `id == name` |
-| I-04 | 业务节点名 | `name == id`（无别名解析） |
+| I-04 | 业务节点名 | `name == id`（C25 已作废；无别名） |
 | I-05 | 边端点 | 所有 `source` / `target` 都在节点 id 集合 |
 | I-06 | 条件标记 | 分支边 `conditional=True` 且 `condition` 非空 |
 | I-07 | 去重 | 无重复 `(source,target)`；条件优先 |

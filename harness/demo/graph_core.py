@@ -28,7 +28,6 @@
 
 * 公开门面统一为 `freegraph.graph`，且须再导出 `Command` / `Send` / `interrupt` /
   `RunConfig`（依据：B2F2「公开 API 门面 `freegraph/graph.py`」+ C16/C17/C18/C22）；
-* `add_node(name, fn, alias=...)` 的**节点别名**形态（依据：C25 / B8F3）；
 * `compile(checkpointer=..., store=...)` 的关键字形态（依据：C10 / C19 / C20）；
 * `invoke(input, config)` 的 `config` 同时接受 `RunConfig` 与普通 dict
   （依据：C11 签名 `invoke(input, config=None)` + C22）；`recursion_limit` 走 dict 形态
@@ -539,14 +538,11 @@ def case_run_config_and_context() -> None:
 
     g.compile().invoke({"messages": [], "llm_calls": 0}, cfg)
 
-    # C21：context 是独立通道，不塞进 configurable
-    # ⚠️ **context 独立通道段降级为软断言**（T040 · **实测依据 = T011 的首次执行红点**）——
-    # **context 独立通道**归 **B8F3**（M2）⇒ ⇒ 该段不判失败（缺口**具名**承接）。
-    _B8F3_NOTE = "context 独立通道未交付 —— 归 B8F3"
-    soft(
+    # C21：context 是独立通道，不塞进 configurable（B8F3 已交付 ⇒ 硬断言）
+    check(
         seen.get("ctx") == {"user": "u1"},
         "C21 context 作为独立通道透传到节点",
-        f"节点读到 context={seen.get('ctx')!r} —— {_B8F3_NOTE}",
+        f"节点读到 context={seen.get('ctx')!r}",
     )
     # ⚠️ **T041**（B7F3 · 事实订正）：`RunConfig` **已冻结为有** `configurable` 字段
     # （`src/freegraph/contracts/types.py:215`）⇒ ⇒ 原断言 `not hasattr(cfg, "configurable")`
@@ -557,49 +553,6 @@ def case_run_config_and_context() -> None:
         "C21 context 未被塞进 configurable",
         f"实际 configurable={getattr(cfg, 'configurable', None)!r}",
     )
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# A10 · 节点别名：C25
-# ─────────────────────────────────────────────────────────────────────────────
-def case_node_alias() -> None:
-    section("A10 节点别名 · C25")
-
-    def node(state: State) -> dict:
-        return {"messages": ["x"]}
-
-    g = StateGraph(State)
-    try:
-        g.add_node("agent", node, alias="model")
-    except TypeError as exc:
-        # C25 的**语义**由章程规定，但「别名」的具体调用形态章程未锁（C25 只说「允许别名」）
-        soft(False, "C25 节点别名可寻址", f"实现未采用 `add_node(..., alias=)` 形态（{exc}）——形态待 B8F3 锁定")
-        return
-    g.add_edge(START, "agent")
-    g.add_edge("agent", END)
-    app = g.compile()
-
-    out = app.invoke({"messages": [], "llm_calls": 0})
-    eq(out.get("messages"), ["x"], "C25 带别名的节点正常执行")
-
-    # 别名应在流式事件 / 图结构中可见（用于用户的 stream 过滤器）。
-    # B8F2 已交付：事件为四键信封 ⇒ 节点名在 ``payload`` 的键上。
-    _B8F2_NOTE = "B8F2 已交付 · 四键信封"
-    try:
-        events = list(app.stream({"messages": [], "llm_calls": 0}, stream_mode="updates"))
-        names = set()
-        for ev in events:
-            if isinstance(ev, dict):
-                payload = ev.get("payload", {})
-                if isinstance(payload, dict):
-                    names.update(payload.keys())
-        soft(
-            bool(names & {"model", "agent"}),
-            "C25 别名（或原名）出现在流式事件中",
-            f"事件 payload 键 = {sorted(names)} —— {_B8F2_NOTE}",
-        )
-    except Exception as exc:  # noqa: BLE001
-        soft(False, "C25 别名（或原名）出现在流式事件中", f"{type(exc).__name__}: {exc} —— {_B8F2_NOTE}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -657,7 +610,6 @@ def main() -> int:
         case_concurrency_and_errors,
         case_recursion_limit,
         case_run_config_and_context,
-        case_node_alias,
     ):
         try:
             case()

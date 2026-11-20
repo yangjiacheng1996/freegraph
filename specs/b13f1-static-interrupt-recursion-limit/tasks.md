@@ -1,4 +1,7 @@
 ---
+
+> **2026-11-20 后续修订（C25 正式作废）**：本文件 T099 中「保留 C25 一行」为历史；C25 行已由 B8F3 正式作废移除。
+
 description: "Task list for B13F1 · 静态中断点 + recursion_limit"
 ---
 

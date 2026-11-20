@@ -1,3 +1,5 @@
+> **2026-11-20 后续修订（C25 正式作废）**：`add_node` 不再接受 `alias`；本文件 alias 相关文字保留为历史。
+
 # Research · B2F2 公开 API 门面 + API 签名快照
 
 **feature**: `B2F2`（M0 地基 · 31 个 feature 中的第 3 个）
@@ -287,7 +289,7 @@ B6F1 若要公开 `schema`（或任何新属性），快照会 **diff** ⇒ 需�
 | 方法 | 冻结签名（进入快照） | 依据 |
 |---|---|---|
 | `__init__` | `(self, schema: Any) -> None` | 裁定 4（参数名 `schema`）+ C1 的 schema 类型体系归 **B4F1** |
-| `add_node` | `(self, name: str, fn: NodeFunc, *, alias: str \| None = None) -> Self` | 宪法原则 III 第 3 项 + C25 |
+| `add_node` | `(self, name: str, fn: NodeFunc) -> Self` | 宪法原则 III 第 3 项；C25 已正式作废，无 `alias` |
 | `add_edge` | `(self, src: str \| list[str], dst: str) -> Self` | 宪法原则 III 第 4 项 |
 | `add_conditional_edges` | `(self, src: str, path_fn: Callable[..., str \| list[str]], path_map: list[str] \| dict[str, str]) -> Self` | 宪法原则 III 第 5 项（C7 路由契约归 **B8F1**） |
 | `compile` | `(self, *, checkpointer: Checkpointer \| None = None, store: Store \| None = None) -> CompiledGraph` | 裁定 6 + C10 / C19 / C20 |
@@ -418,7 +420,7 @@ NotImplementedError("<方法名> 尚未接线（由 <feature> 交付）")
 
 | freegraph 符号 | 对应上游符号 | 等价程度 | 差异说明 |
 |---|---|---|---|
-| `StateGraph` | `langgraph.graph.StateGraph` | 部分等价 | 构造**只接受** `schema` 一个位置参数（上游另有 `context_schema` / `input_schema` / `output_schema`）；`add_node` 的参数名为 `name` / `fn`（上游 `node` / `action`）且新增 `alias` 关键字；`compile` 只保留 `checkpointer` / `store` 两个关键字（上游另含 `cache` / `interrupt_before` / `interrupt_after` / `debug` / `name` / `transformers`）；**构建器行为待 B6F1 / B7F2 交付**；上游来源 `langgraph/graph/state.py:131`（核实环境 `langgraph 1.2.11`） |
+| `StateGraph` | `langgraph.graph.StateGraph` | 部分等价 | 构造**只接受** `schema` 一个位置参数（上游另有 `context_schema` / `input_schema` / `output_schema`）；`add_node` 的参数名为 `name` / `fn`（上游 `node` / `action`）；C25 已正式作废，无 `alias` 关键字；`compile` 只保留 `checkpointer` / `store` 两个关键字（上游另含 `cache` / `interrupt_before` / `interrupt_after` / `debug` / `name` / `transformers`）；**构建器行为待 B6F1 / B7F2 交付**；上游来源 `langgraph/graph/state.py:131`（核实环境 `langgraph 1.2.11`） |
 | `START` | `langgraph.constants.START` | 行为等价 | 值与语义均一致（`'__start__'`）；上游来源 `langgraph/constants.py:30`（核实环境 `langgraph 1.2.11`） |
 | `END` | `langgraph.constants.END` | 行为等价 | 值与语义均一致（`'__end__'`）；上游来源 `langgraph/constants.py:28`（核实环境 `langgraph 1.2.11`） |
 | `Send` | `langgraph.types.Send` | 部分等价 | 形状等价（`node` / `arg`）；**freegraph 侧不可变**（上游可变）；**fan-out 行为待 B11F1 交付**；上游来源 `langgraph/types.py:704`（核实环境 `langgraph 1.2.11`） |
@@ -511,7 +513,7 @@ interrupt(value: Any) -> Any
 | 4 | `Send` 的**动态 fan-out** | **B11F1** | 行为 |
 | 5 | `interrupt` 的**中断 / 恢复**（含 `Command(resume=...)` 闭环） | **B10F1** | 行为 |
 | 6 | `Command` 的**运行时语义**（`goto` / `update`） | **B9F1** | 行为 |
-| 7 | 节点**别名行为**（`alias` 的运行时寻址） | **B8F3** | 行为 |
+| 7 | ~~节点别名行为（`alias` 的运行时寻址）~~ | **C25 已正式作废** | 历史 |
 | 8 | `recursion_limit`（走 dict 形态） | **B13F1** | 行为 |
 | 9 | `get_graph` / `draw_mermaid` / `draw_mermaid_png` | **B22F1 / B23F1** | 能力 |
 | 10 | 状态 **schema 的类型体系**（C1：`schema` 注解从 `Any` 收紧） | **B4F1** | 类型收紧（走快照 diff 流程） |

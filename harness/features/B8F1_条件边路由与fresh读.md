@@ -139,7 +139,7 @@
 - 不实现 `stream()`（属 B8F2）。
 - 不实现 `Send` fan-out 的调度（属 B11F1）——路由返回**序列**的多目标 fan-out
   若与 `Send` 语义重叠，须在 spec 中明确区分。
-- 不实现节点别名（属 B8F3）/ `context` 通道（属 B8F3）。
+- 不实现节点别名（原属 B8F3；**C25 已于 2026-11-20 正式作废**）/ `context` 通道（属 B8F3）。
 - 不实现 `get_graph` / PNG（属 B22F1 / B23F1）。
 - 不实现 checkpoint（属 B14F1）。
 - 不实现 async（v2 范围）。

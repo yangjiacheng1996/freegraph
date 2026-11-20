@@ -205,7 +205,12 @@ _ENTRY = NodeSpec(subscribes=(), run=lambda state: {})
 
 
 def test_i1_node_input_is_a_plain_dict_with_only_the_available_subscriptions() -> None:
-    """**I-1**：入参 MUST 是**普通 `dict`**且只含「订阅集 ∩ 有值集」。"""
+    """**I-1**：入参 MUST 是**普通 `dict`**且只含「订阅集 ∩ 有值集」。
+
+    ⚠️ **2026-11-20 · B8F3 T-1（只补注记）**：本用例覆盖 ``context is None``
+    ⇒ 入参仍是**精确** ``dict``；``context is not None`` 时标准入参为**带只读
+    ``.context`` 的 ``dict`` 子类**（映射内容仍可变、映射语义不变）⇒ 原判据逐字不变。
+    """
     channels = _channels()
     channels["count"].update([3])
     captured: list[dict[str, Any]] = []

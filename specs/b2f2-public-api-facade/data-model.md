@@ -1,3 +1,5 @@
+> **2026-11-20 后续修订（C25 正式作废）**：`add_node` 不再接受 `alias`；本文件 alias 相关文字保留为历史。
+
 # Data Model · B2F2 门面导出面的冻结规格
 
 **feature**: `B2F2`（公开 API 门面 `freegraph/graph.py` + API 签名快照）
@@ -91,7 +93,7 @@
 
 | 方法 | 签名 | 形态要点 |
 |---|---|---|
-| `add_node` | `(self, name: str, fn: NodeFunc, *, alias: str \| None = None) -> Self` | 位置参数 `(str, Callable)`（宪法 III 第 3 项）；`alias` **keyword-only**（C25 · B8F3）；`fn` 用契约层已有的 `NodeFunc` 协议 |
+| `add_node` | `(self, name: str, fn: NodeFunc) -> Self` | 位置参数 `(str, Callable)`（宪法 III 第 3 项）；**C25 已正式作废，无 `alias`**；`fn` 用契约层已有的 `NodeFunc` 协议 |
 | `add_edge` | `(self, src: str \| list[str], dst: str) -> Self` | 返回注解 `Self`（链式语义 · 宪法 III 第 4 项） |
 | `add_conditional_edges` | `(self, src: str, path_fn: Callable[..., str \| list[str]], path_map: list[str] \| dict[str, str]) -> Self` | `path_map` **同时支持 list 与 dict**（宪法 III 第 5 项）；**无缺省值**；路由契约 C7 归 B8F1 |
 | `compile` | `(self, *, checkpointer: Checkpointer \| None = None, store: Store \| None = None) -> CompiledGraph` | **无参可调用** + 两个 **keyword-only** 可选关键字（裁定 6） |
@@ -216,7 +218,7 @@
     [method] __init__(self, schema: Any) -> None
     [method] add_conditional_edges(self, src: str, path_fn: Callable[..., str | list[str]], path_map: list[str] | dict[str, str]) -> Self
     [method] add_edge(self, src: str | list[str], dst: str) -> Self
-    [method] add_node(self, name: str, fn: NodeFunc, *, alias: str | None = None) -> Self
+    [method] add_node(self, name: str, fn: NodeFunc) -> Self
     [method] compile(self, *, checkpointer: Checkpointer | None = None, store: Store | None = None) -> CompiledGraph
 [function] interrupt(value: Any) -> Any
 ```

@@ -1,5 +1,7 @@
 <!-- authority: yes -->
 
+> **2026-11-20 后续修订（C25 正式作废）**：`add_node` 不再接受 `alias`；`_NodeRecord` 不再含 `alias`。本契约中 alias 相关文字保留为历史。
+
 # 构建器契约（StateGraph Builder Contract）—— B6F1 的唯一权威
 
 **Feature**: `B6F1` · **Spec**: [../spec.md](../spec.md) · **Plan**: [../plan.md](../plan.md)
@@ -17,7 +19,7 @@
 | 项 | 契约 |
 |---|---|
 | 构造 | `StateGraph(state_schema: Any, context_schema: Any = None, *, input_schema: Any = None, output_schema: Any = None) -> None` |
-| 节点 | `add_node(node: str \| Callable[..., Any], action: Callable[..., Any] \| None = None, *, alias: str \| None = None, defer: bool = False, metadata: Mapping[str, Any] \| None = None, destinations: dict[str, str] \| tuple[str, ...] \| None = None) -> Self` |
+| 节点 | `add_node(node: str \| Callable[..., Any], action: Callable[..., Any] \| None = None, *, defer: bool = False, metadata: Mapping[str, Any] \| None = None, destinations: dict[str, str] \| tuple[str, ...] \| None = None) -> Self`（`alias` 已随 C25 正式作废） |
 | 静态边 | `add_edge(start_key: str \| list[str], end_key: str) -> Self`（运行时也接受 `tuple[str, ...]` 源） |
 | 条件边 | `add_conditional_edges(source: str, path: Callable[..., str \| list[str]], path_map: list[str] \| dict[str, str] \| None = None) -> Self` |
 | 校验 | `validate(interrupt: Sequence[str] \| None = None) -> Self` |
@@ -44,7 +46,7 @@
 - 重复节点名、`START` / `END` 作节点名、节点名含 `\|` / `:` ⇒ 立即 `ValueError`。
 - 节点名 `__parent__` 在本层**不拒绝**（上游 `add_node` 同款接受）；由 B7F2 的
   `GraphSpec` 构造期 **B9F1 FR-005 `__parent__` 保留名检查**最终失败（与 V-1 / V-2 / V-3 同族）。
-- `alias` / `defer` / `metadata` 原样记录；`metadata` 浅拷贝。本 feature **不校验**其运行时类型。
+- `defer` / `metadata` 原样记录；`metadata` 浅拷贝。**C25 已正式作废，`alias` 不再接受。** 本 feature **不校验** `defer` / `metadata` 的运行时类型。
 - **B22F1 追加**：`destinations` 仅用于图渲染（`get_graph`），不影响执行；`None` = 使用返回注解推断，显式序列 / dict = 覆盖推断（含空）。形态非法 ⇒ `TypeError`；目标存在性由编译期校验（`ValueError`）。
 - MUST NOT 调用 `action`、MUST NOT 检查其返回注解（`destinations=None` 时仅做 `get_type_hints` 只读推断）。
 
@@ -112,7 +114,7 @@ class _BuilderSpec:
 |---|---|---|
 | `channels` | 状态通道（schema 顺序）+ 路由通道（目标首次出现顺序） | B7F2 → `GraphSpec.channels` |
 | `nodes` | 节点名 → `NodeSpec(subscribes=全部状态通道, run=action)`；保序 | B7F2 → `GraphSpec.nodes` |
-| `node_records` | 节点名 → `_NodeRecord`（含 alias / defer / metadata） | B7F2 按 D-1 在 `CompiledGraph` 私有字段保留；B8F3 读取 alias |
+| `node_records` | 节点名 → `_NodeRecord`（含 defer / metadata；**无 alias**） | B7F2 按 D-1 在 `CompiledGraph` 私有字段保留；C25 作废后 B8F3 不再读取 alias |
 | `edges` | 静态边；单源 `str` / 多源 `tuple`；值 MAY 含 `END` | B7F2（仅过滤**单源** `END` 后 → `GraphSpec.edges`；多源 **V-16 形态**（`END` / 目标数 ≠ 1）原样保留给 V-16） |
 | `conditional_edges` | 条件边规格；登记顺序 | B7F2 机械翻译为纯内建类型 `dict[str, tuple[dict[str, Any], ...]]`（内层 `{"branch": str, "path": Callable, "path_map": dict[Hashable, str] \| None, "targets": tuple[str, ...], "route_channels": tuple[str, ...]}`，`branch` 取自 `_ConditionalEdgeSpec.branch`，形状以 spec D-2 为准）并存放于 `CompiledGraph` 私有字段；B8F1 经 L2 `GraphSpec.conditional_edges` 消费 |
 
@@ -123,7 +125,6 @@ class _BuilderSpec:
 class _NodeRecord:
     name: str
     action: Callable[..., Any]
-    alias: str | None = None
     defer: bool = False
     metadata: Mapping[str, Any] | None = None
 ```
@@ -243,7 +244,7 @@ class _ConditionalEdgeSpec:
   私有字段（如 `_conditional_edges`）；在 B8F1 放宽 V-8 之前，MUST NOT 填充
   `GraphSpec.conditional_edges`。
 - MUST 在 `CompiledGraph` 私有字段保留**完整 `_BuilderSpec`**（至少 `node_records`），
-  供 B8F3 读取 alias；该保留 MUST NOT 改写快照内容。
+  **C25 正式作废后，B8F3 不再读取 alias**；该保留 MUST NOT 改写快照内容。
 - 条件边字段在 B7F2 阶段仍保持 `GraphSpec.conditional_edges` 为空（B7F1 的 V-8）；
   B8F1 落地时把该映射填入 `GraphSpec.conditional_edges` 并承接 V-8 放宽。
 - MUST NOT 修改快照字段；如需变换，先复制。
@@ -259,8 +260,8 @@ class _ConditionalEdgeSpec:
 
 ### 6.3 B8F3
 
-- MUST 从 B7F2 按 D-1 保留的 `_BuilderSpec.node_records` 中读取 `_NodeRecord.alias`。
-- MUST NOT 要求用户重新声明别名。
+- **C25 已正式作废**：MUST NOT 读取 `_NodeRecord.alias`；`add_node` MUST NOT 接受 `alias`。
+- 历史「B8F3 读取 alias」的承接已撤回。
 
 ---
 
@@ -271,6 +272,6 @@ class _ConditionalEdgeSpec:
 - 本 feature 不执行任何节点 / 路由函数 / 归约器。
 - 本 feature 不实现 `compile()` / `invoke()` / `stream()` / `get_graph()` /
   `draw_mermaid()`。
-- 本 feature 不实现别名寻址（B8F3）、`defer` 屏障（B7F4 X-03）、条件边求值（B8F1）、
+- **C25 已正式作废**（alias 不再接受）；本 feature 不实现 `defer` 屏障（B7F4 X-03）、条件边求值（B8F1）、
   静态断点关键字（B7F2）。`defer=True` 目标的路由通道类型差异登记为 **X-7**（已知不支持）。
 - 本 feature 不实现上游窄 `input_schema` 推断；`NodeSpec.subscribes` = 全部状态通道。

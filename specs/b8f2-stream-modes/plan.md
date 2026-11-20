@@ -1,3 +1,5 @@
+> **2026-11-20 后续修订（C25 正式作废）**：C25 流式别名软断言已移除；本计划中 alias 文字保留为历史。
+
 # Implementation Plan: B8F2 · `stream()`：多模式流式输出 + `StreamWriter`
 
 **Branch**: `b8f2-stream-modes`（**未创建分支** —— 本仓库无 `.specify/extensions.yml`
@@ -351,7 +353,7 @@ tests/
 harness/
 ├── demo/
 │   ├── visualization.py             # ★ 改 —— case_stream_modes 期望转绿
-│   └── graph_core.py                # ★ 改 —— C25 流式软断言读 payload 键
+│   └── graph_core.py                # ★ 改 —— C25 流式别名软断言已移除
 └── verification/B8F2/
     ├── acceptance.py                # ★ 新增 —— 一键验收（0/1/2）
     └── manual-verification.md       # ★ 新增 —— 五段式 + 追认

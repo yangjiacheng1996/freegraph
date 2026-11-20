@@ -32,7 +32,7 @@
   **双参路由函数** / **第二参名字不叫 `config`** / **`**kwargs` 形态** /
   **注解不匹配跳过注入** / **`__start__` 条件边** / **纯条件边入口** /
   **静态入口与条件入口并存**
-- [x] Out of Scope 明确点名归属 feature（`stream` / `Send` 调度 / 别名与 `context` /
+- [x] Out of Scope 明确点名归属 feature（`stream` / `Send` 调度 / C25 已作废的别名与 `context` /
   `get_graph` + PNG / checkpoint / async）
 
 ## 2. 判据级可判定性（宪法原则 VI）
@@ -138,7 +138,7 @@
   **不出现**在 fresh 视图里（裁定 8 · **X-4**）
 - [x] 「序列返回值」与「`Send`」的语义**明确区分**（共享状态 vs 逐目标载荷 · 裁定 9 ·
   实测 **E-9 / E-11**）
-- [x] 边界**逐条点名归属 feature**（`stream` / `Send` 调度 / 别名与 `context` /
+- [x] 边界**逐条点名归属 feature**（`stream` / `Send` 调度 / C25 已作废的别名与 `context` /
   `get_graph` + PNG / checkpoint / async）
 - [x] 下游承接条款 **D-1…D-5** 齐备（**B8F2** / **B8F3** / **B11F1** / **B22F1 + B23F1** /
   **B25F1**）⇒ ⇒ ⇒ 每条含「承接方 + 里程碑 + 动作」三项

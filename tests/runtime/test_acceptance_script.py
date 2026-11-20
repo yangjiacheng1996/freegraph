@@ -55,14 +55,27 @@ def test_graph_core_recursion_case_uses_the_hard_assertion() -> None:
     assert "check(True" in case
 
 
-def test_readme_soft_assertion_list_no_longer_mentions_recursion_limit() -> None:
-    """README 软断言清单移除 ``recursion_limit`` 行，保留 C25（FR-032）。"""
+def test_readme_soft_assertion_list_no_longer_mentions_retired_items() -> None:
+    """README 软断言清单移除 ``recursion_limit`` 行与 C25 行（C25 已正式作废）。"""
     readme = (_REPO_ROOT / "harness" / "demo" / "README.md").read_text(
         encoding="utf-8"
     )
     assert "recursion_limit` 的载体" not in readme
-    assert "C25 节点别名的调用形态" in readme
-    assert "当前一处" in readme
+    assert "C25 节点别名的调用形态" not in readme
+    assert "当前一处" not in readme
+    assert "当前零处" in readme
+
+
+def test_graph_core_c21_context_case_uses_hard_assertion() -> None:
+    """``case_run_config_and_context`` 的 C21 段 MUST 为硬断言（无 ``soft(``）。"""
+    source = (_REPO_ROOT / "harness" / "demo" / "graph_core.py").read_text(
+        encoding="utf-8"
+    )
+    case = source.split("def case_run_config_and_context()", 1)[1].split(
+        "\ndef _invoke_ready()", 1
+    )[0]
+    assert "soft(" not in case
+    assert "check(" in case or "eq(" in case
 
 
 def test_b13f1_one_click_acceptance_script_passes() -> None:
@@ -84,3 +97,28 @@ def test_b13f1_one_click_acceptance_script_passes() -> None:
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert "B13F1 acceptance: PASS" in proc.stdout
+
+
+def test_b8f3_one_click_acceptance_script_passes() -> None:
+    """`harness/verification/B8F3/acceptance.py` 一键验收 PASS（A1…A7）。"""
+    env = {
+        **os.environ,
+        "PYTHONUTF8": "1",
+        "PYTHONIOENCODING": "utf-8",
+    }
+    proc = subprocess.run(
+        [
+            sys.executable,
+            str(_REPO_ROOT / "harness" / "verification" / "B8F3" / "acceptance.py"),
+            "--skip-differential",
+        ],
+        cwd=str(_REPO_ROOT),
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=180,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "B8F3 acceptance: PASS" in proc.stdout

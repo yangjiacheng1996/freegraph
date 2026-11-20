@@ -279,3 +279,8 @@
 
 - **D-2（B8F2 → B14F1 · M3 · `checkpoints` 档的真实数据源）**：B8F2 的 `checkpoints` 档在 v1 **恒为空序列**（无伪造事件）⇒ B14F1 交付 `MemorySaver` / checkpointer 后 MUST 提供「每创建一个 checkpoint 一条事件」的数据源，并复用上游 `_loop.py:631-636` / `debug.py:144`（`map_debug_checkpoint`）的「checkpoint 事件 vs `get_state()` 同形」口径。
 - 同时注意：B8F2 的 `StreamSession` 在 v1 **忽略** `checkpointer`（不读/写快照、不触发恢复）；真实 checkpoint 语义归本 feature。
+
+## 下游承接（B8F3 → 本 feature · 2026-11-20 · 只接线）
+
+- **D-1（B8F3 → B14F1 · M3 · `context` 不持久化）**：B8F3 已接线 `RunConfig.context`，但 **MUST NOT** 把 `context` 写入 checkpoint、**MUST NOT** 在恢复时从快照还原 `context`；本 feature 的 checkpoint 契约 MUST NOT 为 `context` 预留持久化字段或「内存态恢复」旁路。
+- **D-3（B8F3 → M3 · 不得回退）**：本 feature MUST 以「`context` 已接线、alias 已移除」为前提；MUST NOT 回退到 `configurable` 承载 `context`，MUST NOT 重新引入节点别名。

@@ -1,3 +1,5 @@
+> **2026-11-20 后续修订（C25 正式作废）**：`add_node` 不再接受 `alias`；本契约中 alias 相关文字保留为历史。
+
 <!-- authority: facade -->
 
 # 门面导出面清单（facade-api.md）
@@ -82,7 +84,7 @@ from freegraph.graph import (
 
 | 符号 | 类别 | 定义位置 | 契约条目 | 行为归属 | 转出？ |
 |---|---|---|---|---|---|
-| `StateGraph` | class | `freegraph._stategraph` | C1 / C9 / C10 / C25 | **B6F1**（构建）/ **B7F2**（编译） | 否 |
+| `StateGraph` | class | `freegraph._stategraph` | C1 / C9 / C10（C25 已正式作废） | **B6F1**（构建）/ **B7F2**（编译） | 否 |
 | `START` | constant | `freegraph.graph` | **C9** | — | 否 |
 | `END` | constant | `freegraph.graph` | **C9** | — | 否 |
 | `Send` | class | `freegraph._primitives` | **C18** | **B11F1** | 否 |
@@ -121,7 +123,7 @@ from freegraph.graph import (
 | 调用 | 形态 | 依据 |
 |---|---|---|
 | `StateGraph(state_schema, context_schema=None, *, input_schema=None, output_schema=None)` | **恰一个**必填位置参数；参数名**逐字对齐上游**（**上游同款** · 上游 `langgraph/graph/state.py:216-224`）；其余**可选** | 宪法原则 III 第 2 项 · **上游对齐 P3** |
-| `StateGraph.add_node(node, action=None, *, alias=None, defer=False, metadata=None)` | 位置 `(node, action)`（**上游同款** · 上游 `:667-682`）· 支持**单 callable 形态**（`add_node(fn)` ⇒ 取 `fn.__name__` · 上游 `:778-787`）· 关键字 `alias`（**keyword-only** · C25） | 宪法原则 III 第 3 项 · **上游对齐 P3** |
+| `StateGraph.add_node(node, action=None, *, defer=False, metadata=None)` | 位置 `(node, action)`（**上游同款** · 上游 `:667-682`）· 支持**单 callable 形态**（`add_node(fn)` ⇒ 取 `fn.__name__` · 上游 `:778-787`）· **C25 已正式作废，无 `alias` 关键字** | 宪法原则 III 第 3 项 · **上游对齐 P3** |
 | `StateGraph.add_edge(start_key, end_key)` | `(str \| list[str], str)`，参数名**逐字对齐上游**（上游 `:928`），返回注解 `Self`（链式语义） | 宪法原则 III 第 4 项 · **上游对齐 P3** |
 | `StateGraph.add_conditional_edges(source, path, path_map=None)` | 参数名**逐字对齐上游**（上游 `:982-989`）· `path_map` **同时支持 list 与 dict** · **可省略** | 宪法原则 III 第 5 项 · C7 · **上游对齐 P3** |
 | `StateGraph.add_sequence(nodes)` · `set_entry_point(key)` · `set_conditional_entry_point(path, path_map=None)` · `set_finish_point(key)` · `validate(interrupt=None)` · `set_node_defaults(**kwargs)` | **上游同款**的六个方法（上游 `:1032-1077` / `:1079` / `:1092` / `:1116` / `:1129-1175` / `:272-335`）⇒ 全部为**桩**（归 B6F1 接线） | **上游对齐 P3** |
@@ -206,7 +208,7 @@ from freegraph.graph import (
 | 3 | `Command` 的运行时语义（`goto` / `update`） | **B9F1** | 行为 |
 | 4 | `interrupt` 的中断 / 恢复闭环 | **B10F1** | 行为 |
 | 5 | `Send` 的动态 fan-out | **B11F1** | 行为 |
-| 6 | 节点别名（`alias`）的运行时寻址 | **B8F3** | 行为 |
+| 6 | ~~节点别名（`alias`）的运行时寻址~~ | **C25 已正式作废** | 历史 |
 | 7 | `schema` 的注解从 `Any` 收紧（C1 的类型体系） | **B4F1** | 类型收紧（走快照 diff 流程） |
 | 8 | 外壳模块**搬到目标层**（L2 / L3）时只改门面的 import 行 —— **合法**（门面是跨层单元，ARCH-1 例外允许其 import L1–L3） | B6F1 / B10F1 / B11F1 | 重构（门面导出面 MUST NOT 变） |
 | 9 | API 快照检查**挂进 CI 流水线** | **B3F1** | 工程设施 |

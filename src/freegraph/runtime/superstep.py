@@ -68,6 +68,7 @@ from ._concurrency import (
     attach_failure_notes,
     run_tasks_concurrently,
 )
+from ._context import bind_context, with_context, with_context_arg
 from ._interrupt import (
     bind_run,
     bind_task,
@@ -797,7 +798,7 @@ def _node_input(
     subset = {
         key: channel for key, channel in channels.items() if key in node.subscribes
     }
-    return read_channels(subset)
+    return with_context(read_channels(subset))
 
 
 def _normalize_node_result(
@@ -1337,7 +1338,15 @@ def _run_round(
         records.append((len(records), node_name, node_name, node, node_input))
     for target, arg in fanout_pending:
         task_id = len(records)
-        records.append((task_id, f"{target}:{task_id}", target, spec.nodes[target], arg))
+        records.append(
+            (
+                task_id,
+                f"{target}:{task_id}",
+                target,
+                spec.nodes[target],
+                with_context_arg(arg),
+            )
+        )
 
     # ── ③ 并发执行（TaskId 为提交序 · 结果槽键 = TaskId） ──
     started: list[TaskId] = []
@@ -2241,7 +2250,7 @@ def run_graph(
     _validate_max_concurrency(effective_concurrency)
     effective_limit = resolve_limit(run_config.recursion_limit, max_steps)
     table = new_run_table()
-    with bind_run(table):
+    with bind_run(table), bind_context(run_config.context):
         if isinstance(input, Command):
             return _resume_graph(
                 spec,

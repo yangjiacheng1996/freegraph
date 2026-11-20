@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import inspect
 from typing import Annotated, Any, Literal, TypedDict
 
@@ -58,11 +59,13 @@ def test_target_style_build_is_unchanged() -> None:
     assert builder_summary(spec) == (2, 2, 1)
 
 
-def test_alias_defer_metadata_and_single_callable_are_recorded() -> None:
-    """SC-014：alias / defer / metadata 记录；单 callable 取名可用。"""
+def test_alias_is_removed_and_defer_metadata_and_single_callable_are_recorded() -> None:
+    """SC-014：alias 已移除；defer / metadata 记录；单 callable 取名可用。"""
     metadata = {"tag": "x"}
     builder = StateGraph(State)
-    builder.add_node("a", node_a, alias="model", defer=True, metadata=metadata)
+    with pytest.raises(TypeError, match="alias"):
+        builder.add_node("a", node_a, alias="model")
+    builder.add_node("a", node_a, defer=True, metadata=metadata)
     builder.add_node(node_b)
     builder.add_edge(START, "a")
     builder.add_edge("a", END)
@@ -70,7 +73,10 @@ def test_alias_defer_metadata_and_single_callable_are_recorded() -> None:
 
     spec = builder._build_spec()  # type: ignore[attr-defined]
     record = spec.node_records["a"]
-    assert record.alias == "model"
+    assert "alias" not in {field.name for field in dataclasses.fields(record)}
+    assert not hasattr(record, "alias")
+    assert "alias" not in {field.name for field in dataclasses.fields(spec)}
+    assert not hasattr(spec, "alias")
     assert record.defer is True
     assert record.metadata == {"tag": "x"}
     assert "node_b" in spec.node_records

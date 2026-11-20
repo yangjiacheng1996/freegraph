@@ -7,7 +7,7 @@
 >
 > **权威来源**：本目录的一切内容派生自 `harness/proposals/立项书.md`：
 > - **feature 清单与小目标** = §5.2 总表（唯一权威）；
-> - **契约 C1–C26** = §5.3（同步自 `harness/reports/Q8-图运行时最小契约.md` §3.4）；
+> - **契约 active 清单 C1–C24 + C26–C27** = §5.3（同步自 `harness/reports/Q8-图运行时最小契约.md` §3.4；C25 已于 2026-11-20 正式作废、编号不复用）；
 > - **红线与门禁** = `.specify/memory/constitution.md`（原则 I–X）+ §9.1；
 > - **验收契约** = §9.2 + `harness/demo/`。
 >
@@ -46,7 +46,7 @@
 | 19 | **B8F2** | [B8F2_stream多模式流式.md](B8F2_stream多模式流式.md) | L2 | M2 | B7F3 | 1,180 | 多模式流式输出 | |
 | 20 | **B22F1** | [B22F1_get_graph与draw_mermaid.md](B22F1_get_graph与draw_mermaid.md) | L3 | M2 | B7F2 | 1,140 | `draw_mermaid()` 离线必然成功、零出站 | ★ |
 | 21 | **B23F1** | [B23F1_draw_mermaid_png离线不阻断.md](B23F1_draw_mermaid_png离线不阻断.md) | L3 | M2 | B22F1 | 1,080 | PNG 路径离线不抛阻断性异常 | ★ |
-| 22 | **B8F3** | [B8F3_节点别名与context通道.md](B8F3_节点别名与context通道.md) | L3 | M2 | B7F3 | 580 | C21（`context` 通道）/ C22（`RunConfig` 标识）/ C25（节点别名）落地 | |
+| 22 | **B8F3** | [B8F3_节点别名与context通道.md](B8F3_节点别名与context通道.md) | L3 | M2 | B7F3 | 580 | C21（`context` 通道）/ C22（`RunConfig` 标识）落地；**C25 已于 2026-11-20 正式作废、alias 移除**（历史提示词保留，当前以 spec 为准） | ✅ **已交付（2026-11-20）** |
 | 23 | **B18F1** | [B18F1_Span数据类生产.md](B18F1_Span数据类生产.md) | L5 | M3 | B7F3 | 1,140 | span 属性命名符合 OTel GenAI semconv；未注入 tracer 时零副作用、零开销 | |
 | 24 | **B19F1** | [B19F1_TraceSink与current_span.md](B19F1_TraceSink与current_span.md) | L5 | M3 | B18F1 | 840 | 嵌套 span 父子关系正确；不注入 tracer 时零副作用 | |
 | 25 | **B20F1** | [B20F1_本地Trace存储JSONL.md](B20F1_本地Trace存储JSONL.md) | L5 | M3 | B19F1 | 820 | trace 落盘，零出站 | |
@@ -60,9 +60,9 @@
 
 **合计**：**32 feature / 24 功能块 / 33,005 行 / 96 人日 / 报价 192,000 元 / 96 天**。
 
-> **状态更新（2026-11-20）**：**B23F1 已交付**（`draw_mermaid_png()` 离线不阻断 ·
-> v1 占位 PNG）⇒ 固定脚本六项最小交付集（**B6F1 · B7F2 · B7F3 · B8F1 · B22F1 ·
-> B23F1**）**齐备**；下一步 **B8F3**（M2 收口）。
+> **状态更新（2026-11-20）**：**B8F3 已交付**（`context` 独立通道 + `RunConfig`
+> 运行期接线；alias / C25 正式作废）⇒ **M2 收口**；下一步 **B18F1**（M3 起点）。
+> 固定脚本六项最小交付集（**B6F1 · B7F2 · B7F3 · B8F1 · B22F1 · B23F1**）此前已齐备。
 
 > **B17（`Store` 长期记忆）已于 2026-11-05 砍掉**——理由：freegraph 是**通用图框架**
 > （智能体 / RPA 自动化 / 脚本编排 / 在一定程度上替代 `main` 函数 / 可视化工作流编排），
@@ -137,7 +137,7 @@
 > 退出码：`0` = PASS / `1` = 断言失败 / `2` = 环境未就绪（两者必须分开）。
 > 「软断言 → 硬断言」的升级节点已写在相应 feature 的初稿里（`recursion_limit` 载体 →
 > B13F1；`MemorySaver` 模块路径 / trace 目录参数名 / `update_state` 签名 / tracer
-> 注入载体 → M3 各 feature；节点别名形态 → B8F3）。
+> 注入载体 → M3 各 feature；`context` 独立通道 → B8F3（已交付；alias / C25 已作废））。
 
 ---
 

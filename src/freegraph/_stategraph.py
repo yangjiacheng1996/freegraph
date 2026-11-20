@@ -85,7 +85,6 @@ class _NodeRecord:
 
     name: str
     action: Callable[..., Any]
-    alias: str | None = None
     defer: bool = False
     metadata: Mapping[str, Any] | None = None
     destinations: tuple[tuple[str, str | None], ...] = ()
@@ -836,7 +835,6 @@ class StateGraph:
         node: str | Callable[..., Any],
         action: Callable[..., Any] | None = None,
         *,
-        alias: str | None = None,
         defer: bool = False,
         metadata: Mapping[str, Any] | None = None,
         destinations: dict[str, str] | tuple[str, ...] | None = None,
@@ -884,7 +882,6 @@ class StateGraph:
         self._nodes[name] = _NodeRecord(
             name=name,
             action=action,
-            alias=alias,
             defer=defer,
             metadata=metadata,
             destinations=effective_destinations,

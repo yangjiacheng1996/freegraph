@@ -46,6 +46,7 @@ import sys
 import time
 import traceback
 from pathlib import Path
+from typing import TypedDict
 
 try:
     from freegraph.graph import (
@@ -67,7 +68,7 @@ import freegraph
 HERE = Path(__file__).resolve().parent
 
 SUITES: list[tuple[str, str, str]] = [
-    ("core", "graph_core.py", "图运行时内核（C1–C25 / B4F1–B13F1）"),
+    ("core", "graph_core.py", "图运行时内核（C1–C24 / B4F1–B13F1）"),
     ("agent", "agent_loop.py", "Agent 工具循环（零依赖等价物 / C4·C7·C8·C11·C16·C17）"),
     ("viz", "visualization.py", "图导出与可视化（C12–C15·C26 / B8F2·B22F1·B23F1）"),
 ]
@@ -208,6 +209,10 @@ def case_preflight() -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 # 2 · 最小图可执行：门面不是空壳
 # ─────────────────────────────────────────────────────────────────────────────
+class _MinimalState(TypedDict):
+    value: int
+
+
 def build_minimal_graph():
     """一个两节点的最小图——只用章程已锁死的 API 形态（§4.3 #2–#7）。"""
 
@@ -217,7 +222,7 @@ def build_minimal_graph():
     def second(state: dict) -> dict:
         return {"value": state.get("value", 0) + 10}
 
-    g = StateGraph(dict)
+    g = StateGraph(_MinimalState)
     g.add_node("first", first)
     g.add_node("second", second)
     g.add_edge(START, "first")

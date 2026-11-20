@@ -2,6 +2,9 @@
 
 **Spec**: [spec.md](./spec.md) · **Plan**: [plan.md](./plan.md) · **Contract**: [contracts/builder-contract.md](./contracts/builder-contract.md)
 
+> **2026-11-20 后续修订（C25 正式作废）**：差分场景 **D-74** 已迁移到 **B8F3 D-142**；
+> 本文件的 `D-50…D-74` 为历史范围，`parity_probe.py` 不再承载 D-74。
+
 > 本文件是**验证指南**，不是实现教程。所有验证只做「建图 / 校验 / 读取私有快照」；
 > **不调用** `compile()` / `invoke()`。`compile()` 仍属 B7F2。
 
@@ -201,7 +204,7 @@ assert calls == {"node": 0, "router": 0}
 
 - 构建器相关测试全绿；
 - `tests/facade/test_facade.py` 只保留 `compile()` / 其余未交付方法的未接线断言；
-- 差分 D-50…D-74 符合各自判词；
+- 差分 D-50…D-73 符合各自判词（D-74 已迁移到 B8F3 D-142）；
 - acceptance 脚本输出 `B6F1 acceptance: PASS`；
 - API 快照零差异。
 

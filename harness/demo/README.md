@@ -22,7 +22,7 @@
 
 | 脚本 | 验证什么 | 覆盖契约 | 对应 feature |
 |---|---|---|---|
-| `graph_core.py` | **图运行时内核**（前置用例） | C1–C25（**C20 = `Store` 契约已冻结、v1 不实现**——B17 已砍） | B4F1–B13F1、M1+M2 |
+| `graph_core.py` | **图运行时内核**（前置用例） | C1–C24（**C20 = `Store` 契约已冻结、v1 不实现**——B17 已砍；C25 已正式作废） | B4F1–B13F1、M1+M2 |
 | `agent_loop.py` | **Agent 工具循环**——`target.py` 的零依赖等价物 | C4·C7·C8·C11·C16·C17 | B7F3·B8F1·B8F2·B9F1·B10F1 |
 | `visualization.py` | **图导出与可视化**（mermaid / PNG / 流式） | C12–C15·C26 | B8F2·B22F1·B23F1 |
 | `acceptance.py` | **人工验收编排器**（自身也 import 并执行 freegraph）：前置自检 + 最小图可执行 + **零出站断言** + 串跑上述三组 + 生成《人工验收记录》 | —— | B25F1 |
@@ -63,13 +63,8 @@ python harness/demo/acceptance.py --record harness/verification/freegraph/manual
   C16 的 `Command(goto=, update=, resume=)`、C17 的 `__interrupt__`、C18 的 `Send`、
   C22 的 `RunConfig` 九字段、C7 的 list/dict 两种 `path_map`。
 * **◌ 软断言** —— **语义由章程规定、但调用形态尚未拍板**的检查，**不判失败**，
-  只标注「待锁定」。当前一处：
-
-  | 检查 | 待锁定的东西 | 由谁拍板 |
-  |---|---|---|
-  | C25 节点别名的调用形态 | `add_node(..., alias=)` 还是别的 | B8F3 |
-
-  **形态一旦拍板，这里的软断言就该升级为硬断言。**
+  只标注「待锁定」。当前零处（C25 节点别名已于 2026-11-20 正式作废；
+  `add_node(..., alias=...)` 现抛 `TypeError`）。
 
 * **◌ 依赖未交付 feature 的软断言**（**B7F3 起** · **2026-11-16**）—— 这类检查的
   **形态已经锁定**，只是**所依赖的能力尚未交付**⇒ ⇒ **不判失败**，但**每条都具名
@@ -79,8 +74,6 @@ python harness/demo/acceptance.py --record harness/verification/freegraph/manual
   |---|---|---|
   | A5 条件边与 fresh 读（C7 / C8） | **条件边路由求值** | **B8F1** |
   | A6 的 C16 段（`Command(update=)` 经条件边到达） | **条件边路由求值** | **B8F1** |
-  | A9 的 context 段（C21 context 独立通道） | **context 独立通道** | **B8F3** |
-  | A10 的流式事件段（C25 别名出现在事件里） | **`stream()`** | **B8F2** |
   | A6 的 C17 段（`Command(resume=)` 恢复取值） | **checkpointer 载体** | **B14F1** |
   | agent_loop 的 B1 / B2 / B3（工具循环 · tool_call 形状 · 审批插入） | **条件边路由求值** | **B8F1** |
 
@@ -95,8 +88,8 @@ python harness/demo/acceptance.py --record harness/verification/freegraph/manual
 * ✅ **B7F3 已交付 `invoke()`（2026-11-16）**：`invoke()` 已接线 ⇒ 就绪探针
   （`_invoke_ready()` · 键在 `NotImplementedError` 上）**自动切换** ⇒ ⇒ `graph_core.py`
   与 `agent_loop.py` 现在**跑完全部用例组**并以**退出码 0** 结束（**不是** 2）。
-  ⚠️ 仍为软断言的**5 组**（条件边路由 / context 独立通道 / `stream()` / 工具循环 /
-  恢复载体）见上表 ⇒ ⇒ `visualization.py` 的 V1–V6 现在**全部真跑**
+  ⚠️ 仍为软断言的**4 组**（条件边路由 / `stream()` / 工具循环 / 恢复载体）见上表
+  ⇒ ⇒ `visualization.py` 的 V1–V6 现在**全部真跑**
   （`get_graph` / `draw_mermaid` 已由 **B22F1**、`draw_mermaid_png` 已由 **B23F1**、
   `stream` 已由 **B8F2** 交付）。
 
