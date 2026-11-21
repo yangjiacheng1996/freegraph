@@ -19,11 +19,19 @@ from __future__ import annotations
 
 from freegraph.contracts.trace import Span
 
+from ._file_store import FileTraceStore
 from ._invoke import invoke_model, invoke_tool
 from ._producer import SpanProducer, current_tracer
 from ._record import TraceRecord
 
-__all__ = ["SpanProducer", "TraceRecord", "current_span", "invoke_model", "invoke_tool"]
+__all__ = [
+    "FileTraceStore",
+    "SpanProducer",
+    "TraceRecord",
+    "current_span",
+    "invoke_model",
+    "invoke_tool",
+]
 
 
 def current_span() -> Span | None:

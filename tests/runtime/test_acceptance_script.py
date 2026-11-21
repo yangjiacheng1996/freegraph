@@ -170,3 +170,27 @@ def test_b19f1_one_click_acceptance_script_passes() -> None:
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert "B19F1 acceptance: PASS" in proc.stdout
+
+
+def test_b20f1_one_click_acceptance_script_passes() -> None:
+    """`harness/verification/B20F1/acceptance.py` 一键验收 PASS（A1–A5）。"""
+    env = {
+        **os.environ,
+        "PYTHONUTF8": "1",
+        "PYTHONIOENCODING": "utf-8",
+    }
+    proc = subprocess.run(
+        [
+            sys.executable,
+            str(_REPO_ROOT / "harness" / "verification" / "B20F1" / "acceptance.py"),
+        ],
+        cwd=str(_REPO_ROOT),
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=120,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "B20F1 acceptance: PASS" in proc.stdout

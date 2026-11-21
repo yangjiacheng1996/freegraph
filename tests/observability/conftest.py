@@ -4,8 +4,13 @@
 
 from __future__ import annotations
 
+import json
+import os
+import stat
+import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -308,3 +313,65 @@ def trace_record_counter() -> TraceRecordConstructionCounter:
 @pytest.fixture
 def input_output_counter() -> InputOutputCaptureCounter:
     return InputOutputCaptureCounter()
+
+
+# ── B20F1 共享 helpers ───────────────────────────────────────────────────
+
+
+def make_span(*, run_id: str = "safe-run-1", node: str = "a", **overrides: Any) -> Any:
+    """构造一个字段齐全的 ``Span``（默认是结束快照）。"""
+    from freegraph.contracts.trace import Span
+
+    values: dict[str, Any] = {
+        "id": uuid.uuid4().hex,
+        "name": node,
+        "attributes": {},
+        "parent": None,
+        "start_time": "2026-11-21T12:00:00.000000000+00:00",
+        "end_time": "2026-11-21T12:00:00.000120000+00:00",
+        "context": {},
+        "thread_id": "t-1",
+        "run_id": run_id,
+        "node": node,
+        "checkpoint_id": None,
+    }
+    values.update(overrides)
+    return Span(**values)
+
+
+def make_record(*, run_id: str = "safe-run-1", node: str = "a", **overrides: Any) -> Any:
+    """构造一个字段齐全的 ``TraceRecord``。"""
+    from freegraph.observability._record import TraceRecord
+
+    values: dict[str, Any] = {
+        "span_id": uuid.uuid4().hex,
+        "task_id": node,
+        "run_id": run_id,
+        "thread_id": "t-1",
+        "checkpoint_id": None,
+        "node": node,
+        "superstep": 0,
+        "triggers": (),
+        "concurrency_group": (),
+        "barrier_groups": (),
+        "input_state": {},
+        "output_state": {},
+        "error": None,
+    }
+    values.update(overrides)
+    return TraceRecord(**values)
+
+
+def read_jsonl(path: Path) -> list[dict[str, Any]]:
+    """逐行 ``json.loads`` 并返回对象列表（空行视为错误）。"""
+    text = path.read_text(encoding="utf-8")
+    lines = text.splitlines()
+    assert all(line for line in lines), "empty line in JSONL"
+    return [json.loads(line) for line in lines]
+
+
+def file_mode(path: Path) -> int | None:
+    """返回 POSIX mode；Windows / 非 POSIX 返回 ``None``。"""
+    if os.name != "posix":
+        return None
+    return stat.S_IMODE(os.stat(path).st_mode)

@@ -328,6 +328,7 @@ class TestB18F1PublicFace:
         import freegraph.observability as observability
 
         assert set(observability.__all__) == {
+            "FileTraceStore",
             "SpanProducer",
             "TraceRecord",
             "current_span",

@@ -9,7 +9,7 @@
 > | 所属 功能块 | B20（本地 Trace 存储） |
 > | 架构层 | L5 可观测层 |
 > | 里程碑 | M3 可诊断（第 26 个） |
-> | 前置依赖 | **B20F1** |
+> | 前置依赖 | **B20F1**（✅ 已交付 2026-11-21） |
 > | 规模 | 1,020 行（实现 560 / 测试 460）· 3 人日 |
 > | 建议 short-name | `b20f2-trace-query-sqlite` |
 > | MVP 必需（★） | 否（**三件套之「trace 时间线 / 详情」的完成态**） |
@@ -26,7 +26,8 @@
 
 ### 2. 背景与上下文
 
-- **三件套之第 ② 件的完成态**：B20F1 解决「写」，本 feature 解决「查」。
+- **三件套之第 ② 件的完成态**：B20F1 **已交付写入侧**（`FileTraceStore` /
+  `trace-<run_id>.jsonl` / `kind` 双行 / 零出站），本 feature 解决「查」。
   用户场景（立项书 §5.8.2）：查一次运行的全部 trace（定位哪一步慢、哪一步报错、
   模型收到什么）；按 thread 查多轮会话；**写自动化断言**（CI 中断言「每次运行恰好
   2 次模型调用」）。
@@ -177,3 +178,22 @@
 
 - **D-1（B19F1 → B20F2 · M3 · 查询字段）**：**承接机制** = 查询 B20F1 落盘的 B19F1 `to_jsonable()` 视图（`span_id` 关联 Span ↔ record）。B19F1 的 `TraceRecord.to_jsonable()` 提供 `task_id`（标准 = 节点名；fan-out = `节点名:TaskId`）/ `superstep` / `triggers` / `concurrency_group` / `barrier_groups`；本 feature 的返回结构 MUST 保留这些字段，MUST NOT 重新定义。C27 的四类过滤器（`run_id` / `thread_id` / 时间范围 / 节点名）**不变**；`task_id` / `superstep` 仅作返回字段或附加检索，若新增为契约过滤器 MUST 走 C27 修订。
 - **D-2（B19F1 → B20F2 · M3 · 稳定视图）**：`to_jsonable()` 是 JSONL 的唯一稳定视图；本 feature MUST 以 B20F1 落盘的该视图为查询来源，MUST NOT 要求 B19F1 提供第二套序列化。
+
+## 下游承接（B20F1 → 本 feature · 2026-11-21 · 只接线）
+
+- **D-1（B20F1 → B20F2 · M3 · `FileTraceStore` 与文件布局）**：B20F1 **已交付**
+  `freegraph.observability.FileTraceStore(directory=..., *, on_error=None)`；每个
+  `run_id` 一个 `trace-<run_id>.jsonl`，行格式 = `kind="span"`（`Span` 11 字段）+
+  `kind="trace_record"`（`TraceRecord.to_jsonable()` 13 字段），通过
+  `trace_record.span_id` ↔ `span.id` 关联；`run_id` 安全 allowlist =
+  `^[A-Za-z0-9][A-Za-z0-9_-]*$`（无点号）。
+- **D-2（B20F1 → B20F2 · M3 · 写侧不变）**：本 feature MUST 在**同一 `FileTraceStore`
+  对象上补齐查询 API**（并新增 `SqliteTraceStore`），**MUST NOT** 改变 B20F1 已交付的
+  `on_span_start` / `on_span_end` / `on_trace_record` / `current_span` 写侧行为、文件
+  命名、`kind` / 字段名、`0o600`、per-instance 锁与四路诊断。
+- **D-3（B20F1 → B20F2 · M3 · 查询来源）**：B20F1 **只写不读**；本 feature 读取其
+  `trace-<run_id>.jsonl` 时 MUST 按上述行结构解析，MUST NOT 要求 B20F1 提供查询方法；
+  JSONL 文件格式仍属内部实现细节（C27 ⑤），Studio 只能走本 feature 的查询 API。
+- 落点：`specs/b20f1-local-trace-jsonl/spec.md` 的 `FileTraceStore` 形态锁定 ·
+  `specs/b20f1-local-trace-jsonl/contracts/jsonl-record-contract.md` ·
+  `harness/verification/B20F1/manual-verification.md`。

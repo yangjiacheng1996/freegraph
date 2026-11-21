@@ -136,6 +136,8 @@ SIGNED_SOURCE_FILES = (
     "src/freegraph/observability/_time.py",
     "src/freegraph/observability/_producer.py",
     "src/freegraph/observability/_invoke.py",
+    # B20F1 新增源文件（宪法原则 X / G5）
+    "src/freegraph/observability/_file_store.py",
 )
 
 
