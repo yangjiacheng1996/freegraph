@@ -175,5 +175,5 @@
 
 ## 下游承接（B19F1 → 本 feature · 2026-11-21 · 只接线）
 
-- **D-1（B19F1 → B20F2 · M3 · 查询字段）**：B19F1 的 `TraceRecord.to_jsonable()` 提供 `task_id`（标准 = 节点名；fan-out = `节点名:TaskId`）/ `superstep` / `triggers` / `concurrency_group` / `barrier_groups`；本 feature 的返回结构 MUST 保留这些字段，MUST NOT 重新定义。C27 的四类过滤器（`run_id` / `thread_id` / 时间范围 / 节点名）**不变**；`task_id` / `superstep` 仅作返回字段或附加检索，若新增为契约过滤器 MUST 走 C27 修订。
+- **D-1（B19F1 → B20F2 · M3 · 查询字段）**：**承接机制** = 查询 B20F1 落盘的 B19F1 `to_jsonable()` 视图（`span_id` 关联 Span ↔ record）。B19F1 的 `TraceRecord.to_jsonable()` 提供 `task_id`（标准 = 节点名；fan-out = `节点名:TaskId`）/ `superstep` / `triggers` / `concurrency_group` / `barrier_groups`；本 feature 的返回结构 MUST 保留这些字段，MUST NOT 重新定义。C27 的四类过滤器（`run_id` / `thread_id` / 时间范围 / 节点名）**不变**；`task_id` / `superstep` 仅作返回字段或附加检索，若新增为契约过滤器 MUST 走 C27 修订。
 - **D-2（B19F1 → B20F2 · M3 · 稳定视图）**：`to_jsonable()` 是 JSONL 的唯一稳定视图；本 feature MUST 以 B20F1 落盘的该视图为查询来源，MUST NOT 要求 B19F1 提供第二套序列化。
