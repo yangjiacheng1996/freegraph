@@ -242,8 +242,11 @@
    **模块定位口径**：import 的目标 MUST 先被**定位到具体路径**（以被检根 + `sys.path` 解析）⇒
    落在**同一注册表条目**下 ⇒ 单元内部引用（不产生层边）· 落在**其它条目**下 ⇒ 按层间方向判定 ·
    **无法解析到仓库内路径** ⇒ 视为第三方 ⇒ 不产生层边；
-5. **公开 API 门面**是 ARCH-1 的**唯一既有例外**（横跨 L1–L3，允许 import L1–L3，仍不得 import L4 / L5）
-   —— 由层注册表显式声明，MUST NOT 硬编码在门禁实现里；
+5. **公开 API 门面**是 ARCH-1 的**既有例外之一**（横跨 L1–L3，允许 import L1–L3，仍不得
+   import L4 / L5）—— 由层注册表显式声明，MUST NOT 硬编码在门禁实现里；
+   **2026-11-21 新增 R-1 例外**：`src/freegraph/_stategraph.py`（L3）**局部** import
+   `src/freegraph/observability/_inject.py`（L5），仅限 tracer 注入 / 外层屏蔽；由层注册表
+   `trace-wiring-L3-L5` **精确放行**；MUST NOT 扩展为任意 L3 → L5；
 6. **本门禁 NOT 重复判的两条（2026-11-08 分析轮订正 · M10）**：
    - **「L1 契约层内部零内部层 import」由既有门禁 G2 承担**（范围 = `src/freegraph/contracts/**`）⇒
      **G25 不重复判**（注册表 §0.3 **L-2**）；

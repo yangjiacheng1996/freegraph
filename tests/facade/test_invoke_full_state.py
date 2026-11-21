@@ -190,7 +190,7 @@ class TestFillAndCoverage:
 
 
 class TestFrozenHoldingFace:
-    PRIVATE = {"_spec", "_builder_spec", "_conditional_edges"}
+    PRIVATE = {"_spec", "_builder_spec", "_conditional_edges", "_tracer"}
     PUBLIC = {
         "checkpointer",
         "store",
@@ -203,10 +203,10 @@ class TestFrozenHoldingFace:
     }
 
     def test_vars_is_exactly_the_eleven_frozen_names(self) -> None:
-        """``vars(compiled)`` MUST **恰好**是那 **11** 个冻结名（B7F2 冻结面）。"""
+        """``vars(compiled)`` MUST **恰好**是那 **12** 个冻结名（B19F1 新增 `_tracer`）。"""
         compiled = build_two_node_graph().compile()
         assert set(vars(compiled)) == self.PRIVATE | self.PUBLIC
-        assert len(vars(compiled)) == 11
+        assert len(vars(compiled)) == 12
 
     def test_runtime_export_surface_is_unchanged(self) -> None:
         """``freegraph.runtime.__all__`` MUST 仍**恰好 23** 个符号（**零新增**导出）。"""

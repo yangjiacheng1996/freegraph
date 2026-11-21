@@ -66,7 +66,7 @@ def stream(
 | id | 同一 `stream()` 的全部事件共享 `run_id`；跨流不同 |
 | `thread_id` | `configurable["thread_id"]` 优先于顶层 `thread_id`；未提供 ⇒ `None` |
 | `RunConfig.run_id` | **忽略**（事件 `run_id` 恒由运行时生成） |
-| 运行标识载体 | `StreamSession` 把 `run_id` / `thread_id` 绑定到 L2 私有 contextvar `_STREAM_RUN_ID` / `_STREAM_THREAD_ID`；B18F1 / B19F1 的 span MUST 读取同一对值（D-3） |
+| 运行标识载体 | `StreamSession` 把 `run_id` / `thread_id` 绑定到 L2 私有 contextvar `_STREAM_RUN_ID` / `_STREAM_THREAD_ID`；B18F1 / L2 的 span MUST 读取同一对值，B19F1 从节点 span 继承（D-3） |
 | 禁止 | MUST NOT 在 `payload` 里再挂 `run_id` / `thread_id` |
 | 多 mode | 同一信封，`stream_mode` 字段区分（**不走** `(mode, payload)` 元组） |
 
@@ -271,7 +271,7 @@ finally：复原 contextvar token；零悬挂线程
 | IS-22 | 声明 `writer` 的节点在 `stream` 中得到注入；`stream_writer` 不注入；`invoke` 中为 no-op |
 | IS-23 | `input=None` = 无输入写入；`Command` 在**首次迭代**被拒绝（调用时不报错） |
 | IS-24 | 条件边图在 `stream` 下的路由目标序列与 `invoke` 一致（复用同一实现）；**双参路由第二参 == 原始 `config`** |
-| IS-25 | `_STREAM_RUN_ID` / `_STREAM_THREAD_ID` 与本流全部事件的 `run_id` / `thread_id` 一致；B18F1 / B19F1 读取同一对值 |
+| IS-25 | `_STREAM_RUN_ID` / `_STREAM_THREAD_ID` 与本流全部事件的 `run_id` / `thread_id` 一致；B18F1 / L2 读取同一对值，B19F1 继承 |
 
 ---
 

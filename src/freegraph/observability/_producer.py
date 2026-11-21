@@ -27,6 +27,7 @@ from typing import Any, Literal
 
 from freegraph.contracts.trace import Span
 
+from ._record import TraceRecord, json_safe
 from ._time import end_iso_after, utc_now_iso_ns
 
 __all__ = ["SpanProducer", "bind_tracer", "current_tracer"]
@@ -89,9 +90,17 @@ class SpanProducer:
 
     def __init__(self, receiver: Any | None = None) -> None:
         self._receiver = receiver
+        self._wants_trace_records = (
+            getattr(receiver, "on_trace_record", None) is not None
+        )
         self._stack: ContextVar[tuple[_SpanFrame, ...]] = ContextVar(
             f"freegraph_span_stack_{id(self)}", default=()
         )
+
+    @property
+    def wants_trace_records(self) -> bool:
+        """接收端是否实现可选的 ``on_trace_record``（构造期缓存）。"""
+        return self._wants_trace_records
 
     def on_span_start(self, span: Span) -> None:
         """入栈并转发开始快照；接收端异常被隔离。"""
@@ -110,6 +119,11 @@ class SpanProducer:
         if index >= 0:
             self._stack.set(stack[:index] + stack[index + 1 :])
         self._forward("on_span_end", span)
+
+    def current_span(self) -> Span | None:
+        """栈顶 span；空栈 ⇒ ``None``。"""
+        stack = self._stack.get()
+        return stack[-1].span if stack else None
 
     def current_span_id(self) -> str | None:
         """栈顶 span 的 ``id``；空栈 ⇒ ``None``。"""
@@ -192,6 +206,36 @@ class SpanProducer:
             node=node_span.node,
             checkpoint_id=node_span.checkpoint_id,
         )
+
+    def on_trace_record(self, payload: dict[str, Any]) -> None:
+        """由 L2 ``_bind`` 调用：构造 ``TraceRecord`` 并转发给可选接收端。"""
+        if not self._wants_trace_records:
+            return
+        record = TraceRecord(
+            span_id=payload["span_id"],
+            task_id=payload["task_id"],
+            run_id=payload["run_id"],
+            thread_id=payload["thread_id"],
+            checkpoint_id=payload["checkpoint_id"],
+            node=payload["node"],
+            superstep=payload["superstep"],
+            triggers=tuple(tuple(trigger) for trigger in payload["triggers"]),
+            concurrency_group=tuple(payload["concurrency_group"]),
+            barrier_groups=tuple(tuple(group) for group in payload["barrier_groups"]),
+            input_state=json_safe(payload["input_state"]),
+            output_state=json_safe(payload["output_state"]),
+            error=payload["error"],
+        )
+        callback = getattr(self._receiver, "on_trace_record", None)
+        if callback is None:
+            return
+        try:
+            callback(record)
+        except Exception:
+            logger.warning(
+                "span receiver on_trace_record failed; observable write dropped",
+                exc_info=True,
+            )
 
     def _forward(self, method: str, span: Span) -> None:
         """把快照转发给接收端；接收端异常 MUST 被隔离。"""

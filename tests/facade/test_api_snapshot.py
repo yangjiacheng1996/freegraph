@@ -315,7 +315,7 @@ class TestSnapshotTextCompliance:
 class TestB18F1PublicFace:
     """B18F1 helpers / SpanProducer MUST NOT 进入公开门面或 L2 ``__all__``。"""
 
-    NEW_SYMBOLS = {"invoke_model", "invoke_tool", "SpanProducer"}
+    NEW_SYMBOLS = {"invoke_model", "invoke_tool", "SpanProducer", "current_span", "TraceRecord"}
 
     def test_new_symbols_are_not_in_public_facades(self) -> None:
         import freegraph.graph as graph
@@ -329,6 +329,8 @@ class TestB18F1PublicFace:
 
         assert set(observability.__all__) == {
             "SpanProducer",
+            "TraceRecord",
+            "current_span",
             "invoke_model",
             "invoke_tool",
         }

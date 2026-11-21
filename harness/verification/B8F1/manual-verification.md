@@ -148,7 +148,7 @@ contracts 21 | facade 7 | runtime 23
 | `freegraph.contracts.__all__` | **21** | **零变更**（门禁 G7） |
 | `freegraph.graph.__all__` | **7** | **零变更**（门禁 G15 / G19） |
 | `freegraph.runtime.__all__` | **23** | **零变更**（新增的 `_routing.py` 是 **L2 私有** ⇒ **不进** `__all__`） |
-| `vars(compiled)` 的键数 | **11** | **零新增**私有字段（**T-3 不破**） |
+| `vars(compiled)` 的键数 | **12** | B19F1 新增私有 `_tracer`（只增） |
 | `freegraph.runtime.errors` 的符号集合 | **不变** | **零新增错误类型**（**I-14**） |
 
 ### 3.7 B8F1 一键验收（`harness/verification/B8F1/acceptance.py` · **A1…A10**）

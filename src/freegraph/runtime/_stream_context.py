@@ -22,8 +22,9 @@
 * **无流 no-op** —— ``get_stream_writer()`` 在未绑定流时返回模块级 no-op
   （上游 ``langgraph/config.py:13-14``）；MUST NOT 抛异常；
 * **运行标识** —— ``_STREAM_RUN_ID`` / ``_STREAM_THREAD_ID`` 由
-  :class:`~freegraph.runtime._stream.StreamSession` 绑定；B18F1 / B19F1
-  的 span MUST 读取同一对值（D-3 / H-9 · ARCH-3 已登记例外 R-6）；
+  :class:`~freegraph.runtime._stream.StreamSession` 绑定；**L2** span 读取
+  同一对值（D-3 / H-9 · ARCH-3 例外 R-6 已收窄）；B19F1 从节点 start
+  ``Span`` 继承 ``run_id`` / ``thread_id``，不直接读取本模块；
 * **invoke 路径 id 绑定** —— B18F1 的私有助手 :func:`bind_run_ids` 只设置
   ``_STREAM_RUN_ID`` / ``_STREAM_THREAD_ID``；``bind_stream`` 仍是
   ``StreamSession`` 的唯一绑定入口。

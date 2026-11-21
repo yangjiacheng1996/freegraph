@@ -161,3 +161,8 @@
 
 - **D-3（B18F1 → B21F1 · M4 · OTLP 映射 1:1）**：B18F1 的模型 / 工具 span 属性键（除失败时的 `error.type`）全部来自 `gen_ai.*` 允许清单；本 feature 的 OTLP exporter MUST 逐键直映射，MUST NOT 解析 freegraph 私有格式，MUST NOT 要求 B18F1 增删 `Span` 字段。
 - 落点：`specs/b18f1-span-production/spec.md` 的 **D-3** · tasks **T057**。
+
+## 下游承接（B19F1 → 本 feature · 2026-11-21 · 只接线）
+
+- **D-1（B19F1 → B21F1 · M4 · `TraceRecord` 不映射为 OTLP span）**：B19F1 的 `TraceRecord` 是本地补充元数据，**不是** `Span`；本 feature MUST 只导出 B18F1 的 `Span`，MUST NOT 把 `TraceRecord` 映射为独立 OTLP span，MUST NOT 要求 B19F1 改字段 / 改协议。若未来要把触发源 / 并发组 / 屏障组写进 OTLP 属性，MUST 在本 feature 的 spec 单独登记映射与偏离，**不得**回写 B19F1 记录形态。
+- **D-2**：默认关闭 / 零出站不变；仅用户显式配置端点时才出站。

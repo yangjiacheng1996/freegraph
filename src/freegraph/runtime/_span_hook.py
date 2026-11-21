@@ -26,8 +26,9 @@ import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Protocol
+from typing import Any, Protocol
 
 from freegraph.contracts.trace import Span
 
@@ -42,6 +43,43 @@ class _SpanTracer(Protocol):
     def on_span_end(self, span: Span) -> None: ...
 
     def current_span_id(self) -> str | None: ...
+
+
+@dataclass(frozen=True, slots=True)
+class TaskTraceMeta:
+    """L2 私有纯数据：一个节点任务的 trace 元数据（B19F1）。"""
+
+    node: str
+    task_key: str
+    superstep: int
+    triggers: tuple[tuple[Any, ...], ...]
+    concurrency_group: tuple[str, ...]
+    barrier_groups: tuple[tuple[str, ...], ...]
+
+
+def build_trace_payload(
+    meta: TaskTraceMeta,
+    start: Span,
+    node_input: Any,
+    output_state: Any,
+    error: BaseException | None,
+) -> dict[str, Any]:
+    """构造 L2 → L5 的纯数据 payload（键名与 ``TraceRecord`` 逐字一致）。"""
+    return {
+        "span_id": start.id,
+        "task_id": meta.task_key,
+        "run_id": start.run_id,
+        "thread_id": start.thread_id,
+        "checkpoint_id": start.checkpoint_id,
+        "node": meta.node,
+        "superstep": meta.superstep,
+        "triggers": meta.triggers,
+        "concurrency_group": meta.concurrency_group,
+        "barrier_groups": meta.barrier_groups,
+        "input_state": node_input,
+        "output_state": output_state,
+        "error": error,
+    }
 
 
 _SPAN_TRACER: ContextVar[_SpanTracer | None] = ContextVar(

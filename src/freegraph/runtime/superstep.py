@@ -51,6 +51,7 @@ from collections.abc import Callable, Container, Mapping, Sequence
 from contextlib import nullcontext
 from dataclasses import dataclass, field
 from functools import partial
+import logging
 from typing import Any
 import uuid
 
@@ -94,7 +95,13 @@ from ._stream_context import (
     record_round_tasks,
 )
 from ._routing import evaluate_routes, validate_conditional_payload
-from ._span_hook import current_span_tracer, end_node_span, start_node_span
+from ._span_hook import (
+    TaskTraceMeta,
+    build_trace_payload,
+    current_span_tracer,
+    end_node_span,
+    start_node_span,
+)
 from ._static import (
     STATIC_AFTER,
     STATIC_BEFORE,
@@ -106,6 +113,8 @@ from ._static import (
 from .channel import Channel, EphemeralValue
 from .errors import InterruptError, InvalidChannelUpdateError
 from .read import read_channels
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "GraphSpec",
@@ -719,6 +728,38 @@ def _satisfied_groups(
 
 
 
+def _trace_triggers_from_satisfied(
+    satisfied: list[tuple[tuple[str, str], ...]],
+) -> tuple[tuple[Any, ...], ...]:
+    """把已满足组并集转换为确定性 ``triggers``（标准项 index = -1）。"""
+    members: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for group in satisfied:
+        for member in group:
+            if member in seen:
+                continue
+            seen.add(member)
+            members.append(member)
+
+    def _key(item: tuple[str, str]) -> tuple[str, str, int]:
+        kind, source = item
+        return kind, source, -1
+
+    return tuple((kind, source) for kind, source in sorted(members, key=_key))
+
+
+def _trace_barrier_groups(
+    satisfied: list[tuple[tuple[str, str], ...]],
+) -> tuple[tuple[str, ...], ...]:
+    """取已满足的多源组（成员数 > 1），每组转为源节点名元组。"""
+    groups: list[tuple[str, ...]] = []
+    for group in satisfied:
+        if len(group) <= 1:
+            continue
+        groups.append(tuple(source for _kind, source in group))
+    return tuple(sorted(groups))
+
+
 def _is_triggered(
     spec: GraphSpec,
     state: SchedulerState,
@@ -1005,6 +1046,17 @@ def _execute_node_pure(
     """**纯执行**一个节点（阶段 ③ · FR-009 · 执行期零共享状态写）。"""
     result = node.run(node_input)
     return _normalize_node_result(result, spec.nodes, node_name)
+
+
+def _execute_node_pure_with_raw(
+    spec: GraphSpec,
+    node_name: str,
+    node: NodeSpec,
+    node_input: Any,
+) -> tuple[dict[str, Any], Any]:
+    """纯执行并同时返回 ``(normalized, raw)``（B19F1 记录专用）。"""
+    raw = node.run(node_input)
+    return _normalize_node_result(raw, spec.nodes, node_name), raw
 
 
 def _commit_outcome(
@@ -1324,27 +1376,38 @@ def _run_round(
     snapshot_fanout = dict(state.fanout)
 
     # ── ② 标准触发任务准备 ──
-    standard: list[tuple[str, NodeSpec, dict[str, Any]]] = []
+    standard: list[
+        tuple[str, NodeSpec, dict[str, Any], list[tuple[tuple[str, str], ...]]]
+    ] = []
     for node_name in sorted(triggered):
         node = spec.nodes[node_name]
         groups = _trigger_groups(spec, state, node_name, node)
         satisfied = _satisfied_groups(state, node_name, groups)
         node_input = _node_input(spec, state, node)
         _consume_versions(state, node_name, satisfied)
-        standard.append((node_name, node, node_input))
+        standard.append((node_name, node, node_input, satisfied))
 
     # ── ②′ fan-out 任务准备（不消费触发源版本） ──
-    fanout_pending: list[tuple[str, Any]] = []
+    fanout_pending: list[tuple[str, int, str, Any]] = []
     for producer_id in sorted(state.fanout):
         payload = state.fanout[producer_id]
         for task in payload.tasks:
-            fanout_pending.append((task.target, task.arg))
+            fanout_pending.append((payload.producer, task.index, task.target, task.arg))
     state.fanout.clear()
 
     records: list[tuple[TaskId, str, str, NodeSpec, Any]] = []
-    for node_name, node, node_input in standard:
+    trace_meta: list[
+        tuple[tuple[tuple[Any, ...], ...], tuple[tuple[str, ...], ...]]
+    ] = []
+    for node_name, node, node_input, satisfied in standard:
         records.append((len(records), node_name, node_name, node, node_input))
-    for target, arg in fanout_pending:
+        trace_meta.append(
+            (
+                _trace_triggers_from_satisfied(satisfied),
+                _trace_barrier_groups(satisfied),
+            )
+        )
+    for producer, index, target, arg in fanout_pending:
         task_id = len(records)
         records.append(
             (
@@ -1355,6 +1418,22 @@ def _run_round(
                 with_context_arg(arg),
             )
         )
+        trace_meta.append(((("send", producer, index),), ()))
+
+    concurrency_group = tuple(task_key for _tid, task_key, _target, _node, _arg in records)
+    metas: dict[TaskId, TaskTraceMeta] = {
+        task_id: TaskTraceMeta(
+            node=target,
+            task_key=task_key,
+            superstep=state.step,
+            triggers=triggers,
+            concurrency_group=concurrency_group,
+            barrier_groups=barriers,
+        )
+        for (task_id, task_key, target, _node, _input), (triggers, barriers) in zip(
+            records, trace_meta
+        )
+    }
 
     # ── ③ 并发执行（TaskId 为提交序 · 结果槽键 = TaskId） ──
     started: list[TaskId] = []
@@ -1364,7 +1443,10 @@ def _run_round(
         task_id: TaskId,
         task_key: str,
         target: str,
-        fn: Callable[[], dict[str, Any]],
+        meta: TaskTraceMeta,
+        node_input: Any,
+        fn_plain: Callable[[], dict[str, Any]],
+        fn_raw: Callable[[], tuple[dict[str, Any], Any]],
     ) -> Callable[[], dict[str, Any]]:
         def _inner() -> dict[str, Any]:
             started.append(task_id)
@@ -1373,18 +1455,39 @@ def _run_round(
             ):
                 tracer = current_span_tracer()
                 if tracer is None:
-                    return fn()
+                    return fn_plain()
                 run_id, thread_id = current_stream_ids()
                 start = start_node_span(tracer, target, run_id, thread_id, None)
                 if start is None:
-                    return fn()
+                    return fn_plain()
+                needs_records = bool(getattr(tracer, "wants_trace_records", False))
+                output_state: Any = None
+                error: BaseException | None = None
                 try:
-                    result = fn()
-                except BaseException:
-                    end_node_span(tracer, start)
-                    raise
+                    if needs_records:
+                        normalized, output_state = fn_raw()
+                    else:
+                        normalized = fn_plain()
+                except BaseException as exc:
+                    error = exc
+                    normalized = {}
+                if needs_records:
+                    payload = build_trace_payload(
+                        meta, start, node_input, output_state, error
+                    )
+                    callback = getattr(tracer, "on_trace_record", None)
+                    if callback is not None:
+                        try:
+                            callback(payload)
+                        except Exception:
+                            logger.warning(
+                                "trace record receiver failed; write dropped",
+                                exc_info=True,
+                            )
                 end_node_span(tracer, start)
-                return result
+                if error is not None:
+                    raise error
+                return normalized
 
         return _inner
 
@@ -1397,7 +1500,10 @@ def _run_round(
                     task_id,
                     task_key,
                     target,
+                    metas[task_id],
+                    node_input,
                     partial(_execute_node_pure, spec, target, node, node_input),
+                    partial(_execute_node_pure_with_raw, spec, target, node, node_input),
                 ),
             )
             for task_id, task_key, target, node, node_input in records

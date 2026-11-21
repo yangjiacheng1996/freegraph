@@ -27,7 +27,7 @@
 |---|---|---|
 | **路径** | 反引号包裹的仓库相对路径 | **目录** ⇒ 前缀匹配（该目录下的一切）；**文件** ⇒ 精确匹配 |
 | **层** | `L1`…`L6` 或 `—` | 代码归属层；`—` = **跨层单元**（不属于任何单一层） |
-| **例外** | `—` 或 `facade-L1-L3` | ARCH-1 的例外标记；当前**唯一**例外 = 公开 API 门面 |
+| **例外** | `—` / `facade-L1-L3` / `trace-wiring-L3-L5` | ARCH-1 的例外标记；`facade-L1-L3` = 公开 API 门面（既有），`trace-wiring-L3-L5` = B19F1 tracer 接线（2026-11-21 新增，仅 `_stategraph.py` → `observability/_inject.py`） |
 | **说明** | 自由文本 | 人类可读备注（不参与判定） |
 
 ### 0.2 判定规则（G25 MUST 逐条遵守）
@@ -50,6 +50,7 @@
    - **工程设施类**跨层单元（如 `harness/scripts/gates/`）**额外** MUST NOT 被**任何** `src/` 下的层
      import —— 它是**构建期**代码，不属运行时依赖图；
    - 带 `facade-L1-L3` 例外的条目 ⇒ 允许 import **L1–L3**，仍**不得** import **L4 / L5**；
+   - 带 `trace-wiring-L3-L5` 例外的条目 ⇒ **只允许** import **`src/freegraph/observability/_inject.py`**（精确文件）；MUST NOT import 其它 L5 模块；其它方向仍按本规则第 2 条；该例外**不是**「L3 → L5 通行证」；
    - **同一跨层单元内部**的模块互相 import ⇒ **不产生层边 ⇒ 不构成违规**
      （spec FR-008 ④ · 2026-11-08 分析轮订正）—— 而**不同**跨层单元之间的 import **仍**适用本规则第 1 条
      （「只能 import L1 与更低层」⇒ 违规）。
@@ -92,7 +93,7 @@
 | `src/freegraph/` | `L1` | — | **顶层包面**（目录条目 · **粒度统一为「目录优先 + 文件精确」**）· 新增**顶层模块**的**默认归属 = L1**（**更具体的条目优先** —— 最长前缀优先）· ⚠️ 新模块若属**其它层**，MUST **显式登记**（否则会按 L1 判定 ⇒ 可能误判反向 import） |
 | `src/freegraph/__init__.py` | `L1` | — | 顶层包**惰性 / 空壳**（仅 `__version__`）· 硬约束见 §0.3 **L-1**（ARCH-2 · D1 决议附加约束） |
 | `src/freegraph/contracts/` | `L1` | — | **契约层**（C1–C27 · 5 协议 · 5 纯数据类）· 只允许标准库（G2 · 硬约束见 §0.3 **L-2**） |
-| `src/freegraph/_stategraph.py` | `L3` | — | **图定义层**：`StateGraph` 的实现体（立项书 §5.1：`StateGraph` 属 L3） |
+| `src/freegraph/_stategraph.py` | `L3` | `trace-wiring-L3-L5` | **图定义层**：`StateGraph` 的实现体（立项书 §5.1：`StateGraph` 属 L3）· **B19F1 tracer 接线**：仅允许 import `src/freegraph/observability/_inject.py`（精确文件）；MUST NOT 扩展为任意 L3 → L5 |
 | `src/freegraph/graph.py` | `—` | `facade-L1-L3` | **公开 API 门面**（B2F2）· 横跨 L1–L3 ⇒ ARCH-1 的**唯一**例外 |
 | `src/freegraph/runtime/` | `L2` | — | **执行内核层**（B4F1 起）· 尚未存在 · 登记以保证「新增层零改动」 |
 | `src/freegraph/persistence/` | `L4` | — | **持久化层**（B14F1 起）· 尚未存在 · 不得横向依赖 L5（宪法「分层」条 3） |
@@ -100,6 +101,11 @@
 | `src/freegraph/app/` | `L6` | — | **应用层 / Studio UI**（v2 可选子包 · v1 不交付）· 尚未存在 |
 | `harness/scripts/gates/` | `—` | — | **工程设施**（本 feature 的门禁）· 跨层单元 · 只能 import L1 与更低层 · **不得**被 L2–L5 import |
 | `harness/proposals/` | `—` | — | **发行与文档**（立项书 §5.1 跨层单元 · B24F1 / B25F1）· 跨层单元 · 只能 import L1 与更低层 · **不得**被 L2–L5 import（其发行工件另含 `THIRD_PARTY_NOTICES` / `README.md` 的兼容矩阵章节 / `COMPAT.md`（尚未落地）/ `.github/workflows/publish.yml`） |
+
+> **📌 2026-11-21 分析修复（发起者批准 R-1）**：`_stategraph.py`（L3）→
+> `observability/_inject.py`（L5）是 **ARCH-1 的第二个已批准例外**，仅限 tracer 注入 /
+> 外层屏蔽；G25 实现必须按 `trace-wiring-L3-L5` **精确放行**，**MUST NOT** 放开任意
+> L3 → L5。
 
 > **📌 条目表粒度（2026-11-08 分析轮订正 · M10 / M11）**：
 > ① **粒度统一为「目录优先 + 文件精确」** —— 新增 `src/freegraph/`（L1）目录条目 ⇒ **新增一个顶层模块不再落入
@@ -121,6 +127,7 @@
 | 顶层包（`__init__.py`）的空壳约束 | 无（**G2 的范围不含该文件**） | **§0.3 L-1** · 由 **G25** 判（**具名例外** · 优先于「L1 与 L6 允许同层 import」） |
 | 门面的横向依赖 | **G18**（门面**不横依赖** L4 / L5） | G25 判**全包**方向；`facade-L1-L3` 例外**声明在注册表里**（MUST NOT 硬编码在门禁实现中） |
 | 跨层单元的导入方向 | 无 | G25 新增（FR-008） |
+| B19F1 tracer 接线 | 无 | G25 新例外 `trace-wiring-L3-L5`：仅 `_stategraph.py` → `observability/_inject.py`（精确文件；2026-11-21 发起者批准 R-1） |
 
 ---
 

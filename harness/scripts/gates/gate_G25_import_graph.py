@@ -12,8 +12,10 @@
 4. **跨层单元**只能 import **L1 与更低层**，且 MUST NOT 被 **L2–L5** import
    （**L6 除外** —— L6 经由公开 API 门面使用内核 ⇒ L6 → 门面是正确方向）；
    **同一跨层单元内部**的模块互相 import ⇒ **不产生层边 ⇒ 不构成违规**；
-5. **公开 API 门面**是 ARCH-1 的**唯一既有例外**（由层注册表显式声明，
-   MUST NOT 硬编码在门禁实现里）；
+5. **公开 API 门面**是 ARCH-1 的**既有例外之一**（由层注册表显式声明，
+   MUST NOT 硬编码在门禁实现里）；**2026-11-21 新增 R-1**：
+   `_stategraph.py`（L3）→ `observability/_inject.py`（L5）仅按注册表的
+   `trace-wiring-L3-L5` **精确放行**，MUST NOT 放开任意 L3 → L5；
 6. **本门禁 NOT 重复判的两条**（注册表 §0.3）：**L-2**（契约层内部零内部层
    import ⇒ 既有 G2 承担）；**L-1**（顶层包 MUST NOT import 任何内部层
    ⇒ **G25 判**，优先于「L1 与 L6 允许同层 import」）。
@@ -49,15 +51,31 @@ def _layer_number(layer: str) -> int:
 
 
 def allow(
-    source: _gatekit.LayerEntry, target: _gatekit.LayerEntry
+    source: _gatekit.LayerEntry,
+    target: _gatekit.LayerEntry,
+    target_rel: str | None = None,
 ) -> tuple[bool, str]:
     """层间方向判定 ⇒ ``(是否合规, 违规说明)``。
 
     真值表与 spec FR-008 · `layer-registry.md` §0.2 规则 2 ·
     `architecture-gates.md` G25 第 3 条 · `data-model.md` §5.2 **四处口径一致**。
+
+    ``target_rel`` 是**精确模块路径**（仓库相对路径）；仅用于
+    ``trace-wiring-L3-L5`` 例外的**精确文件**判定。直接调用 ``allow(source, target)``
+    的旧用法仍然可用（此时 L5 目标会被判违规）。
     """
     if source.path == target.path:
         return True, ""
+    # ── 2026-11-21 · R-1：只允许 _stategraph.py → observability/_inject.py ──
+    if source.exception == "trace-wiring-L3-L5":
+        if target_rel == "src/freegraph/observability/_inject.py":
+            return True, ""
+        if target.layer == "L5":
+            return False, (
+                "trace-wiring-L3-L5 只允许 _stategraph.py → "
+                "observability/_inject.py（精确文件）；不得 import 其它 L5 模块"
+            )
+        # 非 L5 目标（L1 / L2 / L3 / …）继续走既有方向判定
     if source.is_cross_layer and target.is_cross_layer:
         return False, (
             f"跨层单元 {source.path} 不得 import 另一个跨层单元 {target.path}"
@@ -172,7 +190,7 @@ def evaluate(root: Path, registry_path: Path) -> list[_gatekit.Violation]:
                     )
                 )
                 continue
-            compliant, reason = allow(entry, target_entry)
+            compliant, reason = allow(entry, target_entry, target_rel)
             if compliant:
                 continue
             violations.append(

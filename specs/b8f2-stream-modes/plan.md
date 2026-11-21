@@ -98,7 +98,7 @@ typing 构件上限 3.11（`contextvars` / `dataclasses` / `uuid` / `inspect` / 
 | 节点签名声明 `writer` 时 MUST 以关键字注入 writer；`**kwargs` / 其它参数名 / 注解不匹配 ⇒ 不注入 | FR-036 · SC-021 |
 | `stream` 的 `input` 注解沿用 `StateDict`；运行期允许 `None` = 无输入写入；`Command` / 非法类型在**首次迭代**拒绝；`checkpointer` 被忽略；静态断点在**首次迭代**以 V-26 `ValueError` 拒绝 | FR-023 / FR-028 |
 | 每条事件四键 + `run_id` / `thread_id` | FR-013 / FR-027 · SC-010 / SC-011 |
-| `run_id` / `thread_id` MUST 绑定 L2 私有 contextvar，供 B18F1 / B19F1 读取 | FR-027 · D-3 · H-9 |
+| `run_id` / `thread_id` MUST 绑定 L2 私有 contextvar，供 B18F1 / L2 读取；B19F1 继承 | FR-027 · D-3 · H-9 |
 | 非法 mode / 空序列 ⇒ 调用时 `ValueError`；非 `str` / 非 `Sequence` / 非 `None` ⇒ 调用时 `TypeError` | FR-002 · SC-001 |
 | 中断：task 补发 + `__interrupt__` + 正常结束 | FR-025 · SC-017 |
 | 失败：custom 先出 + 原异常重抛 + 失败轮无 values/updates/tasks/debug | FR-026 · SC-013 |
@@ -177,7 +177,7 @@ typing 构件上限 3.11（`contextvars` / `dataclasses` / `uuid` / `inspect` / 
 | 原则 X（署名头 / 文档） | G30 · API 快照 + 兼容矩阵更新 | ✅ |
 | 原则 XI（上游优先） | 七种 mode 照抄；偏离只 6 条（X-1…X-6）如实登记；P-11 仅载体 SAME，custom 时机归 P-23/X-6 | ✅ |
 | 原则 XII（最优设计 / 零重复载体） | `_full_state` 复用 · `PregelTask` 复用 · writer 单载体 · `_run_single_step` 单轮单实现 · `SuperStepResult` 追加而非另立 | ✅ |
-| 立项书 §5.1 **ARCH-3**（跨层只经 Protocol + 纯数据类） | D-3 的 L2 私有运行期 contextvar 读取 ⇒ **已登记例外 R-6**（不新增公开符号 · 不改 ARCH-1 方向） | ⚠️ **R-6** |
+| 立项书 §5.1 **ARCH-3**（跨层只经 Protocol + 纯数据类） | D-3 的 L2 私有运行期 contextvar 读取（B18F1 / L2）⇒ **例外 R-6 已收窄**；B19F1 不直接读取（从节点 span 继承）· 不新增公开符号 · 不改 ARCH-1 方向 | ⚠️ **R-6** |
 | 运行时基线（3.11 · typing 上限） | Technical Context 逐项 ≤ 3.11 · G9 | ✅ |
 | 依赖白名单 / 黑名单 | 零新增运行时依赖 | ✅ |
 | 跨 feature 承接（v1.8.0） | H-1…H-10 消费既有 feature；D-1…D-4 写入目标初稿（R-2） | ⚠️ R-2 |
@@ -213,7 +213,7 @@ MUST NOT 新增门禁编号 · MUST NOT 放宽依赖 / 许可证 / 商标 / 零�
 |---|---|---|---|
 | D-1 | B8F3（M2） | 别名在流式事件中的可见性（`updates` 键 = 节点名；不另造映射） | `harness/features/B8F3_节点别名与context通道.md` |
 | D-2 | B14F1（M3） | `checkpoints` 档真实数据源（每 checkpoint 一条 · 与 `get_state()` 同形） | `harness/features/B14F1_Checkpointer协议与MemorySaver.md` |
-| D-3 | B18F1 / B19F1（M3） | 两条事件通道独立、共享 `run_id` / `thread_id`；**载体 = L2 私有 `_STREAM_RUN_ID` / `_STREAM_THREAD_ID` contextvar**（**ARCH-3 例外 · R-6**）；trace 不塞进信封 | `harness/features/B18F1_Span数据类生产.md` / `B19F1_TraceSink与current_span.md` |
+| D-3 | B18F1 / L2（读取）· B19F1（继承）· M3 | 两条事件通道独立、共享 `run_id` / `thread_id`；**载体 = L2 私有 `_STREAM_RUN_ID` / `_STREAM_THREAD_ID` contextvar**（**ARCH-3 例外 · R-6，已收窄**）；B19F1 从节点 span 继承；trace 不塞进信封 | `harness/features/B18F1_Span数据类生产.md` / `B19F1_TraceSink与current_span.md` |
 | D-4 | B22F1 / B23F1（M2） | 图导出不依赖流式副作用；流式不调用图导出 | `harness/features/B22F1_get_graph与draw_mermaid.md` / `B23F1_draw_mermaid_png离线不阻断.md` |
 
 **落点**：`tasks.md` 的可勾选接线任务（只接线 · 不越界实现）+ 追认文字并入 R-1 的同一次追认。
@@ -252,7 +252,7 @@ MUST NOT 新增门禁编号 · MUST NOT 放宽依赖 / 许可证 / 商标 / 零�
 
 | # | 被登记项 | 现状 | 判据未放宽的论证 | 承接方 |
 |---|---|---|---|---|
-| R-6 | `立项书 §5.1` **ARCH-3**「跨层只经由 `Protocol` + 纯数据类」 | D-3 / H-9 让 L5 的 B18F1 / B19F1 读取 L2 私有 contextvar `_STREAM_RUN_ID` / `_STREAM_THREAD_ID` | 载荷 = `str \| None` **运行期元数据**，不是新的公开契约载体；**不新增公开符号**（`runtime.__all__` 仍 23）· **不改变** ARCH-1 导入方向（L5 → L2 合法）· 若未来升级为公开 API ⇒ MUST 另走契约修订（`Protocol` + 纯数据类） | B8F2（登记）· B18F1 / B19F1（读取） |
+| R-6 | `立项书 §5.1` **ARCH-3**「跨层只经由 `Protocol` + 纯数据类」 | D-3 / H-9 让 B18F1 / L2 读取 L2 私有 contextvar `_STREAM_RUN_ID` / `_STREAM_THREAD_ID`；B19F1 从节点 span 继承，不直接读取 | 载荷 = `str \| None` **运行期元数据**，不是新的公开契约载体；**不新增公开符号**（`runtime.__all__` 仍 23）· **不改变** ARCH-1 导入方向（L5 → L2 合法）· 若未来升级为公开 API ⇒ MUST 另走契约修订（`Protocol` + 纯数据类） | B8F2（登记）· B18F1 / L2（读取）· B19F1（继承） |
 
 > 红线：该例外**只覆盖**运行期标识的私有 contextvar 读取；MUST NOT 被扩展为「任意 L5 → L2 私有模块依赖」的通行证。
 
@@ -269,7 +269,7 @@ MUST NOT 新增门禁编号 · MUST NOT 放宽依赖 / 许可证 / 商标 / 零�
 |---|---|
 | ARCH-1：L2 只依赖 L1 | ✅ `_stream.py` / `_stream_context.py` 只依赖标准库 + L1 + 同层 `superstep`（私有） |
 | 反向依赖：L2 → L3 | ✅ 零（`_full_state` 只在 L3 使用） |
-| **ARCH-3：跨层只经 Protocol + 纯数据类** | ⚠️ **已登记例外 R-6**：B18F1 / B19F1 读取 L2 私有运行期 contextvar（`str \| None` 元数据）；不新增公开符号、不改 ARCH-1 方向 |
+| **ARCH-3：跨层只经 Protocol + 纯数据类** | ⚠️ **例外 R-6（已收窄）**：B18F1 / L2 读取 L2 私有运行期 contextvar（`str \| None` 元数据）；B19F1 从节点 span 继承，**不直接读取**；不新增公开符号、不改 ARCH-1 方向 |
 | 公开面 | ✅ 门面 8 / 契约 22 / runtime 23 / 顶层 `__all__` 仍 `["__version__"]` |
 | 零重复载体 | ✅ `_full_state` / `PregelTask` / `StreamWriter` 各一个实现点；`_run_single_step` / `_run_round` 由 `run_super_step` 与 `_stream_tick` **共用**；`run_id` / `thread_id` 只经 L2 contextvar 传递 |
 | 偏离登记 | ✅ X-1…X-6 全部登记；X-6（custom 轮末批量）不消耗追认额度 |
@@ -413,7 +413,7 @@ harness/features/                    # ★ 下游接线（R-2）
 | **R-3** | v1.6.0 分阶段 / 原则 VIII | 关键字注入（已交付）/ 会话恢复 / 规模 | 提示词边界 | 关键字注入已交付；会话恢复显式 Out of Scope；规模不单方面修改；判据未放宽 | B14F1 / 发起者（规模） | 注记 + 承接 | `spec.md` Out of Scope / Assumptions |
 | **R-4** | 原则 VIII | C-1…C-8 事实更正 | Phase 0 实测 | 已回写 spec；判据只收紧 | B8F2（M2） | 文档更正 | `research.md` §3 + `spec.md` 引文差异 |
 | **R-5** | v1.6.0 门禁分阶段 | 门禁 3/4/5 的 target.py / fake 轮 / 真实模型轮 | PNG 属 B23F1；真实模型环境不具备 | 固定脚本零改动；图能力侧证据照常；判据未放宽 | B22F1 + B23F1 · B25F1 | 下游接线 + 追认 | `manual-verification.md` · `tasks.md` T061 |
-| **R-6** | 立项书 §5.1 ARCH-3 | L5 的 B18F1 / B19F1 读取 L2 私有运行期 contextvar | 标识需跨事件/span 对齐，且不得新增公开符号 | 载荷 = `str \| None` 运行期元数据；不改 ARCH-1 方向；未来升级公开 API 须另走契约修订 | B8F2（登记）· B18F1 / B19F1（读取） | 登记例外 + 下游接线 | `spec.md` D-3 注 · `tasks.md` T067 |
+| **R-6** | 立项书 §5.1 ARCH-3 | B18F1 / L2 读取 L2 私有运行期 contextvar；B19F1 从节点 span 继承，**不直接读取** | 标识需跨事件/span 对齐，且不得新增公开符号 | 载荷 = `str \| None` 运行期元数据；不改 ARCH-1 方向；未来升级公开 API 须另走契约修订 | B8F2（登记）· B18F1 / L2（读取）· B19F1（继承） | 登记例外 + 下游接线 | `spec.md` D-3 注 · `tasks.md` T067 |
 
 > **X-6**（`custom` 产出时机 DIFF）已按原则 XI 的**必须自研区 ②（上游自身的不确定）**
 > 登记于 `spec.md` §4；它**不属破冻结面**、**不消耗** T-1…T-5 的唯一追认额度；

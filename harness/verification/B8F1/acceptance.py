@@ -34,7 +34,7 @@
   第二参**不叫** ``config`` ⇒ 按**一参**调用 ⇒ ``TypeError`` · 注解**不在**
   匹配集 ⇒ **跳过注入** · **MUST NOT** 发 ``UserWarning``）· FR-003 · SC-021；
 * **A8** **公开面只增不删**（B8F2 后契约 **22** · 门面 **8** · ``runtime`` **23** ·
-  ``vars(compiled)`` == **11** 键 · **零新增错误类型**）· FR-037 · SC-016；
+  ``vars(compiled)`` == **12** 键 · **零新增错误类型**）· FR-037 · SC-016；
 * **A9** **差分组全绿**（**D-103…D-120** · 判词分布 SAME **12** / DIFF **4** /
   STRICTER **2**）· FR-032 · SC-013；
 * **A10** **破冻结面的回溯验证**（**7 类** · 逐条**机械判据** + 人工验证记录的
@@ -754,7 +754,7 @@ def _check_a7_no_warning() -> tuple[bool, str]:
 
 
 def _check_a8() -> tuple[bool, str]:
-    """**A8** · 公开面**只增不删**（B8F2 后 22 / 8 / 23 / 11 键 · 零新增错误类型）。"""
+    """**A8** · 公开面**只增不删**（B8F2 后 22 / 8 / 23 / 12 键（B19F1 新增 `_tracer`） · 零新增错误类型）。"""
     from freegraph import contracts, graph, runtime
 
     counts = (len(contracts.__all__), len(graph.__all__), len(runtime.__all__))
@@ -767,7 +767,7 @@ def _check_a8() -> tuple[bool, str]:
     builder.add_conditional_edges("r", lambda state: "a", ["a"])
     compiled = builder.compile()
     keys = len(vars(compiled))
-    ok = ok and keys == 11
+    ok = ok and keys == 12
 
     from freegraph.runtime import errors
 
@@ -784,7 +784,7 @@ def _check_a8() -> tuple[bool, str]:
     }
     return ok, (
         f"contracts / facade / runtime = {counts[0]} / {counts[1]} / {counts[2]}"
-        f" · vars(compiled) = {keys} 键 · errors 符号集合 = {len(error_symbols)}"
+        f" · vars(compiled) = {keys} 键（B19F1 = 12） · errors 符号集合 = {len(error_symbols)}"
     )
 
 
@@ -932,7 +932,7 @@ def main() -> int:
 
     # ── A8 · 零新增公开面 ───────────────────────────────────────────────
     print("\n[A8] 零新增公开面")
-    _check_gate("A8", "22 / 8 / 23 符号 + 11 键 + 零新增错误类型", _check_a8)
+    _check_gate("A8", "22 / 8 / 23 符号 + 12 键 + 零新增错误类型", _check_a8)
 
     # ── A9 · 差分组 ─────────────────────────────────────────────────────
     print("\n[A9] 差分组 D-103…D-120")

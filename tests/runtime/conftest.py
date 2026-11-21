@@ -505,3 +505,47 @@ def criterion_evaluator(
         return resolve_criterion_input(expression)
 
     return _evaluate
+
+
+class B19RecordingSink:
+    """B19F1 运行期测试用接收端（start/end + records）。"""
+
+    def __init__(self) -> None:
+        self.started: list[Any] = []
+        self.ended: list[Any] = []
+        self.records: list[Any] = []
+
+    def on_span_start(self, span: Any) -> None:
+        self.started.append(span)
+
+    def on_span_end(self, span: Any) -> None:
+        self.ended.append(span)
+
+    def on_trace_record(self, record: Any) -> None:
+        self.records.append(record)
+
+
+class B19FailingRecordSink(B19RecordingSink):
+    def on_trace_record(self, record: Any) -> None:
+        self.records.append(record)
+        raise RuntimeError("record boom")
+
+
+class B19RunIdBindingCounter:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str | None]] = []
+
+    def install(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import freegraph._stategraph as stategraph
+        import freegraph.runtime._stream_context as stream_context
+        import freegraph.runtime.superstep as superstep
+
+        original = stream_context.bind_run_ids
+
+        def wrapper(run_id: str, thread_id: str | None) -> Any:
+            self.calls.append((run_id, thread_id))
+            return original(run_id, thread_id)
+
+        monkeypatch.setattr(stream_context, "bind_run_ids", wrapper)
+        monkeypatch.setattr(superstep, "bind_run_ids", wrapper)
+        monkeypatch.setattr(stategraph, "bind_run_ids", wrapper)

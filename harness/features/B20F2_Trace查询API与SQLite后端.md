@@ -8,7 +8,7 @@
 > | feature ID | `B20F2` |
 > | 所属 功能块 | B20（本地 Trace 存储） |
 > | 架构层 | L5 可观测层 |
-> | 里程碑 | M3 可诊断（第 25 个） |
+> | 里程碑 | M3 可诊断（第 26 个） |
 > | 前置依赖 | **B20F1** |
 > | 规模 | 1,020 行（实现 560 / 测试 460）· 3 人日 |
 > | 建议 short-name | `b20f2-trace-query-sqlite` |
@@ -170,5 +170,10 @@
 ## 下游承接（B18F1 → 本 feature · 2026-11-21 · 只接线）
 
 - **D-2（B18F1 → B20F2 · M3 · 查询维度）**：B18F1 的 span 记录提供 `run_id` / `thread_id` / `node` / `checkpoint_id`；**C27 / DF6 的查询过滤器 = `run_id` / `thread_id` / 时间范围 / 节点名**，**v1 不含 `checkpoint_id` 过滤器**。本 feature MUST 按此实现，MUST NOT 自行增加 `checkpoint_id` 过滤维度（如需增加走 C27 契约修订）。
-- **D-6（B18F1 → B19F1 / B20 · M3 · invoke 路径逐节点记录）**：`invoke()` 路径的逐节点输入 / 输出 / 错误 MUST 由 B19F1 或本 feature / B20F1 提供等价记录；**承接机制 MUST 在本 feature / B20F1 的 spec 写死**：本 feature MUST 查询 B19F1 通过 L2 既有节点接缝（或其扩展 hook）捕获的 `(node, input_state, output_state, error)` record，或从 `PregelTask` / `SuperStepResult` 快照取等价记录；**错误载体 = 原样抛出的异常（+ `add_note`）**。
+- **D-6（B18F1 → B19F1 / B20 · M3 · invoke 路径逐节点记录）**：B19F1 **已交付**逐节点 `TraceRecord`，B20F1 负责落 JSONL；本 feature MUST 查询 B20F1 落盘的 `TraceRecord.to_jsonable()` 视图，MUST NOT 要求 B19F1 重新导出或从 `PregelTask` / `SuperStepResult` 重新猜。
 - 落点：`specs/b18f1-span-production/spec.md` 的 **D-2 / D-6** · tasks **T057**。
+
+## 下游承接（B19F1 → 本 feature · 2026-11-21 · 只接线）
+
+- **D-1（B19F1 → B20F2 · M3 · 查询字段）**：B19F1 的 `TraceRecord.to_jsonable()` 提供 `task_id`（标准 = 节点名；fan-out = `节点名:TaskId`）/ `superstep` / `triggers` / `concurrency_group` / `barrier_groups`；本 feature 的返回结构 MUST 保留这些字段，MUST NOT 重新定义。C27 的四类过滤器（`run_id` / `thread_id` / 时间范围 / 节点名）**不变**；`task_id` / `superstep` 仅作返回字段或附加检索，若新增为契约过滤器 MUST 走 C27 修订。
+- **D-2（B19F1 → B20F2 · M3 · 稳定视图）**：`to_jsonable()` 是 JSONL 的唯一稳定视图；本 feature MUST 以 B20F1 落盘的该视图为查询来源，MUST NOT 要求 B19F1 提供第二套序列化。

@@ -40,6 +40,7 @@ import types
 import uuid
 import warnings
 from collections.abc import Callable, Hashable, Iterator, Mapping, Sequence
+from contextlib import nullcontext
 from dataclasses import dataclass
 from typing import Any, Literal, Self, Union, get_args, get_origin, get_type_hints
 
@@ -68,12 +69,30 @@ from .runtime import (
     run_graph,
 )
 from .runtime._stream import StreamSession
-from .runtime._stream_context import get_stream_writer
+from .runtime._recursion import resolve_config
+from .runtime._span_hook import current_span_tracer
+from .runtime._stream_context import bind_run_ids, get_stream_writer
 from .runtime.superstep import _stream_tick
 
 _START = "__start__"
 _END = "__end__"
 _RESERVED_CHARS = ("|", ":")
+
+_TRACE_OWN = "OWN"
+_TRACE_MASK = "MASK"
+_TRACE_LEGACY_DIRECT = "LEGACY_DIRECT"
+_TRACE_NONE = "NONE"
+
+
+def _trace_mode(tracer: Any) -> str:
+    """单一共享守卫：OWN / MASK / LEGACY_DIRECT / NONE（B19F1 · T031）。"""
+    if tracer is not None:
+        return _TRACE_OWN
+    if current_span_tracer() is None:
+        return _TRACE_NONE
+    from .observability._inject import b19f1_scope_active
+
+    return _TRACE_MASK if b19f1_scope_active() else _TRACE_LEGACY_DIRECT
 
 #: L1 协议别名（仅用于静态检查 / 文档；实现体类同名但**不继承**它 ⇒ 结构化子类型）。
 _COMPILED_GRAPH_PROTOCOL = CompiledGraphProtocol
@@ -615,6 +634,7 @@ class CompiledGraph:
         transformers: Any,
         interrupt_before_nodes: tuple[str, ...],
         interrupt_after_nodes: tuple[str, ...],
+        tracer: Any = None,
     ) -> None:
         self._spec = spec
         self._builder_spec = builder_spec
@@ -627,6 +647,7 @@ class CompiledGraph:
         self.transformers = transformers
         self.interrupt_before_nodes = interrupt_before_nodes
         self.interrupt_after_nodes = interrupt_after_nodes
+        self._tracer = tracer
 
     def invoke(
         self,
@@ -663,12 +684,29 @@ class CompiledGraph:
         / ``InterruptError`` / 节点的真异常）**原类型 + 原消息**直达调用方 ⇒ ⇒
         **MUST NOT** 包装 / 吞掉（契约 §4）。
         """
-        result = run_graph(
-            self._spec,
-            input,
-            checkpointer=self.checkpointer,
-            config=config,
-        )
+        mode = _trace_mode(self._tracer)
+        if mode == _TRACE_OWN:
+            run_id = uuid.uuid4().hex
+            thread_id = resolve_config(config).resolved_thread_id()
+            id_cm: Any = bind_run_ids(run_id, thread_id)
+            from .observability._inject import trace_run_scope
+
+            scope_cm: Any = trace_run_scope(self._tracer)
+        elif mode == _TRACE_MASK:
+            id_cm = nullcontext()
+            from .observability._inject import trace_run_scope
+
+            scope_cm = trace_run_scope(None)
+        else:
+            id_cm = nullcontext()
+            scope_cm = nullcontext()
+        with id_cm, scope_cm:
+            result = run_graph(
+                self._spec,
+                input,
+                checkpointer=self.checkpointer,
+                config=config,
+            )
         if isinstance(result, InterruptResult):
             # ⚠️ **唯一**转成路径 = ``as_result_dict()``（B10F1 独占）⇒ ⇒
             # 「补齐」是其**之后**的**独立**一步（对两条路径**同款**）。
@@ -696,7 +734,18 @@ class CompiledGraph:
     ) -> Iterator[dict[str, Any]]:
         """L3 主循环：反复驱动 L2 私有单轮入口（与上游 ``while loop.tick()`` 同构）。"""
         spec = self._spec
-        with StreamSession(spec, input, config, run_id=run_id) as session:
+        mode = _trace_mode(self._tracer)
+        if mode == _TRACE_OWN:
+            from .observability._inject import trace_run_scope
+
+            trace_cm: Any = trace_run_scope(self._tracer)
+        elif mode == _TRACE_MASK:
+            from .observability._inject import trace_run_scope
+
+            trace_cm = trace_run_scope(None)
+        else:
+            trace_cm = nullcontext()
+        with trace_cm, StreamSession(spec, input, config, run_id=run_id) as session:
             thread_id = session.thread_id
             if "values" in modes:
                 yield _event(
@@ -1128,6 +1177,7 @@ class StateGraph:
         debug: bool = False,
         name: str | None = None,
         transformers: Any = None,
+        tracer: Any = None,
     ) -> CompiledGraph:
         """编译成可执行产物（B7F2）。
 
@@ -1168,4 +1218,5 @@ class StateGraph:
             transformers=transformers,
             interrupt_before_nodes=spec.interrupt_before,
             interrupt_after_nodes=spec.interrupt_after,
+            tracer=tracer,
         )

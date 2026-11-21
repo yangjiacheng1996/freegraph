@@ -35,7 +35,7 @@
     [method] add_edge(self, start_key: str | list[str], end_key: str) -> Self
     [method] add_node(self, node: str | Callable[..., Any], action: Callable[..., Any] | None = None, *, defer: bool = False, metadata: Mapping[str, Any] | None = None, destinations: dict[str, str] | tuple[str, ...] | None = None) -> Self
     [method] add_sequence(self, nodes: Sequence[Any]) -> Self
-    [method] compile(self, checkpointer: Checkpointer | None = None, *, cache: Any = None, store: Store | None = None, interrupt_before: Any = None, interrupt_after: Any = None, debug: bool = False, name: str | None = None, transformers: Any = None) -> CompiledGraph
+    [method] compile(self, checkpointer: Checkpointer | None = None, *, cache: Any = None, store: Store | None = None, interrupt_before: Any = None, interrupt_after: Any = None, debug: bool = False, name: str | None = None, transformers: Any = None, tracer: Any = None) -> CompiledGraph
     [method] set_conditional_entry_point(self, path: Callable[..., str | list[str]], path_map: list[str] | dict[str, str] | None = None) -> Self
     [method] set_entry_point(self, key: str) -> Self
     [method] set_finish_point(self, key: str) -> Self

@@ -289,7 +289,7 @@ rc=0
 | **SC-013** 驱动到终止 + **多源汇合（屏障）** | ✅ | `test_invoke_full_state.py::test_multi_source_barrier_lands_after_every_source` |
 | **SC-014** G22「③② 运行期」断言被点亮 | ✅ | §3.6 G22（步骤 6）—— **只接线 · 零新增门禁编号** |
 | **SC-015** `invoke` 不抛 `NotImplementedError` | ✅ | `test_invoke_full_state.py::test_invoke_never_raises_not_implemented` |
-| **SC-016** `vars(compiled)` 仍 == 11 键 | ✅ | `test_invoke_full_state.py::TestFrozenHoldingFace` |
+| **SC-016** `vars(compiled)` 仍 == 12 键（B19F1 新增 `_tracer`） | ✅ | `test_invoke_full_state.py::TestFrozenHoldingFace` |
 | **SC-017** 差分 D-92…D-102 全绿 | ✅ | §3.3 —— **127/127** |
 | **SC-018** 人工验证记录覆盖**两轮**实测输出 | ✅ | §5.1 / §5.2 |
 | **SC-019** 破冻结面的**唯一一次**追认留痕 | ✅ | §7 —— **发起者本人已签署**（2026-11-17 · **追认次数 == 1**）⇒ ⇒ **合入闸口已打开** |

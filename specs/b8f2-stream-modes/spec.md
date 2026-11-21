@@ -44,12 +44,12 @@
 |---|---|---|---|---|
 | **D-1** | **B8F2 → B8F3** | **M2** | **收缩（C25 正式作废）**：`stream_mode="updates"` 的载荷键 MUST 与 `invoke` / 图结构使用**同一套内部节点名口径**（沿用 B8F1 的 `path_map` 查表口径）；**不存在别名解析**，B8F3 MUST NOT 为 `stream()` 另造命名映射。 | FR-004 · FR-016 · H-10 |
 | **D-2** | **B8F2 → B14F1** | **M3** | **`checkpoints` 档的真实数据源**：本 feature 的 `checkpoints` 档在 v1 **恒为空序列**（无伪造事件）⇒ ⇒ B14F1 交付 `MemorySaver` / checkpointer 后 MUST 提供「每创建一个 checkpoint 一条事件」的数据源，并复用 `_loop.py:631-636` / `debug.py:144`（`map_debug_checkpoint`）的「checkpoint 事件 vs `get_state()` 同形」口径。 | FR-017 · 裁定 5 |
-| **D-3** | **B8F2 → B18F1 / B19F1** | **M3** | **两条事件通道独立、按 id 合并**：`stream()` 的事件与 `TraceSink` 的 span **不互为前置**；二者 MUST 共享同一 `run_id` / `thread_id`（D11 已冻结）⇒ ⇒ **载体 = L2 私有 contextvar**（`_STREAM_RUN_ID` / `_STREAM_THREAD_ID` · 由 `StreamSession` 绑定；B18F1 / B19F1 MUST 读取同一对 contextvar）⇒ ⇒ B18F1 / B19F1 MUST NOT 反向要求 `stream()` 先落地，亦 MUST NOT 把 trace 数据塞进 `stream()` 的信封。 | FR-013 · FR-027 · H-9 · SC-010 |
+| **D-3** | **B8F2 → B18F1 / B19F1** | **M3** | **两条事件通道独立、按 id 合并**：`stream()` 的事件与 `TraceSink` 的 span **不互为前置**；二者 MUST 共享同一 `run_id` / `thread_id`（D11 已冻结）⇒ ⇒ **载体 = L2 私有 contextvar**（`_STREAM_RUN_ID` / `_STREAM_THREAD_ID` · 由 `StreamSession` 绑定；B18F1 / L2 `_run_round` MUST 读取同一对 contextvar；B19F1 从节点 start `Span` 继承 `run_id` / `thread_id`，不直接读取 `_stream_context`）⇒ ⇒ B18F1 / B19F1 MUST NOT 反向要求 `stream()` 先落地，亦 MUST NOT 把 trace 数据塞进 `stream()` 的信封。 | FR-013 · FR-027 · H-9 · SC-010 |
 | **D-4** | **B8F2 → B22F1 / B23F1** | **M2** | **图导出与流式互不影响**：`get_graph` / `draw_mermaid_png` MUST NOT 依赖 `stream()` 的副作用；`stream()` MUST NOT 调用图导出 ⇒ ⇒ 两者只在「同一张编译产物」上共享只读规格。 | FR-006 · SC-013 · Out of Scope |
 
 > ⚠️ **ARCH-3 例外登记（2026-11-20 · 发起者授权）**：D-3 / H-9 的
 > `_STREAM_RUN_ID` / `_STREAM_THREAD_ID` 是 **L2 私有运行期 contextvar**，由 B18F1 /
-> B19F1（L5）读取。这是对 `立项书 §5.1` **ARCH-3**「跨层只经由 `Protocol` + 纯数据类」的
+> L2 `_run_round` 读取；B19F1 从节点 start `Span` 继承，不直接读取。这是对 `立项书 §5.1` **ARCH-3**「跨层只经由 `Protocol` + 纯数据类」的
 > **已登记例外**：其载荷是 `str | None` **运行期元数据**，不是新的公开契约载体；本 feature
 > **MUST NOT** 因此新增公开符号（`runtime.__all__` 仍 23）。该例外**不改变** ARCH-1 的
 > 导入方向约束（L5 → L2 合法），也**不放宽**任何跨层 Protocol 判据；若未来把该标识升级为
@@ -707,7 +707,7 @@ D-130 / D-131 / D-132 / D-133 / D-135 / D-136）+ **DIFF 4**（D-125 / D-126 / D
   全部事件；`thread_id` MUST 按 `RunConfig.resolved_thread_id()` 的同一口径解析
   （`configurable["thread_id"]` 优先）；`RunConfig.run_id` MUST NOT 被用作事件 `run_id`。
   `StreamSession` MUST 把该 `run_id` / `thread_id` 绑定到 L2 私有 contextvar
-  （`_STREAM_RUN_ID` / `_STREAM_THREAD_ID`），供 **B18F1 / B19F1** 的 span 读取
+  （`_STREAM_RUN_ID` / `_STREAM_THREAD_ID`），供 **B18F1 / L2** 的 span 读取；B19F1 从 span 继承
   （D-3 / H-9）⇒ MUST NOT 新增公开符号，MUST NOT 改 `run_super_step` / `run_super_steps` 签名。
 - **FR-028**: `stream()` v1 MUST **不**提供会话连续 / checkpoint 持久化 / `Command` 恢复路径
   （这些属 B14F1 / B15F1 / B16F1）；`StreamSession` MUST **忽略** `checkpointer`
@@ -901,7 +901,7 @@ D-130 / D-131 / D-132 / D-133 / D-135 / D-136）+ **DIFF 4**（D-125 / D-126 / D
   双参路由、在**执行前**精确判定 `recursion_limit`。
 - `RunConfig.run_id` 字段为上游兼容保留；事件的 `run_id` 由运行时生成，该字段在 `stream()`
   路径**不生效**（D11 追认 · X-5 · **宪法 v1.15.2 已订正**）。事件的 `run_id` / `thread_id`
-  由 `StreamSession` 绑定到 L2 私有 contextvar（FR-027），供 B18F1 / B19F1 的 span 读取。
+  由 `StreamSession` 绑定到 L2 私有 contextvar（FR-027），供 B18F1 / L2 的 span 读取；B19F1 从 span 继承。
 - `StreamWriter` 的公开入口是 `get_stream_writer()`；**关键字注入**（参数名 `writer`）也由
   本 feature 交付（FR-036）⇒ B8F1 的 DR-4 关闭；不新增公开符号。
 - `custom` 的 v1 产出时机是**每轮结束后批量产出**（按 TaskId 序），不是上游的逐写即时产出；
@@ -931,7 +931,7 @@ D-130 / D-131 / D-132 / D-133 / D-135 / D-136）+ **DIFF 4**（D-125 / D-126 / D
   MUST 转绿；`harness/demo/graph_core.py` 的 C25 流式别名软断言已随 C25 作废移除；
   `event["payload"]` 的键（信封形态适配 · **不是**放宽判据）。
 - **人工门禁**：`harness/verification/B8F2/manual-verification.md` MUST 含
-  「七种 mode 实测输出 + 差分结果 + T-1…T-5 追认 + R-5 / R-6 登记」。
+  「七种 mode 实测输出 + 差分结果 + T-1…T-5 追认 + R-5 / R-6 登记（R-6 已收窄）」。
 - **证据门禁**：mode 名与语义的证据锚点 = `langgraph/types.py:122-124`（`StreamMode`
   字面量；说明 docstring 至 `:136`）·
   `langgraph/graph/state.py:1357`（默认 `updates`）· `langgraph/pregel/main.py:2737-2743`

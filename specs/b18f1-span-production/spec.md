@@ -128,6 +128,7 @@
 - `RunConfig.run_id` **MUST 被忽略**（宪法 v1.15.2：该字段为上游兼容保留，MUST NOT 用作事件 / span 的 `run_id`）；用户不可设置 / 覆盖。
 - 未启用 span 生产时，**MUST NOT** 生成 / 绑定任何 **span 专用**运行标识（零开销；`stream()` 既有事件 id 不属 span 生产）。
 - B18F1 **MUST NOT** 新增第二套 id 生成机制；若 plan 需要把 id 绑定推进到 `invoke` 路径，MUST 复用运行期同一载体（`_STREAM_RUN_ID` / `_STREAM_THREAD_ID` 或等价的 L2 私有载体）。本 feature 采用前者：在 `run_graph` 经 L2 私有助手 `bind_run_ids(run_id, thread_id)` 设置**同一对** contextvar（见 plan R-2 / tasks T007），不新增第二套载体。
+- **与 B19F1 的衔接**：B19F1 的注入点是 `compiled.invoke`（L3），它可能**先于** L2 `run_graph` 绑定本次注入运行的 `run_id`（为满足嵌套注入独立）。此情形下 B18F1 的 L2 绑定是 **fallback**：仅在 `current_stream_ids()[0] is None` 时生效；L3 已绑定时 L2 MUST NOT 覆盖。两者共用同一 `bind_run_ids` 载体，**每次注入运行恰一次有效绑定**。
 
 #### Q5（`checkpoint_id` 何时有值）
 
@@ -431,7 +432,8 @@
 
 - **FR-019**：MUST NOT 引入 `opentelemetry-*` / `langchain*` / `langsmith` / 任何第三方运行时依赖；基础安装依赖闭包 MUST 仍为空集。
 - **FR-020**：span 生产与模块导入 MUST NOT 读取任何环境变量（含 `LANGSMITH_*` / `LANGCHAIN_*` / `OTEL_*`）；MUST NOT 发起任何出站请求。
-- **FR-021**：B18F1 的 L5 模块 MUST 只 import 标准库 + L1；MUST NOT 让 L5 横向 import L2–L4 的业务模块；跨层耦合 MUST 只经由 L1 协议 + 纯数据。**唯一例外**（已在 B8F2 的 ARCH-3 R-6 登记）：只读 `_STREAM_RUN_ID` / `_STREAM_THREAD_ID` 两个 `str | None` 元数据；**本 feature 不使用该例外**（L5 从当前节点 span 继承 id，零 L2 import）；MUST NOT 扩展为任意 L5 → L2 私有依赖，MUST NOT 把 trace 数据塞进 `stream()` 信封。
+- **FR-021**：B18F1 的 L5 模块 MUST 只 import 标准库 + L1；MUST NOT 让 L5 横向 import L2–L4 的业务模块；跨层耦合 MUST 只经由 L1 协议 + 纯数据。B8F2 的 ARCH-3 **R-6 已收窄**为「B18F1 / L2 读取 `_STREAM_RUN_ID` / `_STREAM_THREAD_ID` 两个 `str | None` 元数据」；**B18F1 的 L5 不使用该例外**（L5 从当前节点 span 继承 id，零 L2 import）；MUST NOT 扩展为任意 L5 → L2 私有依赖，MUST NOT 把 trace 数据塞进 `stream()` 信封。
+  - **（2026-11-21 跨 feature 接线 · B19F1）**：B19F1 的 `observability/_inject.py` 获准新增 **R-2 绑定例外**：**仅允许** import `runtime._span_hook.bind_span_tracer`（双绑定 `SpanProducer`），**不读** `_stream_context`；这是 B19F1 spec §5 / plan R-2 的已登记 ARCH-3 例外。**本 feature 的事实不变**（B18F1 自身仍不使用该例外）；MUST NOT 扩展为其它 L5 → L2 私有依赖。
 - **FR-022**：B18F1 MUST NOT 扩大公开门面符号数 / L1 契约符号数；`invoke_model` / `invoke_tool` / `SpanProducer` MUST 位于 L5 自有模块（**非公开门面**，可直接 import；是否由 B19F1 再导出由 B19F1 决定）；`import freegraph` 后 MUST NOT 加载 L5 生产模块（保持 ARCH-2 的惰性）。
 - **FR-023**：`Span.context` 在 v1 MUST **恒为空映射**（Q15）；MUST NOT 承载 C21 的 `context`（`RunConfig.context` / 节点 state context），MUST NOT 被辅助函数 / 节点 / 接收端填入任何附加元数据。MUST NOT 回退到 `configurable` 承载 context，MUST NOT 重新引入节点别名（B8F3 D-2 / D-3）。
 - **FR-024**：并发安全：同一 super-step 内并发执行的多个节点，各自的当前 span 栈 MUST 独立；MUST NOT 出现跨任务的父子关系；线程池传播 MUST 沿用 B8F2 的每任务 `copy_context()` 机制，MUST NOT 新立第二套上下文传播。

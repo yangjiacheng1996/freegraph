@@ -430,7 +430,7 @@ def test_i13_the_public_faces_are_unchanged() -> None:
     builder.add_node("a", lambda state: {})
     builder.add_edge(START, "r")
     compiled = builder.compile()
-    assert len(vars(compiled)) == 11
+    assert len(vars(compiled)) == 12
 
 
 def test_i14_no_new_error_type_is_introduced() -> None:

@@ -116,11 +116,11 @@ class TestCapabilitySurface:
             assert callable(getattr(compiled, name))
 
 
-# ── T015 · 产物形状（11 键 / 公开属性默认值）──────────────────────────────
+# ── T015 · 产物形状（12 键 / 公开属性默认值）──────────────────────────────
 
 
 class TestProductShape:
-    PRIVATE = {"_spec", "_builder_spec", "_conditional_edges"}
+    PRIVATE = {"_spec", "_builder_spec", "_conditional_edges", "_tracer"}
     PUBLIC = {
         "checkpointer",
         "store",
@@ -135,7 +135,7 @@ class TestProductShape:
     def test_vars_is_exactly_the_eleven_frozen_keys(self) -> None:
         compiled = build_minimal_graph().compile()
         assert set(vars(compiled)) == self.PRIVATE | self.PUBLIC
-        assert len(vars(compiled)) == 11
+        assert len(vars(compiled)) == 12
 
     def test_public_attributes_are_instance_attributes(self) -> None:
         compiled = build_minimal_graph().compile()
@@ -281,7 +281,7 @@ class TestChannelTemplates:
         **逐字相等** ⇒ ⇒ ⇒ **判据只可更严**（恒空 ⇒ 非空且一致）⇒ ⇒ ⇒
         **「产物持有条件边」的语义留存**（**拆分而不删**）。
 
-        ⚠️ **零新增私有字段** ⇒ ⇒ ⇒ ``vars(compiled)`` 的键数仍 == **11**
+        ⚠️ **零新增私有字段** ⇒ ⇒ ⇒ ``vars(compiled)`` 的键数 == **12**（B19F1 新增私有 `_tracer`）
         （**T-3 不破** ⇒ ``:111-114`` 的既有断言**逐字不动**）。
         """
         compiled = build_minimal_graph(conditional=True).compile()

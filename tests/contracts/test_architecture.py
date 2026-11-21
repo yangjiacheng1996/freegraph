@@ -2037,6 +2037,21 @@ class TestB18F1LayeringAndLaziness:
         ]
         assert violations == [], violations
 
+    def test_b19f1_inject_exception_only_binds_span_hook(self, src_dir: Path) -> None:
+        """R-2/R-3：`_inject.py` 只允许相对 import `runtime._span_hook`，不得读 `_stream_context`。"""
+        path = src_dir / "freegraph" / "observability" / "_inject.py"
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        relative_modules = [
+            node.module
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom) and node.level and node.module
+        ]
+        assert all(
+            module in {"runtime._span_hook", "_producer"}
+            for module in relative_modules
+        ), relative_modules
+        assert "runtime._stream_context" not in relative_modules
+
     def test_b18f1_modules_have_no_forbidden_third_party_imports(
         self, src_dir: Path
     ) -> None:

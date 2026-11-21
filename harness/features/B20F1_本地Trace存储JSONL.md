@@ -8,7 +8,7 @@
 > | feature ID | `B20F1` |
 > | 所属 功能块 | B20（本地 Trace 存储） |
 > | 架构层 | L5 可观测层 |
-> | 里程碑 | M3 可诊断（第 24 个） |
+> | 里程碑 | M3 可诊断（第 25 个） |
 > | 前置依赖 | **B19F1** |
 > | 规模 | 820 行（实现 420 / 测试 400）· 3 人日 |
 > | 建议 short-name | `b20f1-local-trace-jsonl` |
@@ -151,5 +151,12 @@ span 落盘成一行一条的 JSON 记录。本 feature 的判定是：**trace �
 ## 下游承接（B18F1 → 本 feature · 2026-11-21 · 只接线）
 
 - **D-2（B18F1 → B20F1 · M3 · JSON 记录）**：B18F1 产出的 span 字段经 `dataclasses.asdict(span)` 后 100% 可被标准库 `json.dumps` 序列化；本 feature 的 JSONL 记录 MUST 原样包含 `run_id` / `thread_id` / `node` / `checkpoint_id`（C23），MUST NOT 要求 B18F1 重新定义 span 字段。
-- **D-6（B18F1 → B19F1 / B20 · M3 · invoke 路径逐节点记录）**：`invoke()` 路径的逐节点输入 / 输出 / 错误 MUST 由 B19F1 或本 feature / B20F2 提供等价记录；**承接机制 MUST 在本 feature / B20F2 的 spec 写死**：本 feature MUST 接收 B19F1 通过 L2 既有节点接缝（或其扩展 hook）捕获的 `(node, input_state, output_state, error)` record，或从 `PregelTask` / `SuperStepResult` 快照取等价记录；**错误载体 = 原样抛出的异常（+ `add_note`）**（节点名 / 耗时已由 B18F1 节点 span 承担）。
+- **D-6（B18F1 → B19F1 / B20 · M3 · invoke 路径逐节点记录）**：B19F1 **已交付** `invoke()` + `stream()` 的逐节点 `TraceRecord`（`(node, input_state, output_state, error)` + 触发源 / 并发组 / 屏障组）；本 feature MUST 消费 B19F1 的 `record.to_jsonable()` 落 JSONL，MUST NOT 从 `PregelTask` / `SuperStepResult` 重新猜（`PregelTask` 无 input 字段）。**错误载体**：内存中为原异常对象；JSONL 视图为 `{"type", "message"}`（由 `to_jsonable()` 提供）。
 - 落点：`specs/b18f1-span-production/spec.md` 的 **D-2 / D-6** · tasks **T057**。
+
+## 下游承接（B19F1 → 本 feature · 2026-11-21 · 只接线）
+
+- **D-1（B19F1 → B20F1 · M3 · `TraceRecord` 消费）**：B19F1 已交付 L5 `freegraph.observability.TraceRecord` 与 `to_jsonable()`。本 feature MUST 原样消费该 JSON 视图，字段至少含 `span_id` / `task_id` / `run_id` / `thread_id` / `checkpoint_id` / `node` / `superstep` / `triggers` / `concurrency_group` / `barrier_groups` / `input_state` / `output_state` / `error`；MUST NOT 重新定义 / 改名字段。
+- **D-2（B19F1 → B20F1 · M3 · 写入入口）**：写作入口 = 用户 sink 的可选鸭子类型方法 `on_trace_record(record)`（**不是** `TraceSink` 三方法协议成员）。本 feature 可实现一个 sink，在 `on_trace_record` 内调用 `record.to_jsonable()` 落 JSONL；MUST NOT 要求 B19F1 新增公开符号或改变 `TraceSink` 协议。
+- **D-3（B19F1 → B20F1 · M3 · span / record 关系）**：`TraceRecord` 与 `Span` 通过 `span_id` 关联，**不是** `Span` 字段；本 feature 可同时落 B18F1 `Span` 与 B19F1 `TraceRecord`（文件布局 / `kind` 字段由本 feature 的 spec 锁定），MUST NOT 把 record 塞进 `Span.attributes` / `Span.context`。
+- **D-4**：默认关闭；未注入 sink ⇒ 零文件 / 零目录；写入失败 MUST NOT 阻断图执行（原则 IV）。

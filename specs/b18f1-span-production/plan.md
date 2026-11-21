@@ -181,6 +181,10 @@ L5 `SpanProducer` 结构化满足它但 **MUST NOT import** 它：
 - 因此 L5 只 import 标准库 + L1；B8F2 的例外留给 **B19F1**（若其需要）；
 - **MUST NOT** 扩展为任意 L5 → L2 私有依赖；**MUST NOT** 把 trace 数据塞进 `stream()` 信封；
   **MUST NOT** 新增第二套 id 载体。
+- **B19F1 的后续登记（2026-11-21）**：B19F1 的 `observability/_inject.py` 经 **R-2** 例外
+  绑定 `runtime._span_hook.bind_span_tracer`（**不读** `_stream_context`）；这是 B19F1 的
+  已登记 ARCH-3 例外，**不改变 B18F1 自身零 L2 import 的事实**。B18F1 的断言拆分 / 红名单
+  第 2 条的 B19F1 版由 `specs/b19f1-tracesink-current-span/tasks.md` T013 承担。
 
 ### 登记项 R-2（**B8F2 私有模块的兼容扩展** · `bind_run_ids`）
 
@@ -190,6 +194,10 @@ invoke span 需要非空 `run_id`。
 **处置**：在 `src/freegraph/runtime/_stream_context.py` **新增私有助手** `bind_run_ids(run_id, thread_id)`
 （`__all__` 仍为空），**只**设置既有两个 contextvar；`run_graph` 仅在
 「tracer 已绑定 **且** 当前 `run_id is None`」时使用它。
+
+**与 B19F1 的 fallback 关系**：B19F1 的 L3 注入点可能先绑定本次注入运行的 `run_id`；
+此时本 helper 的 `run_id is None` 守卫使其自动跳过，不覆盖 L3 值。两者共用同一载体，
+**每次注入运行恰一次有效绑定**；不得产生两个不同 `run_id`。
 
 **不破冻结面的论证**：
 - `StreamSession` 仍通过既有 `bind_stream` 绑定（B8F2 FR-027 逐字满足）；
@@ -483,6 +491,8 @@ harness/
 1. **L2 不得 import L5**：`runtime/*.py` 的 import 图 MUST NOT 出现 `freegraph.observability`。
 2. **L5 不得 import L2**：`observability/*.py` 只允许 `freegraph.contracts.*` + 标准库；
    MUST NOT import `superstep` / `_span_hook` / `_stream` / `_stream_context`。
+   **（B19F1 后续例外）**：`observability/_inject.py` 仅允许 `runtime._span_hook.bind_span_tracer`
+   （R-2 · 已登记 ARCH-3）；**不读** `_stream_context`；其余 L5 模块维持本条。
 3. **门面零扩张**：`freegraph.graph.__all__` 不变；`freegraph.runtime.__all__` 不变。
 4. **`freegraph/__init__.py` 零改动**：`import freegraph` 后 `sys.modules` 不含
    `freegraph.observability` / `freegraph.runtime._span_hook`。

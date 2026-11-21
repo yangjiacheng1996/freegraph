@@ -10,7 +10,7 @@
 ① ``freegraph.graph.__all__`` == **7** 个符号；
 ② ``freegraph.runtime.__all__`` == **23** 个符号（**清单**口径 · 非硬编码）；
 ③ ``freegraph.contracts.__all__`` == **21** 个符号；
-④ ``vars(compiled)`` 的键数 == **11**（3 私有 + 8 公开 · B7F2 的冻结面）；
+④ ``vars(compiled)`` 的键数 == **12**（4 私有 + 8 公开 · B19F1 新增 `_tracer`）；
 ⑤ ``freegraph.runtime.errors`` 的符号集合**不变**（**零新增错误类型** · **I-14**）；
 ⑥ **未实现**的 L1 协议方法（**恰 5** 个）仍抛内置 ``NotImplementedError``
 且消息**点名归属 feature**（**FR-036**）。
@@ -72,13 +72,14 @@ def test_the_contract_layer_exports_exactly_twenty_two_symbols() -> None:
 
 
 def test_the_compiled_product_still_holds_eleven_keys() -> None:
-    """④ ``vars(compiled)`` 的键数 == **11**（**零新增**私有字段 · **T-3 不破**）。"""
+    """④ ``vars(compiled)`` 的键数 == **12**（B19F1 新增 `_tracer` 私有字段）。"""
     compiled = _compiled()
-    assert len(vars(compiled)) == 11
+    assert len(vars(compiled)) == 12
     assert set(vars(compiled)) == {
         "_spec",
         "_builder_spec",
         "_conditional_edges",
+        "_tracer",
         "checkpointer",
         "store",
         "cache",

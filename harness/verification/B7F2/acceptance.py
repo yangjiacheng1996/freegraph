@@ -224,6 +224,7 @@ def b4_snapshot_and_fields() -> None:
             "_spec",
             "_builder_spec",
             "_conditional_edges",
+            "_tracer",
             "checkpointer",
             "store",
             "cache",
@@ -233,7 +234,7 @@ def b4_snapshot_and_fields() -> None:
             "interrupt_before_nodes",
             "interrupt_after_nodes",
         },
-        "B4 vars(compiled) 恰 11 键",
+        "B4 vars(compiled) 恰 12 键（B19F1）",
     )
 
     counter: dict[str, int] = {}

@@ -45,7 +45,7 @@
   四字段零改动 · **新发现**）· **T-3**（L1 + **L3** `stream` 的 `config` 注解 + `stream_mode`
   默认值 + **B7F2 compile-contract / data-model / plan / tasks T006 注记**）· **T-4**（B10F1 契约 §3 +
   `_interrupt.py` docstring）· **T-5**（B2F2 公开面 7/21 → 8/22）⇒ 全部落在**同一次**追认
-- [x] **ARCH-3 例外已登记**（plan R-6）：B18F1 / B19F1 读取 L2 私有运行期 contextvar
+- [x] **ARCH-3 例外已登记并收窄**（plan R-6）：B18F1 / L2 读取 L2 私有运行期 contextvar；B19F1 从节点 span 继承
   （`str | None` 元数据），不新增公开符号、不改 ARCH-1 方向
 - [x] 「拆分而不删」与「原描述不改写」两段义务已写死（T-1…T-5）
 - [x] 零「永久红 CI」：`checkpoints` / `messages` 的判据是「零事件且不抛」，不是

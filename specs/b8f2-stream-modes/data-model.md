@@ -147,7 +147,7 @@
 |---|---|---|
 | `run_id` | `uuid4().hex`（L3 · 每次 `stream()` 一个） | 用户不可指定；`RunConfig.run_id` **忽略**（澄清 A） |
 | `thread_id` | 来自 `config` | `configurable["thread_id"]` 优先于顶层 `thread_id`（`RunConfig.resolved_thread_id()`） |
-| L2 载体 | `StreamSession` 绑定 `_STREAM_RUN_ID` / `_STREAM_THREAD_ID` | B18F1 / B19F1 的 span MUST 读取同一对 contextvar（D-3） |
+| L2 载体 | `StreamSession` 绑定 `_STREAM_RUN_ID` / `_STREAM_THREAD_ID` | B18F1 / L2 的 span MUST 读取同一对 contextvar；B19F1 从节点 span 继承（D-3） |
 
 ---
 
@@ -281,7 +281,7 @@ StateGraph.compile()
 | **IS-22** | 声明 `writer` 的节点在 `stream` 中收到注入；`stream_writer` 不注入；`invoke` 中为 no-op | 行为断言 |
 | **IS-23** | `stream(None)` = 无输入写入，图仍由静态入口触发；`Command` 在首次迭代抛 `TypeError` | 行为断言 |
 | **IS-24** | 条件边图在 `stream` 下的路由目标序列与 `invoke` 一致（复用同一实现）；**双参路由的第二参 == 用户交给 `stream()` 的原始 `config`** | 序列 / 终态等值 + 逐字等值 |
-| **IS-25** | `_STREAM_RUN_ID` / `_STREAM_THREAD_ID` 与本流全部事件的 `run_id` / `thread_id` 一致；B18F1 / B19F1 读取同一对值 | 等值 |
+| **IS-25** | `_STREAM_RUN_ID` / `_STREAM_THREAD_ID` 与本流全部事件的 `run_id` / `thread_id` 一致；B18F1 / L2 读取同一对值，B19F1 继承 | 等值 |
 
 ---
 

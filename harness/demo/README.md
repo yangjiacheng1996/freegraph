@@ -115,7 +115,7 @@ python harness/demo/acceptance.py --record harness/verification/freegraph/manual
 
 | 待锁定的形态 | 依据 |
 |---|---|
-| `compile(tracer=...)` 注入 `TraceSink` | C23 只说「显式传入才生效」，未说载体 |
+| `compile(tracer=...)` 注入 `TraceSink` | **已锁定（B19F1）**：见 `specs/b19f1-tracesink-current-span/spec.md` §「注入点形态裁定」 |
 | 本地 trace 存储目录的参数名 | B20F1 未说参数名 |
 | `MemorySaver` 的模块路径 | B14F1 未定 |
 | `update_state(...)` 的签名 | B16F1 未说签名 |

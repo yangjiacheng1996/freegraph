@@ -195,7 +195,11 @@ def import_violations(path: Path) -> list[str]:
         if isinstance(node, ast.Import):
             for alias in node.names:
                 segment = layer_segment(alias.name)
-                if segment in FORBIDDEN_LAYER_SEGMENTS:
+                allowed_r1 = (
+                    path.name == "_stategraph.py"
+                    and alias.name == "freegraph.observability._inject"
+                )
+                if segment in FORBIDDEN_LAYER_SEGMENTS and not allowed_r1:
                     violations.append(
                         f"{path.name}:{node.lineno}: 禁止的内部层 import: "
                         f"{alias.name}（层段 {segment}）"
@@ -207,7 +211,10 @@ def import_violations(path: Path) -> list[str]:
         elif isinstance(node, ast.ImportFrom):
             module = node.module or ""
             segment = layer_segment(module)
-            if segment in FORBIDDEN_LAYER_SEGMENTS:
+            allowed_r1 = (
+                path.name == "_stategraph.py" and module == "observability._inject"
+            )
+            if segment in FORBIDDEN_LAYER_SEGMENTS and not allowed_r1:
                 violations.append(
                     f"{path.name}:{node.lineno}: 禁止的内部层 import: "
                     f"{'.' * node.level}{module}（层段 {segment}）"

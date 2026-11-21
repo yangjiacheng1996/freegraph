@@ -298,6 +298,86 @@ def _g25_on(
     )
 
 
+def _registry_with_exception(
+    entries: list[tuple[str, str, str]],
+) -> str:
+    """造一份层注册表副本，允许指定「例外」列（R-1 自检用）。"""
+    source = (
+        Path(__file__).resolve().parents[2]
+        / "specs"
+        / "b3f1-scaffold-ci-gates"
+        / "contracts"
+        / "layer-registry.md"
+    )
+    text = source.read_text(encoding="utf-8")
+    extra = ["| 路径 | 层 | 例外 | 说明 |", "|---|---|---|---|"]
+    for path, layer, exception in entries:
+        extra.append(f"| `{path}` | `{layer}` | `{exception}` | R-1 自检注入 |")
+    return text + "\n" + "\n".join(extra) + "\n"
+
+
+def test_g25_allows_trace_wiring_l3_to_inject(isolated_copy: Path) -> None:
+    """G25 · R-1：`_stategraph.py` → `observability/_inject.py` ⇒ **通过**。"""
+    registry = isolated_copy / "layer-registry.md"
+    registry.write_text(
+        _registry_with_exception(
+            [("src/freegraph/_probe_l3.py", "L3", "trace-wiring-L3-L5")]
+        ),
+        encoding="utf-8",
+    )
+    inject = isolated_copy / "src" / "freegraph" / "observability" / "_inject.py"
+    inject.write_text(
+        "def trace_run_scope(tracer):\n    return None\n",
+        encoding="utf-8",
+    )
+    probe = isolated_copy / "src" / "freegraph" / "_probe_l3.py"
+    probe.write_text(
+        "from .observability._inject import trace_run_scope\n"
+        "\n"
+        "__all__ = [\"trace_run_scope\"]\n",
+        encoding="utf-8",
+    )
+    result = run_gate(
+        "gate_G25_import_graph.py",
+        "--root",
+        str(isolated_copy),
+        "--registry",
+        str(registry),
+        cwd=isolated_copy,
+    )
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, f"R-1 例外被误判：\n{output}"
+
+
+def test_g25_rejects_trace_wiring_to_other_l5(isolated_copy: Path) -> None:
+    """G25 · R-1：`_stategraph.py` → 其它 L5 模块 ⇒ **失败**（只精确放行 `_inject.py`）。"""
+    registry = isolated_copy / "layer-registry.md"
+    registry.write_text(
+        _registry_with_exception(
+            [("src/freegraph/_probe_l3.py", "L3", "trace-wiring-L3-L5")]
+        ),
+        encoding="utf-8",
+    )
+    probe = isolated_copy / "src" / "freegraph" / "_probe_l3.py"
+    probe.write_text(
+        "from .observability._producer import SpanProducer\n"
+        "\n"
+        "__all__ = [\"SpanProducer\"]\n",
+        encoding="utf-8",
+    )
+    result = run_gate(
+        "gate_G25_import_graph.py",
+        "--root",
+        str(isolated_copy),
+        "--registry",
+        str(registry),
+        cwd=isolated_copy,
+    )
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, f"R-1 之外 L5 未被拦：\n{output}"
+    assert "_probe_l3.py" in output, f"输出未指名违规文件：\n{output}"
+
+
 def test_g25_rejects_reverse_import(isolated_copy: Path) -> None:
     """G25 · **L1 import L3** ⇒ **失败**（反向 import）。"""
     result = _g25_on(

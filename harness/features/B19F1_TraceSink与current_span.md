@@ -8,9 +8,9 @@
 > | feature ID | `B19F1` |
 > | 所属 功能块 | B19（`TraceSink` + `current_span`） |
 > | 架构层 | L5 可观测层 |
-> | 里程碑 | M3 可诊断（第 23 个） |
+> | 里程碑 | M3 可诊断（第 24 个） |
 > | 前置依赖 | **B18F1** |
-> | 规模 | 840 行（实现 380 / 测试 460）· 3 人日 |
+> | 规模 | 原估算 840 行（实现 380 / 测试 460）；承接义务上浮，实施实测回填 · 3 人日 |
 > | 建议 short-name | `b19f1-tracesink-current-span` |
 > | MVP 必需（★） | 否 |
 
@@ -21,8 +21,10 @@
 ### 1. 目标
 
 把 B18F1 生产的 span **推送给用户注入的接收端**：提供 `TraceSink` 协议接入点与
-`current_span()` 上下文 API，使「当前 span」在嵌套调用中可被访问。
-本 feature 的判定是：**嵌套 span 父子关系正确；不注入 tracer 时零副作用**。
+`current_span()` 上下文 API，使「当前 span」在嵌套调用中可被访问；并交付**逐节点补充
+trace 记录**（`TraceRecord` / 可选 `on_trace_record` / 触发源 / 并发组 / 屏障组 / JSON 降级），
+承接 B9F1 / B11F1 / B12F1 / B7F4 / B18F1 的只接线条款。
+本 feature 的判定是：**嵌套 span 父子关系正确；不注入 tracer 时零副作用；补充记录与节点 span 一一对齐**。
 
 ### 2. 背景与上下文
 
@@ -114,13 +116,16 @@
 
 ### 6. 验收判据（= 立项书 §5.2 B19F1 小目标，逐条可判定）
 
-> 小目标原文：嵌套 span 父子关系正确；不注入 tracer 时零副作用
+> 小目标原文：嵌套 span 父子关系正确；不注入 tracer 时零副作用；补充记录与节点 span 一一对齐
 
 | # | 判据 | 判定方式 |
 |---|---|---|
 | A1 | 嵌套 span 父子关系正确 | 父子断言（`parent` 引用相等） |
 | A2 | 不注入 tracer 时零副作用 | 回调计数 == 0 且 span 创建计数 == 0 |
 | A3 | `current_span()` 可用 | 嵌套场景断言 + 空上下文行为断言 |
+| A4 | 注入即推送、成败皆成对 | start / end 计数相等、按 `id` 配对；异常原样重抛 |
+| A5 | 与 `stream()` 同源同 id | 同一次运行的 `run_id` / `thread_id` 逐字相同 |
+| A6 | 补充记录与 span 对齐 | `record 数 == 节点 span 数`；触发源 / 并发组 / 屏障组可判定 |
 
 ### 7. 关键实体与契约
 
@@ -128,6 +133,7 @@
 |---|---|---|
 | `TraceSink`（协议） | `on_span_start` / `on_span_end` / `current_span` | **C23** |
 | `current_span()` | 当前 span 上下文 | **C24** |
+| `TraceRecord` / 可选 `on_trace_record` | 每节点任务一条补充 trace 记录（触发源 / 并发组 / 屏障组 / input-output / error；与 `Span` 分离） | **B9F1 / B11F1 / B12F1 / B7F4 / B18F1 承接** |
 | 两通道关联 | `stream()` 与 `TraceSink` 共享 `run_id` / `thread_id` | **✅ 已冻结（D11，2026-11-05）** |
 
 > ✅ **口径（已冻结 · D11 批准 2026-11-05）**：立项书 §5.8.3 的**缺口 3** 已关闭——
@@ -153,14 +159,17 @@
   v1 不引入 `opentelemetry-*` 运行时。
 - **零出站 / 零环境变量**：**环境变量存在也不得改变任何行为**（宪法原则 I 的
   「反着做」要求——只有用户显式注入才生效）。
-- **ARCH-1 / ARCH-3**：L5 只依赖 L1；跨层只经由协议 + 纯数据。
+- **ARCH-1 / ARCH-3**：L5 只依赖 L1；跨层只经由协议 + 纯数据。**已登记例外**：**R-1**
+  （`_stategraph.py` → `observability/_inject.py`，已批准）· **R-2**（`_inject.py` **仅**绑定
+  `runtime._span_hook.bind_span_tracer`，**不读** `_stream_context`；ARCH-3 已登记）。
 - **人工门禁**：`harness/verification/<feature>/manual-verification.md`。
 - **证据门禁**：与 LangSmith `get_current_run_tree` 的对应关系须标注来源。
 
 ### 10. 交付物与后续
 
 - **交付物**：`TraceSink` 接入点、`current_span()`、默认关闭机制、嵌套父子关系测试、
-  人工验证记录。
+  **逐节点补充 trace 记录（`TraceRecord` / 可选 `on_trace_record` / 触发源 / 并发组 /
+  屏障组 / JSON 安全降级）**、人工验证记录。
 - **后续解锁**：**B20F1**（本地 Trace 存储：JSONL 后端）→ **B20F2**（查询 API +
   SQLite 后端）→ **B21F1**（OTLP 导出）。
 - **形态联动（必读）**：`harness/demo/README.md` 明确列出「`compile(tracer=)` 注入
@@ -196,8 +205,8 @@
 ## 下游承接（B8F2 → 本 feature · 2026-11-20 · 只接线）
 
 - **D-3（B8F2 → B19F1 · M3 · 两条事件通道独立、按 id 合并）**：`stream()` 事件与 `TraceSink` span **不互为前置**；二者 MUST 共享同一 `run_id` / `thread_id`（D11 已冻结）。
-- **载体 = L2 私有 contextvar** `_STREAM_RUN_ID` / `_STREAM_THREAD_ID`（由 `StreamSession` 绑定）；B19F1 MUST 读取同一对值。
-- **ARCH-3 例外（plan R-6）**：只读取运行期 `str | None` 元数据；MUST NOT 反向要求 `stream()` 先落地，亦 MUST NOT 把 trace 数据塞进 `stream()` 信封。
+- **载体 = L2 私有 contextvar** `_STREAM_RUN_ID` / `_STREAM_THREAD_ID`（由 `StreamSession` 绑定）；**L2 `_run_round` 读取同一对值并写入节点 start `Span`**；B19F1 从该 span 继承 `run_id` / `thread_id`，**不直接读取** `_stream_context`。
+- **ARCH-3 例外（plan R-6，已收窄）**：B18F1 / L2 只读取运行期 `str | None` 元数据；B19F1 **不使用**该 L5 读取例外；MUST NOT 反向要求 `stream()` 先落地，亦 MUST NOT 把 trace 数据塞进 `stream()` 信封。
 
 ## 下游承接（B8F3 → 本 feature · 2026-11-20 · 只接线）
 
