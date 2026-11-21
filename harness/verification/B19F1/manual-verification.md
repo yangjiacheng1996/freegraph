@@ -78,6 +78,7 @@
   （框架出站 0 / 用户出站 2 记录在案）。
 - `git diff --exit-code -- harness/demo/target.py pyproject.toml THIRD_PARTY_NOTICES`：退出码 0。
 - `import freegraph` 后 `sys.modules` 不含 L5 / `opentelemetry` / `langchain*` / `langsmith`。
+- **GitHub Actions**：run `44902066559` —— **7/7 作业 success**（ubuntu-24.04 3.11/3.14 · ubuntu-24.04-arm 3.11 · macos-15 3.11/3.14 · windows-2025 3.11/3.14）。
 
 ## 4. 结论
 
