@@ -5,23 +5,21 @@
 from __future__ import annotations
 
 import socket
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import TypedDict
+from typing import Any, TypedDict
 
 import pytest
 
 pytest.importorskip("langgraph")
 
-from freegraph.contracts import TraceQuery  # noqa: E402
+from freegraph.contracts import Span, TraceQuery  # noqa: E402
 from freegraph.graph import END, START, StateGraph  # noqa: E402
-from freegraph.observability import FileTraceStore, SqliteTraceStore  # noqa: E402
-
-from tests.observability.conftest import (  # noqa: E402
-    assert_rows_equal,
-    make_record,
-    make_span,
-    seed_events,
+from freegraph.observability import (  # noqa: E402
+    FileTraceStore,
+    SqliteTraceStore,
+    TraceRecord,
 )
 
 _PARITY = (
@@ -31,6 +29,49 @@ _PARITY = (
     / "contracts"
     / "upstream-parity.md"
 )
+
+
+def _make_span(*, run_id: str, node: str = "a", span_id: str | None = None) -> Span:
+    return Span(
+        id=span_id or uuid.uuid4().hex,
+        name=node,
+        start_time="2026-11-21T12:00:00.000000000+00:00",
+        end_time="2026-11-21T12:00:00.000120000+00:00",
+        thread_id="t-1",
+        run_id=run_id,
+        node=node,
+    )
+
+
+def _make_record(*, span_id: str, run_id: str, node: str = "a") -> TraceRecord:
+    return TraceRecord(
+        span_id=span_id,
+        task_id=node,
+        run_id=run_id,
+        thread_id="t-1",
+        checkpoint_id=None,
+        node=node,
+        superstep=0,
+        triggers=(),
+        concurrency_group=(),
+        barrier_groups=(),
+        input_state={},
+        output_state={},
+        error=None,
+    )
+
+
+def _seed(store: Any) -> None:
+    span = _make_span(run_id="r1", node="a", span_id="s1")
+    record = _make_record(span_id="s1", run_id="r1", node="a")
+    store.on_trace_record(record)
+    store.on_span_end(span)
+
+
+def _assert_rows_equal(left: list[dict[str, Any]], right: list[dict[str, Any]]) -> None:
+    assert len(left) == len(right), (len(left), len(right))
+    for index, (a, b) in enumerate(zip(left, right, strict=True)):
+        assert a == b, f"row {index} differs: {a!r} != {b!r}"
 
 
 class State(TypedDict, total=False):
@@ -45,12 +86,6 @@ def _linear():
     builder.add_edge("a", "b")
     builder.add_edge("b", END)
     return builder
-
-
-def _seed(store: object) -> None:
-    span = make_span(id="s1", run_id="r1", node="a")
-    record = make_record(span_id="s1", run_id="r1", node="a")
-    seed_events(store, spans=(span,), records=(record,))  # type: ignore[arg-type]
 
 
 def _jsonl(tmp_path: Path) -> FileTraceStore:
@@ -110,7 +145,7 @@ def test_d504_four_filters_and_combination(tmp_path: Path) -> None:
         TraceQuery(run_id="r1", thread_id="t-1", node="a"),
     )
     for query in queries:
-        assert_rows_equal(jsonl.query(query), sqlite.query(query))
+        _assert_rows_equal(jsonl.query(query), sqlite.query(query))
 
 
 def test_d505_failure_isolation_does_not_change_graph_result(tmp_path: Path) -> None:
@@ -163,7 +198,7 @@ def test_d508_concurrent_write_and_query_do_not_corrupt(tmp_path: Path) -> None:
     store = SqliteTraceStore(database)
 
     def writer(index: int) -> None:
-        store.on_span_end(make_span(id=f"s{index}", run_id="r1"))
+        store.on_span_end(_make_span(run_id="r1", span_id=f"s{index}"))
 
     with ThreadPoolExecutor(max_workers=4) as pool:
         list(pool.map(writer, range(20)))
