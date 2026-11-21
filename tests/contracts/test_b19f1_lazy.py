@@ -38,7 +38,9 @@ import freegraph.observability as observability
 assert 'current_span' in observability.__all__
 assert 'TraceRecord' in observability.__all__
 assert 'FileTraceStore' in observability.__all__
+assert 'SqliteTraceStore' in observability.__all__
 assert 'trace_run_scope' not in observability.__all__
+assert 'SqliteTraceStore' not in graph.__all__
 print('ok')
 """,
     )

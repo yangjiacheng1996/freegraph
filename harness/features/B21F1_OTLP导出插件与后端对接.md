@@ -166,3 +166,9 @@
 
 - **D-1（B19F1 → B21F1 · M4 · `TraceRecord` 不映射为 OTLP span）**：B19F1 的 `TraceRecord` 是本地补充元数据，**不是** `Span`；本 feature MUST 只导出 B18F1 的 `Span`，MUST NOT 把 `TraceRecord` 映射为独立 OTLP span，MUST NOT 要求 B19F1 改字段 / 改协议。若未来要把触发源 / 并发组 / 屏障组写进 OTLP 属性，MUST 在本 feature 的 spec 单独登记映射与偏离，**不得**回写 B19F1 记录形态。
 - **D-2**：默认关闭 / 零出站不变；仅用户显式配置端点时才出站。
+
+## 下游承接（B20F2 → 本 feature · 2026-11-22 · 只接线）
+
+- **D-1（B20F2 → B21F1 · M4 · 查询 API 与 OTLP 导出解耦）**：B20F2 **已交付**本地 trace 查询 API（`FileTraceStore.query()` / `SqliteTraceStore.query()`）与 SQLite 后端。本 feature MUST **只导出 B18F1 的 `Span`**，**不消费** B20F2 的查询 API，MUST NOT 要求 B20F2 修改查询语义 / JSONL 行结构 / SQLite schema；查询 API 的稳定性与内部格式边界（C27 ⑤）保持不变。
+- **D-2（证据复用）**：B21F1 的后端对接文档 **MAY** 复用 B20F2 的查询 / 两后端等价证据，但 MUST 注明来源，MUST NOT 把「查询 API 可查」误写成「OTLP 已导出」；两者是不同能力面。
+- **落点**：`specs/b20f2-trace-query-sqlite/spec.md` 的「后续解锁 B21F1」与 `contracts/upstream-parity.md`；本 feature 的 spec MUST 在边界中写明「不消费查询 API」。

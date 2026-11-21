@@ -2,9 +2,9 @@
 
 """L5 可观测层 · **本地 JSONL trace 存储后端** —— 属 **B20F1**（内部模块）。
 
-``FileTraceStore`` 是 B19F1 sink 的**写入侧**实现：只把接收到的 ``Span`` 与
-``TraceRecord`` 序列化为 ``trace-<run_id>.jsonl``，不产生 span、不读写当前 span
-栈、不提供查询 API（查询归 B20F2）。
+``FileTraceStore`` 是 B19F1 sink 的**写入侧**实现：把接收到的 ``Span`` 与
+``TraceRecord`` 序列化为 ``trace-<run_id>.jsonl``；**B20F2** 在同一对象上补齐只读
+``query()``（查询 API），写侧行为逐字不变。
 
 **关键边界**：
 
@@ -30,8 +30,10 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from freegraph.contracts.trace import Span
+from freegraph.contracts.trace import Span, TraceQuery
 
+from ._payloads import record_to_dict, span_to_dict
+from ._query import finalize, normalize_query, normalize_row, parse_instant_ns
 from ._record import TraceRecord
 
 __all__ = ["FileTraceStore"]
@@ -39,29 +41,7 @@ __all__ = ["FileTraceStore"]
 _LOGGER = logging.getLogger(__name__)
 
 _RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
-
-
-def _span_to_dict(span: Span) -> dict[str, Any]:
-    """把结束快照手工映射为 11 字段 dict（``kind`` 第一）。"""
-    return {
-        "kind": "span",
-        "id": span.id,
-        "name": span.name,
-        "attributes": dict(span.attributes),
-        "parent": span.parent,
-        "start_time": span.start_time,
-        "end_time": span.end_time,
-        "context": dict(span.context),
-        "thread_id": span.thread_id,
-        "run_id": span.run_id,
-        "node": span.node,
-        "checkpoint_id": span.checkpoint_id,
-    }
-
-
-def _record_to_dict(record: TraceRecord) -> dict[str, Any]:
-    """把 ``TraceRecord.to_jsonable()`` 原样包装为带 ``kind`` 的 dict。"""
-    return {"kind": "trace_record", **record.to_jsonable()}
+_TRACE_FILE_RE = re.compile(r"^trace-([A-Za-z0-9][A-Za-z0-9_-]*)\.jsonl$")
 
 
 class FileTraceStore:
@@ -113,7 +93,7 @@ class FileTraceStore:
         try:
             run_id = span.run_id
             self._validate_run_id(run_id)
-            payload = _span_to_dict(span)
+            payload = span_to_dict(span)
         except Exception as exc:  # noqa: BLE001 - 写入失败必须被隔离
             self._report(exc)
             return
@@ -124,7 +104,7 @@ class FileTraceStore:
         try:
             run_id = record.run_id
             self._validate_run_id(run_id)
-            payload = _record_to_dict(record)
+            payload = record_to_dict(record)
         except Exception as exc:  # noqa: BLE001 - 写入失败必须被隔离
             self._report(exc)
             return
@@ -133,6 +113,89 @@ class FileTraceStore:
     def current_span(self) -> Span | None:
         """sink 不是 producer；恒返回 ``None``。"""
         return None
+
+    def query(self, query: TraceQuery | None = None) -> list[dict[str, Any]]:
+        """只读检索本地 JSONL trace；返回 B20F1 行视图的独立副本列表。
+
+        * 请求校验（``TypeError`` / 时间 ``ValueError``）在读取任何文件前完成；
+        * 只扫描白名单 ``trace-<run_id>.jsonl``，跳过符号链接 / 非白名单；
+        * 坏行 / 未知 ``kind`` / 字段残缺 ⇒ 跳过 + ``logging.WARNING``；
+        * 不创建 / 改写任何文件；不获取写入锁。
+        """
+        normalized = normalize_query(query)
+        run_filter = normalized.run_id
+        if run_filter is not None and _RUN_ID_RE.fullmatch(run_filter) is None:
+            return []
+        start_ns = (
+            parse_instant_ns(normalized.start_time)
+            if normalized.start_time is not None
+            else None
+        )
+        end_ns = (
+            parse_instant_ns(normalized.end_time)
+            if normalized.end_time is not None
+            else None
+        )
+        if start_ns is not None and end_ns is not None and start_ns > end_ns:
+            return []
+
+        directory = self._directory
+        if not directory.exists():
+            return []
+        if not directory.is_dir():
+            raise NotADirectoryError(f"trace storage is not a directory: {directory}")
+
+        candidates: list[Path] = []
+        for entry in directory.iterdir():
+            if entry.is_symlink():
+                _LOGGER.warning("skip symlink trace candidate: %s", entry)
+                continue
+            match = _TRACE_FILE_RE.fullmatch(entry.name)
+            if match is None:
+                _LOGGER.warning("skip non-allowlist trace candidate: %s", entry)
+                continue
+            if run_filter is not None and match.group(1) != run_filter:
+                continue
+            try:
+                is_file = entry.is_file()
+            except OSError as exc:  # noqa: BLE001 - 单个候选不可读只告警
+                _LOGGER.warning("skip unreadable trace candidate: %s", entry, exc_info=exc)
+                continue
+            if not is_file:
+                _LOGGER.warning("skip non-file trace candidate: %s", entry)
+                continue
+            candidates.append(entry)
+
+        if not candidates:
+            return []
+
+        rows: list[dict[str, Any]] = []
+        failures: list[OSError] = []
+        readable = 0
+        for path in candidates:
+            try:
+                with path.open("r", encoding="utf-8") as handle:
+                    lines = handle.read().splitlines()
+            except OSError as exc:
+                failures.append(exc)
+                _LOGGER.warning("trace file unreadable: %s", path, exc_info=exc)
+                continue
+            readable += 1
+            for line in lines:
+                try:
+                    raw = json.loads(line)
+                except (TypeError, ValueError) as exc:
+                    _LOGGER.warning("skip malformed trace line: %s", path, exc_info=exc)
+                    continue
+                row = normalize_row(raw)
+                if row is None:
+                    _LOGGER.warning("skip invalid trace row: %s", path)
+                    continue
+                rows.append(row)
+
+        if readable == 0 and failures:
+            raise failures[-1]
+        return finalize(rows, normalized)
 
     @staticmethod
     def _validate_run_id(run_id: Any) -> None:

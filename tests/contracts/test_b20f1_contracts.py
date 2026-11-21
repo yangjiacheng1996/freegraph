@@ -90,7 +90,7 @@ print(json.dumps({
         "last_error",
     }
     assert payload["lifecycle"] == []
-    assert payload["queries"] == []
+    assert payload["queries"] == ["query"]
 
 
 def test_frozen_field_counts_are_unchanged(src_dir: Path) -> None:

@@ -138,6 +138,10 @@ SIGNED_SOURCE_FILES = (
     "src/freegraph/observability/_invoke.py",
     # B20F1 新增源文件（宪法原则 X / G5）
     "src/freegraph/observability/_file_store.py",
+    # B20F2 新增源文件（宪法原则 X / G5）
+    "src/freegraph/observability/_payloads.py",
+    "src/freegraph/observability/_query.py",
+    "src/freegraph/observability/_sqlite_store.py",
 )
 
 

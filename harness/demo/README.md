@@ -117,6 +117,7 @@ python harness/demo/acceptance.py --record harness/verification/freegraph/manual
 |---|---|
 | `compile(tracer=...)` 注入 `TraceSink` | **已锁定（B19F1）**：见 `specs/b19f1-tracesink-current-span/spec.md` §「注入点形态裁定」 |
 | 本地 trace 存储目录的参数名 | **已锁定（B20F1）**：`FileTraceStore(directory=...)`，见 `specs/b20f1-local-trace-jsonl/spec.md` §「形态锁定裁定」 |
+| 本地 trace 查询 API 与 SQLite 后端 | **已锁定（B20F2）**：`query(TraceQuery \| None) -> list[dict]`（JSONL / SQLite 同一签名）+ `SqliteTraceStore(database=...)`；表结构 / 文件格式是内部实现细节，Studio 只走 `query()` |
 | `MemorySaver` 的模块路径 | B14F1 未定 |
 | `update_state(...)` 的签名 | B16F1 未说签名 |
 

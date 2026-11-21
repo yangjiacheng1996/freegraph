@@ -46,6 +46,9 @@ def test_new_modules_have_no_forbidden_imports_or_env_reads(src_dir: Path) -> No
         src_dir / "freegraph" / "observability" / "_producer.py",
         src_dir / "freegraph" / "observability" / "_file_store.py",
         src_dir / "freegraph" / "observability" / "__init__.py",
+        src_dir / "freegraph" / "observability" / "_payloads.py",
+        src_dir / "freegraph" / "observability" / "_query.py",
+        src_dir / "freegraph" / "observability" / "_sqlite_store.py",
         src_dir / "freegraph" / "runtime" / "_span_hook.py",
     ]
     forbidden_roots = {"langchain", "langgraph", "langsmith", "opentelemetry"}
@@ -62,7 +65,15 @@ def test_new_modules_have_no_forbidden_imports_or_env_reads(src_dir: Path) -> No
 
 
 def test_no_network_client_is_used_by_new_modules(src_dir: Path) -> None:
-    for name in ("_record.py", "_inject.py", "_producer.py", "_file_store.py"):
+    for name in (
+        "_record.py",
+        "_inject.py",
+        "_producer.py",
+        "_file_store.py",
+        "_payloads.py",
+        "_query.py",
+        "_sqlite_store.py",
+    ):
         text = (src_dir / "freegraph" / "observability" / name).read_text(encoding="utf-8")
         assert "socket" not in text
         assert "requests" not in text

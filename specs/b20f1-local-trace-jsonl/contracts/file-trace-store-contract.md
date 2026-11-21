@@ -43,6 +43,10 @@ class FileTraceStore:
 
 **MUST NOT** 提供：`close()` / `__enter__` / `__exit__` / 上下文管理器 / 查询方法。
 
+> **2026-11-22 · B20F2 增量（只追加）**：`query()` 由 **B20F2** 在**同一
+> `FileTraceStore` 对象**上新增；B20F1 交付时无查询方法。本 contract 的写侧 /
+> 生命周期 / 四路诊断 / `0o600` / per-instance 锁断言**逐字不变**。
+
 ---
 
 ## 2. 文件粒度与命名
@@ -152,7 +156,8 @@ class FileTraceStore:
 
 ## 8. 明确不做
 
-- 查询 API / `TraceQuery` 过滤 / 结果集合 —— B20F2。
+- 查询 API / `TraceQuery` 过滤 / 结果集合 —— B20F2（由 B20F2 交付 `query()`
+  （B20F2 交付后生效）；B20F1 交付时无查询方法；本 contract 的写侧断言不变）。
 - SQLite 后端 / `sqlite3` —— B20F2。
 - OTLP 导出 / 远端后端 —— B21F1。
 - 前端 / UI / Studio —— v2 / B26。

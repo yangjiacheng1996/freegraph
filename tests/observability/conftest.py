@@ -375,3 +375,39 @@ def file_mode(path: Path) -> int | None:
     if os.name != "posix":
         return None
     return stat.S_IMODE(os.stat(path).st_mode)
+
+
+# ── B20F2 共享 helpers ───────────────────────────────────────────────────
+
+
+def seed_events(
+    store: Any,
+    *,
+    spans: tuple[Any, ...] = (),
+    records: tuple[Any, ...] = (),
+) -> None:
+    """按 B19F1 顺序向 store 喂事件：record 先于其 span（若同 ``span_id``）。"""
+    span_ids = {span.id for span in spans}
+    for record in records:
+        if record.span_id in span_ids:
+            store.on_trace_record(record)
+    for record in records:
+        if record.span_id not in span_ids:
+            store.on_trace_record(record)
+    for span in spans:
+        store.on_span_end(span)
+
+
+def assert_rows_equal(left: list[dict[str, Any]], right: list[dict[str, Any]]) -> None:
+    """逐条比较两个查询结果，并在不等时给出可读差异。"""
+    assert len(left) == len(right), (
+        f"row count differs: {len(left)} != {len(right)}\n"
+        f"left={left!r}\nright={right!r}"
+    )
+    for index, (a, b) in enumerate(zip(left, right, strict=True)):
+        assert a == b, f"row {index} differs:\nleft={a!r}\nright={b!r}"
+
+
+def query_by_kind(rows: list[dict[str, Any]], kind: str) -> list[dict[str, Any]]:
+    """按 ``kind`` 过滤查询结果（测试辅助，不改变原列表）。"""
+    return [row for row in rows if row.get("kind") == kind]

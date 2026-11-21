@@ -330,6 +330,7 @@ class TestB18F1PublicFace:
         assert set(observability.__all__) == {
             "FileTraceStore",
             "SpanProducer",
+            "SqliteTraceStore",
             "TraceRecord",
             "current_span",
             "invoke_model",

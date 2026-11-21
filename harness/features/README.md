@@ -50,7 +50,7 @@
 | 23 | **B18F1** | [B18F1_Span数据类生产.md](B18F1_Span数据类生产.md) | L5 | M3 | B7F3 | 1,140 | span 属性命名符合 OTel GenAI semconv；未注入 tracer 时零副作用、零开销 | ✅ **已交付（2026-11-21）** |
 | 24 | **B19F1** | [B19F1_TraceSink与current_span.md](B19F1_TraceSink与current_span.md) | L5 | M3 | B18F1 | 840（历史；承接义务上浮，实施实测回填） | 嵌套 span 父子关系正确；不注入 tracer 时零副作用；补充记录与节点 span 一一对齐 | ✅ **已交付（2026-11-21）** |
 | 25 | **B20F1** | [B20F1_本地Trace存储JSONL.md](B20F1_本地Trace存储JSONL.md) | L5 | M3 | B19F1 | 820 | trace 落盘，零出站 | ✅ **已交付（2026-11-21）** |
-| 26 | **B20F2** | [B20F2_Trace查询API与SQLite后端.md](B20F2_Trace查询API与SQLite后端.md) | L5 | M3 | B20F1 | 1,020 | 可按 thread / 时间 / 节点名检索 | |
+| 26 | **B20F2** | [B20F2_Trace查询API与SQLite后端.md](B20F2_Trace查询API与SQLite后端.md) | L5 | M3 | B20F1 | 1,020 | 可按 thread / 时间 / 节点名检索 | ✅ **已交付（2026-11-22）** |
 | 27 | **B14F1** | [B14F1_Checkpointer协议与MemorySaver.md](B14F1_Checkpointer协议与MemorySaver.md) | L4 | M3 | B7F3 | 1,200 | 快照 + pending writes 双层持久化 | |
 | 28 | **B15F1** | [B15F1_SqliteSaver与状态历史.md](B15F1_SqliteSaver与状态历史.md) | L4 | M3 | B14F1 | 1,240 | 历史快照可枚举 | |
 | 29 | **B16F1** | [B16F1_update_state与时间旅行.md](B16F1_update_state与时间旅行.md) | L4 | M3 | B15F1 | 1,040 | 可从历史 checkpoint 重放 | |
@@ -74,6 +74,11 @@
 > `trace-<run_id>.jsonl` / `kind` 双行 / 零出站；一键验收 **23 项 PASS**；全量
 > **1991 passed / 7 skipped**）⇒ 下一步 **B20F2**（Trace 查询 API + SQLite 后端；
 > 在同一 `FileTraceStore` 对象上补齐查询面）。
+>
+> **状态更新（2026-11-22）**：**B20F2 已交付**（`FileTraceStore.query()` +
+> `SqliteTraceStore` 写 / 查询；四类过滤 / 组合 / 空过滤器 / 稳定排序 / 两后端逐条等价；
+> 一键验收 **A1–A6 · 35 项 PASS**；全量 **2111 passed / 8 skipped**）⇒ 下一步 **B21F1**
+> （OTLP 导出插件 + 后端对接文档；**不消费** B20F2 查询 API）。
 
 > **B17（`Store` 长期记忆）已于 2026-11-05 砍掉**——理由：freegraph 是**通用图框架**
 > （智能体 / RPA 自动化 / 脚本编排 / 在一定程度上替代 `main` 函数 / 可视化工作流编排），
