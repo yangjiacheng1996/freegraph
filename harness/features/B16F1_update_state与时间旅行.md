@@ -178,3 +178,9 @@
 ## 下游承接（B8F3 → 本 feature · 2026-11-20 · 只接线）
 
 - **D-1 / D-3（B8F3 → B16F1 · M3 · `context` 不持久化 / 不得回退）**：`update_state` 与时间旅行回放 MUST NOT 把 `context` 写入 checkpoint 或从历史快照恢复 `context`；`context` 仍只来自本次运行的 `RunConfig.context`。本 feature MUST 以「`context` 已接线、alias 已移除」为前提；MUST NOT 回退到 `configurable` 承载 `context`，MUST NOT 重新引入节点别名。
+
+## 下游承接（B14F1 → 本 feature · 2026-11-22 · 只接线 · 逐条最小改动）
+
+- **D-03（B14F1 → B16F1 · M3 · checkpoint 定位）**：`update_state` / 时间旅行 MUST 以 B14F1 的 checkpoint 顺位 id 与 `StateSnapshot.parent_config` 父链为定位依据；MUST NOT 另造 id 空间或重排父链。
+- **D-08（B14F1 → B16F1 · M3 · `NotImplementedError` 边界）**：B14F1 的 `MemorySaver.delete_for_runs` / `copy_thread` 在 v1 抛 `NotImplementedError`；本 feature 实现运行级删除 / 线程复制时 MUST 重新评估该边界，且 MUST NOT 回改 B14F1 的 `MemorySaver` 行为。
+- **落点**：`specs/b14f1-checkpointer-memory-saver/spec.md` 的「下游承接」D-03 / D-08。

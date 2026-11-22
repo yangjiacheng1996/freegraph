@@ -54,6 +54,7 @@ try:
         StateGraph,
         interrupt,
     )
+    from freegraph.persistence import MemorySaver
 except ImportError as exc:  # pragma: no cover - 环境未就绪路径
     print(f"[环境未就绪] 无法导入 freegraph：{exc}")
     print("→ freegraph 尚未实现（内核自 B1F1 起），或当前环境未安装本仓库。")
@@ -403,13 +404,11 @@ def case_interrupt_resume() -> None:
     g.add_node("ask", asker)
     g.add_edge(START, "ask")
     g.add_edge("ask", END)
-    app = g.compile()
+    app = g.compile(checkpointer=MemorySaver())
+    cfg = RunConfig(thread_id="graph-core-interrupt")
 
     # 第一次：中断
-    try:
-        result = app.invoke({"messages": [], "llm_calls": 0})
-    except Exception as exc:  # noqa: BLE001 - 中断可能以异常或结果形式呈现
-        result = {"__interrupt__": (exc,)}
+    result = app.invoke({"messages": [], "llm_calls": 0}, cfg)
     itr = result.get("__interrupt__")
     check(itr is not None, "C17 中断后结果含 `__interrupt__`", f"实际结果 {result!r}")
     if itr is not None:
@@ -418,21 +417,18 @@ def case_interrupt_resume() -> None:
         check(hasattr(first, "id"), "C17 __interrupt__ 含 .id")
         eq(getattr(first, "value", None), "approve?", "C17 中断载荷原样透出")
 
-    # 第二次：Command(resume=...) 从节点起点重跑
-    # 「从节点起点重跑」是 C17 的语义；但**恢复是否依赖 checkpointer**（C19 的实现细节）
-    # 章程未锁定，故本项为软断言——若实现要求 checkpointer，此处标注待锁定而不判失败。
-    try:
-        out = app.invoke(Command(resume="yes"))
-    except Exception as exc:  # noqa: BLE001
-        soft(False, "C17 Command(resume=) 从节点起点重跑并拿到 resume 值",
-             f"恢复需 checkpointer 支持（{type(exc).__name__}: {exc}）——载体待 B14F1 锁定")
-        return
+    # 第二次：Command(resume=...) 从节点起点重跑（恢复经真实 MemorySaver）
+    out = app.invoke(Command(resume="yes"), cfg)
     check(
         any("answer=yes" in str(m) for m in (out.get("messages") or [])),
         "C17 Command(resume=) 从节点起点重跑并拿到 resume 值",
         f"实际 messages={out.get('messages')!r}",
     )
-    check(len(calls) == 1, "C17 重跑时节点只执行一次（不是从头重复）", f"实际执行 {len(calls)} 次")
+    check(
+        len(calls) == 1,
+        "C17 只重跑被中断节点，interrupt 之后代码执行一次",
+        f"实际执行 {len(calls)} 次",
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

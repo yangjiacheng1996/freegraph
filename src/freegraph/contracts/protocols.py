@@ -5,7 +5,7 @@
 本模块定义 5 个协议：
 
 * :class:`NodeFunc` —— 节点函数协议；
-* :class:`Checkpointer` —— 检查点协议（6 方法）；
+* :class:`Checkpointer` —— 检查点协议（8 方法）；
 * :class:`TraceSink` —— 可观测接收端协议（3 方法）；
 * :class:`Store` —— 长期存储协议（6 方法）；
 * :class:`CompiledGraph` —— 编译产物能力面（6 方法）。

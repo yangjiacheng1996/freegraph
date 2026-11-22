@@ -174,3 +174,8 @@ semconv；未注入 tracer 时零副作用、零开销**。
 ## 下游承接（B8F3 → 本 feature · 2026-11-20 · 只接线）
 
 - **D-2 / D-3（B8F3 → B18F1 · M3 · `context` 与 trace 的关系 / 不得回退）**：C21 的 `context` 是节点只读运行期上下文，**不是** `Span.context` 字段；本 feature MUST NOT 复用 `Span.context` 承载 C21 的 `context`（`Span.context` 仍按 C23 / B2F1 冻结面定义）。MUST 以「`context` 已接线、alias 已移除」为前提；MUST NOT 回退到 `configurable` 承载 `context`，MUST NOT 重新引入节点别名。
+
+## 下游承接（B14F1 → 本 feature · 2026-11-22 · 只接线）
+
+- **D-04（B14F1 → B18F1 · M3 · 节点 span 的 `checkpoint_id`）**：B14F1 已通过既有 `start_node_span(..., checkpoint_id=...)` 接缝把当前 checkpoint id 填入节点 span；模型 / 工具 span 继续从节点 span 继承。本 feature MUST NOT 重新实现子 span 继承，MUST NOT 要求增删 / 改动 `Span` 的 11 字段。
+- **落点**：`specs/b14f1-checkpointer-memory-saver/spec.md` 的「下游承接」D-04。

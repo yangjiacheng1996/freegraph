@@ -225,3 +225,10 @@
 
 - **D-1 / D-3（B8F3 → B15F1 · M3 · `context` 不持久化 / 不得回退）**：历史快照 MUST NOT 包含 `context` 字段；`get_state` / `get_state_history` MUST NOT 从快照还原 `context`。本 feature MUST 以「`context` 已接线、alias 已移除」为前提；MUST NOT 回退到 `configurable` 承载 `context`，MUST NOT 重新引入节点别名。
 
+
+## 下游承接（B14F1 → 本 feature · 2026-11-22 · 只接线 · 逐条最小改动）
+
+- **D-01（B14F1 → B15F1 · M3 · 读侧 / 写侧最小契约）**：`SqliteSaver` MUST 复用 B14F1 已冻结的读侧载体（`.snapshot` / `.pending_writes` / `.scheduler`）、写侧关键字（`values` / `metadata` / `writes` / `task_id` / `task_path`）、`put_writes` 目标由 `configurable["checkpoint_id"]` 指定（缺 key ⇒ `KeyError`）、pending writes 去重 / 排序（`WRITES_IDX_MAP` + `writes_sort_key`）、checkpoint id 排序语义与 `context` 不持久化口径；`get_state` / `get_state_history` 的对外方法归本 feature。MUST NOT 另立第二套载体或 id 空间。
+- **D-02（B14F1 → B15F1 · M3 · `checkpoints` 档消费端）**：`stream(..., stream_mode="checkpoints")` 的消费端接线由本 feature 完成：消费 B14F1 已交付的 `on_checkpoint` / `list()` 数据源，事件与 `get_state()` 同形；MUST NOT 在 `StreamSession` 里另立 checkpoint 路径或伪造事件。
+- **D-08（B14F1 → B15F1 · M3 · `NotImplementedError` 边界）**：B14F1 的 `MemorySaver.delete_for_runs` / `copy_thread` 在 v1 抛 `NotImplementedError`；本 feature 实现运行级删除 / 线程复制时 MUST 重新评估该边界，且 MUST NOT 回改 B14F1 的 `MemorySaver` 行为。
+- **落点**：`specs/b14f1-checkpointer-memory-saver/spec.md` 的「下游承接」D-01 / D-02 / D-08。

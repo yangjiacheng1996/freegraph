@@ -78,6 +78,43 @@ def test_graph_core_c21_context_case_uses_hard_assertion() -> None:
     assert "check(" in case or "eq(" in case
 
 
+def test_graph_core_interrupt_resume_uses_real_memory_saver_and_hard_assertion() -> None:
+    """B14F1 · ``case_interrupt_resume`` 挂真实 ``MemorySaver`` 且无 ``soft(``。"""
+    source = (_REPO_ROOT / "harness" / "demo" / "graph_core.py").read_text(
+        encoding="utf-8"
+    )
+    case = source.split("def case_interrupt_resume()", 1)[1].split(
+        "\ndef case_concurrency_and_errors()", 1
+    )[0]
+    assert "soft(" not in case
+    assert "MemorySaver" in case
+    assert "check(" in case
+    assert "RunConfig(thread_id=" in case
+
+def test_b14f1_one_click_acceptance_script_passes() -> None:
+    """`harness/verification/B14F1/acceptance.py` 一键验收 PASS。"""
+    env = {
+        **os.environ,
+        "PYTHONUTF8": "1",
+        "PYTHONIOENCODING": "utf-8",
+    }
+    proc = subprocess.run(
+        [
+            sys.executable,
+            str(_REPO_ROOT / "harness" / "verification" / "B14F1" / "acceptance.py"),
+        ],
+        cwd=str(_REPO_ROOT),
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=120,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "B14F1 acceptance: PASS" in proc.stdout
+
+
 def test_b13f1_one_click_acceptance_script_passes() -> None:
     """`harness/verification/B13F1/acceptance.py` 一键验收 PASS（V1–V10）。"""
     env = {

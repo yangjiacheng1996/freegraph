@@ -46,6 +46,38 @@ def build_two_node_graph() -> StateGraph:
 
 #: 注入项哨兵（**身份保留**由 `is` 断言）。
 SENTINEL_CHECKPOINTER = object()
+
+
+class _DummyCheckpointer:
+    """B14F1 编译期校验用的**合法** 8 方法鸭子类型 saver。"""
+
+    def get_tuple(self, config: Any) -> Any:
+        return None
+
+    def list(self, config: Any, *args: Any, **kwargs: Any) -> Any:
+        return iter(())
+
+    def put(self, config: Any, *args: Any, **kwargs: Any) -> Any:
+        return None
+
+    def put_writes(self, config: Any, *args: Any, **kwargs: Any) -> Any:
+        return None
+
+    def delete_thread(self, thread_id: str) -> None:
+        return None
+
+    def delete_for_runs(self, run_ids: Any) -> None:
+        raise NotImplementedError
+
+    def copy_thread(self, source_thread_id: str, target_thread_id: str) -> None:
+        raise NotImplementedError
+
+    def get_next_version(self, *args: Any, **kwargs: Any) -> int:
+        return 1
+
+
+#: 满足 L1 ``Checkpointer`` 的**合法**注入项（B14F1 起编译期会校验）。
+DUMMY_CHECKPOINTER = _DummyCheckpointer()
 SENTINEL_STORE = object()
 SENTINEL_CACHE = object()
 SENTINEL_TRANSFORMERS = object()

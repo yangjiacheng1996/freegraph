@@ -185,11 +185,13 @@ class TestNotChecked:
         graph.add_edge("a", "a")
         graph.compile()
 
-    def test_nv5_non_conforming_checkpointer_and_store_compile(self) -> None:
+    def test_nv5a_non_conforming_checkpointer_is_rejected(self) -> None:
+        with pytest.raises(TypeError):
+            build_minimal_graph().compile(checkpointer=object())
+
+    def test_nv5b_non_conforming_store_is_still_accepted(self) -> None:
         with capture_warnings() as caught:
-            build_minimal_graph().compile(
-                checkpointer=object(), store=object()
-            )
+            build_minimal_graph().compile(store=object())
         assert len(caught) == 1
 
     def test_nv6_valid_schemas_compile(self) -> None:

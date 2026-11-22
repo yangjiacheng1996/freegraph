@@ -20,8 +20,8 @@ from freegraph.runtime import GraphSpec
 
 from ._builder_support import CallCounter, RichState, State, node_a, node_b, router
 from ._compiled_support import (
+    DUMMY_CHECKPOINTER,
     SENTINEL_CACHE,
-    SENTINEL_CHECKPOINTER,
     SENTINEL_STORE,
     SENTINEL_TRANSFORMERS,
     build_minimal_graph,
@@ -166,12 +166,12 @@ class TestInjections:
     def test_injection_identities_are_preserved(self) -> None:
         with capture_warnings():
             compiled = build_minimal_graph().compile(
-                checkpointer=SENTINEL_CHECKPOINTER,
+                checkpointer=DUMMY_CHECKPOINTER,
                 store=SENTINEL_STORE,
                 cache=SENTINEL_CACHE,
                 transformers=SENTINEL_TRANSFORMERS,
             )
-        assert compiled.checkpointer is SENTINEL_CHECKPOINTER
+        assert compiled.checkpointer is DUMMY_CHECKPOINTER
         assert compiled.store is SENTINEL_STORE
         assert compiled.cache is SENTINEL_CACHE
         assert compiled.transformers is SENTINEL_TRANSFORMERS
@@ -183,8 +183,11 @@ class TestInjections:
         assert compiled.store == 0
         assert len(caught) == 1  # store 非 None ⇒ 恰好 1 条
 
-    def test_non_store_objects_are_accepted(self) -> None:
-        build_minimal_graph().compile(checkpointer=object())
+    def test_non_saver_checkpointer_objects_are_rejected(self) -> None:
+        with pytest.raises(TypeError):
+            build_minimal_graph().compile(checkpointer=object())
+
+    def test_non_store_objects_are_still_accepted(self) -> None:
         with capture_warnings():
             build_minimal_graph().compile(store=object())
 
@@ -204,14 +207,19 @@ class TestInjections:
         ["checkpointer", "cache", "transformers", "debug", "name"],
     )
     def test_non_store_injections_emit_zero_warnings(self, keyword: str) -> None:
-        value: Any = False if keyword == "debug" else object()
+        if keyword == "debug":
+            value: Any = False
+        elif keyword == "checkpointer":
+            value = DUMMY_CHECKPOINTER
+        else:
+            value = object()
         with capture_warnings() as caught:
             build_minimal_graph().compile(**{keyword: value})
         assert caught == []
 
     def test_all_six_keywords_are_readable(self) -> None:
         sentinels = {
-            "checkpointer": SENTINEL_CHECKPOINTER,
+            "checkpointer": DUMMY_CHECKPOINTER,
             "store": SENTINEL_STORE,
             "cache": SENTINEL_CACHE,
             "debug": True,
@@ -220,7 +228,7 @@ class TestInjections:
         }
         with capture_warnings() as caught:
             compiled = build_minimal_graph().compile(**sentinels)
-        assert compiled.checkpointer is SENTINEL_CHECKPOINTER
+        assert compiled.checkpointer is DUMMY_CHECKPOINTER
         assert compiled.store is SENTINEL_STORE
         assert compiled.cache is SENTINEL_CACHE
         assert compiled.debug is True
@@ -443,4 +451,4 @@ class TestReadmeDocumentation:
     def test_readme_states_store_and_checkpointer_boundaries(self) -> None:
         readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
         assert "v1 不支持 `Store`" in readme
-        assert "checkpointer 的行为归 B14F1" in readme
+        assert "checkpointer 的行为已由 B14F1 的 `MemorySaver` 落地" in readme

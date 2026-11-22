@@ -267,20 +267,27 @@ def test_no_resume_context_survives_across_runs() -> None:
 
 
 def test_the_runtime_never_imports_a_saver_implementation() -> None:
-    """**FR-019**：本 feature **MUST NOT** 交付任何 checkpointer **实现**
-    ⇒ ⇒ ``src/freegraph/**`` 内**零** saver 实现（``MemorySaver`` /
-    ``SqliteSaver`` 属 **B14F1 / B15F1**）。"""
+    """**FR-019 / B14F1 R-2**：``runtime/**`` 内**零** saver 实现，且
+    **MUST NOT** import ``freegraph.persistence``；``MemorySaver`` 归 L4
+    ``freegraph.persistence.memory``。"""
     from pathlib import Path
 
     repo_root = Path(__file__).resolve().parents[2]
-    runtime_dir = repo_root / "src" / "freegraph"
+    runtime_dir = repo_root / "src" / "freegraph" / "runtime"
     offenders = [
         path.name
         for path in sorted(runtime_dir.rglob("*.py"))
         if "class MemorySaver" in path.read_text(encoding="utf-8")
         or "class SqliteSaver" in path.read_text(encoding="utf-8")
+        or "import freegraph.persistence" in path.read_text(encoding="utf-8")
+        or "from freegraph.persistence" in path.read_text(encoding="utf-8")
     ]
     assert offenders == [], offenders
+
+    memory_module = (
+        repo_root / "src" / "freegraph" / "persistence" / "memory.py"
+    )
+    assert "class MemorySaver" in memory_module.read_text(encoding="utf-8")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

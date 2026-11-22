@@ -74,7 +74,6 @@ python harness/demo/acceptance.py --record harness/verification/freegraph/manual
   |---|---|---|
   | A5 条件边与 fresh 读（C7 / C8） | **条件边路由求值** | **B8F1** |
   | A6 的 C16 段（`Command(update=)` 经条件边到达） | **条件边路由求值** | **B8F1** |
-  | A6 的 C17 段（`Command(resume=)` 恢复取值） | **checkpointer 载体** | **B14F1** |
   | agent_loop 的 B1 / B2 / B3（工具循环 · tool_call 形状 · 审批插入） | **条件边路由求值** | **B8F1** |
 
   > ⚠️ **B7F3（2026-11-16）**：这批软断言**按 T011 的首次执行实测红点**登记
@@ -93,14 +92,11 @@ python harness/demo/acceptance.py --record harness/verification/freegraph/manual
   （`get_graph` / `draw_mermaid` 已由 **B22F1**、`draw_mermaid_png` 已由 **B23F1**、
   `stream` 已由 **B8F2** 交付）。
 
-* ✅ **已拍板（2026-11-05）——第三处软断言已关闭**：`interrupt` 恢复**必须依赖
-  checkpointer**（内存态恢复不可靠；`interrupt` 的主场景是 time travel，须跨长时间 /
-  跨重启可恢复；SQLite 是智能体开发的事实标准，故必须采用 checkpointer）。
-  → **恢复路径 MUST NOT 有「不挂 checkpointer 也能恢复」的内存态旁路**；未挂
+* ✅ **B14F1 已交付 `MemorySaver`（2026-11-22）——C17 恢复段已升级为硬断言**：
+  `graph_core.py` 的 `case_interrupt_resume` 已挂真实 `MemorySaver`，两次 `invoke`
+  使用同一 `RunConfig(thread_id=...)`，并把原 `soft(...)` 改为 `check(...)`。
+  **恢复路径 MUST NOT 有「不挂 checkpointer 也能恢复」的内存态旁路**；未挂
   checkpointer 时调用恢复 MUST 抛明确异常。
-  → 该项的**形态已锁定**，待 **B14F1** 落地（`MemorySaver` 模块路径随之锁定）时，
-  在 `graph_core.py` 的 `case_interrupt_resume` 中挂上真实 saver，并把
-  `soft(...)` 改为 `check(...)`。**在此之前仍按软断言处理**（不判失败）。
 
 ## 断言框架是刻意内联的
 
@@ -118,7 +114,7 @@ python harness/demo/acceptance.py --record harness/verification/freegraph/manual
 | `compile(tracer=...)` 注入 `TraceSink` | **已锁定（B19F1）**：见 `specs/b19f1-tracesink-current-span/spec.md` §「注入点形态裁定」 |
 | 本地 trace 存储目录的参数名 | **已锁定（B20F1）**：`FileTraceStore(directory=...)`，见 `specs/b20f1-local-trace-jsonl/spec.md` §「形态锁定裁定」 |
 | 本地 trace 查询 API 与 SQLite 后端 | **已锁定（B20F2）**：`query(TraceQuery \| None) -> list[dict]`（JSONL / SQLite 同一签名）+ `SqliteTraceStore(database=...)`；表结构 / 文件格式是内部实现细节，Studio 只走 `query()` |
-| `MemorySaver` 的模块路径 | B14F1 未定 |
+| `MemorySaver` 的模块路径 | **已锁定（B14F1）**：`freegraph.persistence.MemorySaver`（`InMemorySaver` 同一对象别名） |
 | `update_state(...)` 的签名 | B16F1 未说签名 |
 
 **原则**：*验收脚本与它所验收的能力的 API 形态一起定*——

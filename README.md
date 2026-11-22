@@ -119,7 +119,7 @@ uv run --no-project --python .venv python harness/scripts/gates/gate_G21_depende
 | `PregelTask` | `langgraph.types.PregelTask` | 行为等价 | **上游同款**（2026-11-12 上游对齐 P3 · 上游 `langgraph/types.py:637-646`）：七字段**同名同义**（`id` / `name` / `path` / `error` / `interrupts` / `state` / `result`）⇒ 快照的 `tasks` 元素类型与上游**一致** |
 | `StreamWriter` | `langgraph.types.StreamWriter` | 行为等价 | **上游同款**（B8F2）：`Callable[[Any], None]` 类型别名（上游 `langgraph/types.py:138`）；由 `get_stream_writer()` 取得 · 无流时 no-op · 节点签名声明 `writer` 时按关键字注入 |
 | `NodeFunc` | 无上游对应（自由设计） | 不支持 | 契约条目 **C5 / C6**（节点函数签名 / 节点返回值合并）——上游以普通 `dict` 调用节点函数，**无同名协议类**；返回**形态**已冻结（部分状态字典 / 命令原语 / **命令列表** / **`Send` / `list[Send]` / `tuple[Send, ...]`** / 空值），逐 key 归约语义**已落地**（B4F1 / B5F1）——**`Command` 的运行期语义已落地**（B9F1 · **命令列表**形态与上游 `ToolNode` 自身即用的形态同款） |
-| `Checkpointer` | `langgraph.checkpoint.base.BaseCheckpointSaver` | 行为等价 | **八**方法的**方法名与参数名**逐字对齐（**上游同款** · 2026-11-12 上游对齐 P3 · 由六增八：新增 `delete_for_runs` / `copy_thread` —— 二者在**上游是必须实现**的 ⇒ **上游形状的 saver 直接满足本协议**）；freegraph **纯抽象、无默认实现**，上游是带实现的基类；**未含**上游的**异步变体**（v1 无 async）；**返回类型与载荷形状挂起 B14F1**；上游来源 `langgraph/checkpoint/base/__init__.py:239`（`get_tuple`）/ `:253`（`list`）/ `:277`（`put`）/ `:300`（`put_writes`）/ `:320`（`delete_thread`）/ `:331`（`delete_for_runs`）/ `:350`（`copy_thread`）/ `:692`（`get_next_version`） |
+| `Checkpointer` | `langgraph.checkpoint.base.BaseCheckpointSaver` | 行为等价 | **八**方法的**方法名与参数名**逐字对齐（**上游同款** · 2026-11-12 上游对齐 P3 · 由六增八：新增 `delete_for_runs` / `copy_thread` —— 二者在**上游是必须实现**的 ⇒ **上游形状的 saver 直接满足本协议**）；freegraph **纯抽象、无默认实现**，上游是带实现的基类；**未含**上游的**异步变体**（v1 无 async）；**返回类型与载荷形状已由 B14F1 的 `MemorySaver` 落地**；上游来源 `langgraph/checkpoint/base/__init__.py:239`（`get_tuple`）/ `:253`（`list`）/ `:277`（`put`）/ `:300`（`put_writes`）/ `:320`（`delete_thread`）/ `:331`（`delete_for_runs`）/ `:350`（`copy_thread`）/ `:692`（`get_next_version`） |
 | `TraceSink` | 无上游对应（自由设计） | 不支持 | 契约条目 **C23 / C24**（可观测挂钩 / 当前 span 上下文）——上游**无 span 推送协议**，其 `callbacks` / `tracers` 是**非同名**物 |
 | `Store` | `langgraph.store.base.BaseStore` | 行为等价 | 六方法与**参数名**逐字镜像上游（`search` 的 `namespace_prefix` 是位置参数、`list_namespaces` 的 `prefix` 是关键字参数——上游的这个命名分歧**照抄不统一**）；**命名空间类型收紧为 `tuple[str, ...]`**（**上游同款** · 2026-11-12 上游对齐 P3 · 上游 `langgraph/store/base/__init__.py:311` 的 `NamespacePath`）⇒ **上游形状的 store 直接满足本协议**；**未含**上游的**异步变体**（v1 无 async）；`batch` 操作表示挂起 v2；上游来源 `langgraph/store/base/__init__.py:733`（`batch`）/ `:756`（`get`）/ `:779`（`search`）/ `:856`（`put`）/ `:937`（`delete`）/ `:946`（`list_namespaces`） |
 | `CompiledGraph` | `langgraph.pregel.Pregel` | 部分等价 | 六方法的**返回类别**与**参数名（占位名）**已对齐（`invoke` → 完整状态字典 / `stream` → `dict[str, Any]` 事件迭代器 / `get_state` 查不到返回空值）；**`stream` 已交付**（B8F2 · 七种 mode · 四键信封 · `custom` 轮末批量 X-6）· **行为细节挂起** B15F1 / B16F1；上游来源 `langgraph/pregel/main.py:3783`（`invoke`）/ `:2655`（`stream`）/ `:845`（`get_graph`）/ `:1392`（`get_state`）/ `:1480`（`get_state_history`）/ `:2515`（`update_state`） |
@@ -163,8 +163,9 @@ uv run --no-project --python .venv python harness/scripts/gates/gate_G21_depende
 > （要续跑就把**自己写的初始状态**重新传进去）。
 >
 > **v1 的 `store=` 边界**：`compile(store=...)` 仍被接受（API 兼容），但
-> **v1 不支持 `Store`**——该参数只被记录并发出 1 条 warning，不会生效；
-> **checkpointer 的行为归 B14F1**（本阶段只接受并记录，编译期不做类型校验）。
+> **v1 不支持 `Store`**——该参数只被记录并发出 1 条 warning，不会生效。
+> **checkpointer 的行为已由 B14F1 的 `MemorySaver` 落地**：`compile(checkpointer=...)`
+> 在编译期校验类型，挂载真实 saver 后可按 `thread_id` 持久化 / 恢复。
 
 **证据来源**（截至 2026-11-05，按 LangGraph 1.2.19 / langchain-core 1.7.6 源码核实）：
 `langgraph/types.py:711`（`StateSnapshot`）· `:738`（`Send`）· `:833`（`Command`）·

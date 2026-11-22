@@ -71,6 +71,17 @@ from ._concurrency import (
     attach_failure_notes,
     run_tasks_concurrently,
 )
+from ._checkpoint import (
+    bind_error_interrupts,
+    checkpoint_id_of,
+    config_for_checkpoint,
+    effective_checkpointer,
+    put_error_interrupts,
+    put_initial,
+    put_step,
+    record_error_interrupts,
+    reset_error_interrupts,
+)
 from ._context import bind_context, with_context, with_context_arg
 from ._interrupt import (
     bind_run,
@@ -1359,6 +1370,7 @@ def _run_round(
     *,
     max_concurrency: int | None = None,
     route_config: Any = None,
+    checkpoint_id: str | None = None,
 ) -> tuple[
     list[str],
     dict[str, dict[str, tuple[Any, ...]]],
@@ -1457,7 +1469,9 @@ def _run_round(
                 if tracer is None:
                     return fn_plain()
                 run_id, thread_id = current_stream_ids()
-                start = start_node_span(tracer, target, run_id, thread_id, None)
+                start = start_node_span(
+                    tracer, target, run_id, thread_id, checkpoint_id
+                )
                 if start is None:
                     return fn_plain()
                 needs_records = bool(getattr(tracer, "wants_trace_records", False))
@@ -1615,6 +1629,15 @@ def _run_round(
     # ── ⑥ 收尾（唯一抛出点） ──
     executed = tuple(target_by_id[task_id] for task_id in sorted(by_id))
     if error is not None:
+        if interrupts:
+            record_error_interrupts(
+                (
+                    task_key_by_id[task_id],
+                    payload,
+                )
+                for task_id in sorted(by_id)
+                for payload in by_id[task_id].interrupts
+            )
         attach_failure_notes(
             error,
             [(target_by_id[task_id], by_id[task_id]) for task_id in sorted(by_id)],
@@ -2070,11 +2093,16 @@ def _run_graph_loop(
     route_config: Any = None,
     static_ack: Mapping[str, Any] | None = None,
     static_resume: bool = False,
+    is_fresh: bool = False,
+    current_checkpoint_id: str | None = None,
 ) -> SuperStepResult | InterruptResult:
     """跑**多轮** ⇒ **完成**（``SuperStepResult``）或**挂起**（``InterruptResult``）。
 
     * ``first_round`` —— **显式**指定的首轮节点（**不走**触发判定）⇒ ⇒
       恢复轮（``.snapshot.next``）与会话连续轮（``input=None``）**同款**；
+    * ``is_fresh`` —— **全新会话** ⇒ 在第一个 ``_run_round`` 之前写惰性初始快照；
+    * ``current_checkpoint_id`` —— 本轮起点所用的 checkpoint id（供节点 span 与
+      错误轮 pending writes）；
     * ⚠️ **轮数口径**：``SuperStepResult.steps`` **含**那个「发现没任务了」的
       **空轮**（B7F1 冻结面）⇒ ⇒ 挂起时**没有**空轮 ⇒ ⇒ 两者的 ``steps``
       **计数口径刻意不同**（裁定 2 ③ · 不可直接比较）。
@@ -2083,6 +2111,9 @@ def _run_graph_loop(
     pending: dict[str, dict[str, tuple[Any, ...]]] = {}
     tasks: list[PregelTask] = []
     steps = 0
+    initial_pending = bool(
+        is_fresh and checkpointer is not None and current_checkpoint_id is None
+    )
     triggered: list[str] | None = list(first_round) if first_round is not None else None
     while True:
         # ⚠️ **B8F1**：入口哨兵上的条件边 ⇒ **每轮之前**求值（**幂等**）。
@@ -2110,7 +2141,7 @@ def _run_graph_loop(
                 steps=steps - 1,
             )
             if checkpointer is not None:
-                _write_suspend(
+                written = _write_suspend(
                     run_config,
                     checkpointer,
                     state,
@@ -2121,7 +2152,23 @@ def _run_graph_loop(
                     static_ack=build_static_ack(state),
                     next_nodes=tuple(triggered),
                 )
+                current_checkpoint_id = (
+                    checkpoint_id_of(written) or current_checkpoint_id
+                )
             return result
+        if initial_pending and checkpointer is not None:
+            written = put_initial(
+                run_config,
+                checkpointer,
+                state,
+                _sparse_state(spec, state),
+                tuple(triggered),
+            )
+            initial_pending = False
+            current_checkpoint_id = (
+                checkpoint_id_of(written) or current_checkpoint_id
+            )
+        collector, token = bind_error_interrupts()
         try:
             round_executed, round_pending, round_tasks = _run_round(
                 spec,
@@ -2129,13 +2176,15 @@ def _run_graph_loop(
                 triggered,
                 max_concurrency=max_concurrency,
                 route_config=route_config,
+                checkpoint_id=current_checkpoint_id,
             )
         except GraphInterrupt as exc:
+            reset_error_interrupts(token)
             result = _suspend(spec, state, table, exc, steps=steps)
             if checkpointer is not None:
                 # ⚠️ **挂起时** MUST **写**快照 + **待写入**（FR-012）⇒ ⇒
                 # 挂起态**可被再次恢复**（闭环**可重复** · SC-013）。
-                _write_suspend(
+                written = _write_suspend(
                     run_config,
                     checkpointer,
                     state,
@@ -2143,7 +2192,34 @@ def _run_graph_loop(
                     _produced_interrupts(table, result.interrupts),
                     result.interrupts,
                 )
+                current_checkpoint_id = (
+                    checkpoint_id_of(written) or current_checkpoint_id
+                )
             return result
+        except BaseException:
+            pending_interrupts = tuple(collector)
+            reset_error_interrupts(token)
+            if (
+                checkpointer is not None
+                and pending_interrupts
+                and current_checkpoint_id
+            ):
+                try:
+                    put_error_interrupts(
+                        config_for_checkpoint(
+                            run_config, current_checkpoint_id
+                        ),
+                        checkpointer,
+                        pending_interrupts,
+                    )
+                except Exception:
+                    logger.warning(
+                        "failed to write error-round interrupts",
+                        exc_info=True,
+                    )
+            raise
+        else:
+            reset_error_interrupts(token)
         executed.extend(round_executed)
         tasks.extend(round_tasks)
         for node_name, writes in round_pending.items():
@@ -2163,7 +2239,7 @@ def _run_graph_loop(
                 steps=steps,
             )
             if checkpointer is not None:
-                _write_suspend(
+                written = _write_suspend(
                     run_config,
                     checkpointer,
                     state,
@@ -2174,7 +2250,27 @@ def _run_graph_loop(
                     static_ack=build_static_ack(state),
                     next_nodes=tuple(_determine_triggers(spec, state)),
                 )
+                current_checkpoint_id = (
+                    checkpoint_id_of(written) or current_checkpoint_id
+                )
             return result
+        if checkpointer is not None:
+            next_nodes = tuple(_determine_triggers(spec, state))
+            skip_step_snapshot = bool(
+                static_resume and not next_nodes and not state.fanout
+            )
+            if not skip_step_snapshot:
+                written = put_step(
+                    run_config,
+                    checkpointer,
+                    state,
+                    _sparse_state(spec, state),
+                    next_nodes,
+                    round_tasks,
+                )
+                current_checkpoint_id = (
+                    checkpoint_id_of(written) or current_checkpoint_id
+                )
         triggered = None
     result = SuperStepResult(
         state=_sparse_state(spec, state),
@@ -2249,7 +2345,7 @@ def _write_suspend(
     suspension_kind: str | None = None,
     static_ack: Mapping[str, Any] | None = None,
     next_nodes: Sequence[str] | None = None,
-) -> None:
+) -> Any:
     """**挂起时**的**写侧**（契约 §4 · FR-012 · T041）。
 
     * ``put`` 写**快照**（``values`` = 该步合并后的**稀疏状态**）⇒
@@ -2266,7 +2362,7 @@ def _write_suspend(
     scheduler["static_ack"] = static_ack
     if next_nodes is None:
         next_nodes = tuple(sorted(produced))
-    checkpointer.put(
+    written = checkpointer.put(
         run_config,
         values=dict(values),
         metadata=_suspend_metadata(
@@ -2277,13 +2373,15 @@ def _write_suspend(
             static_ack=static_ack,
         ),
     )
+    write_config = written if written is not None else run_config
     for node_name, payload in produced.items():
         checkpointer.put_writes(
-            run_config,
+            write_config,
             writes=[(_INTERRUPT_CHANNEL, (payload,))],
             task_id=node_name,
             task_path=node_name,
         )
+    return written
 
 
 def _clear_static_suspension(
@@ -2365,6 +2463,7 @@ def run_graph(
     # （那会把 mapping **归一**成 ``RunConfig``）⇒ ⇒ ⇒ **逐字**保留原对象。
     route_config = config
     run_config = resolve_config(config)
+    checkpointer = effective_checkpointer(checkpointer, run_config)
     # ⚠️ **旋钮的读取点**（**自 B7F3 起 · 关键字优先 · config 兜底** · 裁定 13 /
     # FR-023）⇒ ⇒ **``None`` ≡ 未指定** ⇒ ⇒ 「显式 ``None`` 覆盖 config」的
     # 第三种语义**不存在** ⇒ ⇒ ⇒ **兼容扩展**（既有调用方零改动）。
@@ -2438,12 +2537,15 @@ def _first_graph(
             max_steps=max_steps,
             max_concurrency=max_concurrency,
             route_config=route_config,
+            is_fresh=True,
         )
 
     # ⚠️ **会话连续**（**续跑** · **上游同款** · 实测 E-26）
     snapshot = history.snapshot
     pending_writes = history.pending_writes
     scheduler_data = history.scheduler
+    snapshot_config = getattr(snapshot, "config", None) or run_config
+    current_checkpoint_id = checkpoint_id_of(snapshot_config)
     static_kind = scheduler_data.get("suspension_kind")
     static_ack = scheduler_data.get("static_ack")
     _restore_scheduler(state, scheduler_data)
@@ -2469,6 +2571,7 @@ def _first_graph(
             route_config=route_config,
             static_ack=static_ack,
             static_resume=is_static,
+            current_checkpoint_id=current_checkpoint_id,
         )
     # ⚠️ **状态字典**输入 ⇒ 先读 `.snapshot.values`（已恢复）⇒ 再把 `input`
     # **按通道写入**叠加上去 ⇒ ⇒ 写通道 ⇒ 通道版本推进 ⇒ **订阅节点重新触发**
@@ -2487,6 +2590,7 @@ def _first_graph(
         route_config=route_config,
         static_ack=static_ack,
         static_resume=is_static,
+        current_checkpoint_id=current_checkpoint_id,
     )
 
 
@@ -2517,6 +2621,8 @@ def _resume_graph(
     snapshot = history.snapshot
     pending_writes = history.pending_writes
     scheduler_data = history.scheduler
+    snapshot_config = getattr(snapshot, "config", None) or run_config
+    current_checkpoint_id = checkpoint_id_of(snapshot_config)
     static_kind = scheduler_data.get("suspension_kind")
     static_ack = scheduler_data.get("static_ack")
     interrupts = _pending_interrupts(pending_writes)
@@ -2543,6 +2649,7 @@ def _resume_graph(
             route_config=route_config,
             static_ack=static_ack,
             static_resume=True,
+            current_checkpoint_id=current_checkpoint_id,
         )
 
     interrupt_ids = {payload.id for payload in interrupts.values()}
@@ -2590,7 +2697,7 @@ def _resume_graph(
             # ⚠️ **恢复值先落 pending writes 再执行**（**上游同款** · DR-10 ②）
             # ⇒ ⇒ 「恢复」与「首次运行」**共用同一条执行路径** ⇒ ⇒ 零分支。
             checkpointer.put_writes(
-                run_config,
+                snapshot_config,
                 writes=[(_RESUME_CHANNEL, accumulated)],
                 task_id=node_name,
                 task_path=node_name,
@@ -2611,4 +2718,5 @@ def _resume_graph(
         max_steps=max_steps,
         max_concurrency=max_concurrency,
         route_config=route_config,
+        current_checkpoint_id=current_checkpoint_id,
     )

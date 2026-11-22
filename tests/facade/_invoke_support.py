@@ -216,13 +216,12 @@ class StubTuple:
 
 
 class StubCheckpointer:
-    """**自足桩** checkpointer —— 只存**最小**载荷（恢复路径的载体）。
+    """**自足桩** checkpointer —— 存**最小**载荷（恢复路径 / 编译期校验的载体）。
 
-    ⚠️ **方法集逐字按契约 §4 F-05 冻结的清单实现**（**三个**方法：
-    ``get_tuple`` / ``put`` / ``put_writes``）⇒ ⇒ **MUST NOT** 多实现
-    ``list`` / ``delete_thread`` / ``delete_for_runs`` / ``copy_thread`` /
-    ``get_next_version`` 这 **5 个 L2 恢复路径不调用**的协议方法 ⇒ ⇒
-    **MUST NOT** 以「等最小集」这类**开放表述**取舍。
+    ⚠️ B14F1 起 ``compile()`` 在编译期做结构化协议校验 ⇒ 本桩**必须**实现
+    全部 **8** 个方法（L2 恢复路径只调用 ``get_tuple`` / ``put`` / ``put_writes``；
+    其余 5 个为 no-op / ``NotImplementedError``）。⚠️ ``tests/runtime`` 的 3 方法
+    桩**保持不变**（运行期不判 ``isinstance``）。
 
     ⚠️ **仅供测试** ⇒ ⇒ **MUST NOT** 进 ``src/``（``MemorySaver`` / ``SqliteSaver``
     归 **B14F1** · 宪法原则 IV「MUST NOT 提供『不挂 checkpointer 也能恢复』的
@@ -266,3 +265,23 @@ class StubCheckpointer:
                     break
             else:
                 self.pending.append((task_id, channel, value))
+
+    def list(self, config: Any = None, *args: Any, **kwargs: Any) -> Any:
+        """协议结构面：本桩不实现历史枚举。"""
+        return iter(())
+
+    def delete_thread(self, thread_id: str) -> None:
+        """协议结构面：no-op。"""
+        return None
+
+    def delete_for_runs(self, run_ids: Any) -> None:
+        """协议结构面：v1 不实现。"""
+        raise NotImplementedError
+
+    def copy_thread(self, source_thread_id: str, target_thread_id: str) -> None:
+        """协议结构面：v1 不实现。"""
+        raise NotImplementedError
+
+    def get_next_version(self, *args: Any, **kwargs: Any) -> int:
+        """协议结构面：返回整数版本。"""
+        return 1

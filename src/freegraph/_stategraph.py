@@ -78,6 +78,25 @@ _START = "__start__"
 _END = "__end__"
 _RESERVED_CHARS = ("|", ":")
 
+
+def _validate_checkpointer(checkpointer: Any) -> None:
+    """**编译期**校验 ``checkpointer=``（B14F1 · 消解 B7F2 X-4）。
+
+    接受 ``None`` / ``True`` / ``False`` / 满足 L1 ``Checkpointer`` 协议的
+    鸭子类型对象；其它抛 ``TypeError``。布尔判定 MUST 用 ``isinstance(x, bool)``
+    —— **MUST NOT** 用 ``x in (None, True, False)``（否则 ``0`` / ``1`` 会被
+    ``==`` 误接受）。
+    """
+    if checkpointer is None or isinstance(checkpointer, bool):
+        return
+    if isinstance(checkpointer, Checkpointer):
+        return
+    raise TypeError(
+        "Invalid checkpointer provided. Expected a BaseCheckpointSaver equivalent "
+        "(an object satisfying freegraph.contracts.Checkpointer), True, False, or None. "
+        f"Received {type(checkpointer).__name__}."
+    )
+
 _TRACE_OWN = "OWN"
 _TRACE_MASK = "MASK"
 _TRACE_LEGACY_DIRECT = "LEGACY_DIRECT"
@@ -1205,6 +1224,8 @@ class StateGraph:
                 "该参数不会生效（v1 的 Store 行为归 v2）",
                 stacklevel=2,
             )
+
+        _validate_checkpointer(checkpointer)
 
         return CompiledGraph(
             spec=spec,

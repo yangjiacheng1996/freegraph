@@ -259,3 +259,8 @@
 - 验收脚本：`harness/demo/visualization.py`（七种流式模式用例）、
   `harness/demo/graph_core.py`（`stream_mode="updates"` 用例）。
 - 宪法 `.specify/memory/constitution.md`：原则 IV（可视化不阻断执行）。
+
+## 下游承接（B14F1 → 本 feature · 2026-11-22 · 只接线）
+
+- **D-05（B14F1 → B8F2 · M3 · `checkpoints` 档数据源）**：B14F1 已交付「每创建一个 checkpoint 一条事件」的数据源（`MemorySaver(on_checkpoint=...)` + `list()`）；`stream(..., stream_mode="checkpoints")` 的消费端接线归 B15F1。本 feature 的 v1 仍忽略 `checkpointer`（不读 / 写快照、不触发恢复），MUST NOT 伪造 checkpoint 事件，MUST NOT 改变七档 `stream_mode` 语义。
+- **落点**：`specs/b14f1-checkpointer-memory-saver/spec.md` 的「下游承接」D-05。

@@ -4442,8 +4442,8 @@ def _compile_scenarios() -> list[CompileScenario]:
         ),
         CompileScenario(
             "compile D-77 non-saver checkpointer",
-            "DIFF",
-            "freegraph 接受并记录；上游编译期抛 TypeError（X-4）",
+            "SAME",
+            "两侧编译期均抛 TypeError（B14F1 消解 B7F2 X-4）",
             lambda: _fg_compile(checkpointer=object()),
             lambda: _up_compile(checkpointer=object()),
         ),

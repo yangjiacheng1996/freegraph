@@ -268,11 +268,13 @@ def test_static_completion_clears_suspension_markers() -> None:
     assert metadata["scheduler"]["fanout"] == {}
 
 
-def test_ordinary_completion_does_not_write_a_static_completion_snapshot() -> None:
+def test_ordinary_completion_writes_initial_and_step_snapshots_only() -> None:
     spec, _ = _spec()
     stub = StubCheckpointer()
     run_graph(spec, {"count": 0}, checkpointer=stub, config=RunConfig(thread_id="t-plain"))
-    assert "put" not in stub.calls
+    # prepare -> review -> final = 3 实际执行轮；B14F1 写「初始 + 每轮」= 4 次 put。
+    # 普通完成没有 F-10 完成快照（否则会是第 5 次）。
+    assert stub.calls.count("put") == 4
 
 
 def test_static_before_without_checkpointer_still_returns_a_suspension() -> None:

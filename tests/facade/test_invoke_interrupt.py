@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from freegraph.contracts.types import Command
+from freegraph.contracts.types import Command, RunConfig
 from freegraph.runtime.errors import InterruptError
 from freegraph.graph import END, START, StateGraph, interrupt
 
@@ -101,11 +101,12 @@ class TestResume:
         builder.add_edge(START, "ask")
         builder.add_edge("ask", END)
         app = builder.compile(checkpointer=stub)
+        config = RunConfig(thread_id="t-resume")
 
-        first = app.invoke({"messages": []})
+        first = app.invoke({"messages": []}, config)
         assert "__interrupt__" in first
 
-        second = app.invoke(Command(resume="yes"))
+        second = app.invoke(Command(resume="yes"), config)
         assert seen == ["yes"]
         assert "answer=yes" in second["messages"]
 
