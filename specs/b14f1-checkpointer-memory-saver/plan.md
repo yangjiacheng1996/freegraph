@@ -20,6 +20,12 @@
 
 交付 **运行期每轮落盘**：空会话先写**惰性初始快照**；每个**实际执行过**的 super-step 结束后写一条**每轮快照**（`tasks` = 本轮 `PregelTask`）；动态中断 / 静态挂起用**挂起写**计入该轮（**挂起快照 `tasks` 恒为 `()`** · 与 B10F1 冻结挂起写一致）；`interrupt_after` 的挂起写**代替**该轮每轮快照；`static_resume` 的完成快照由 **B13F1 的 F-10 写一次**（本 feature 不重复）；收敛空轮**不写**。
 
+> ⚠️ **B15F1 回溯修订（2026-11-23）**：上述 `tasks` 仅为**存储 / 流数据源**。自 B15F1 起，
+> `CompiledGraph.get_state` / `get_state_history` / `stream(checkpoints)` 的 `tasks` 由读取层按
+> 上游 **next-tasks** 重建（`snapshot.next` + `.scheduler["fanout"]` + pending `__interrupt__`），
+> **MUST NOT** 直接使用本 feature 的完成态 `snapshot.tasks`；B8F2 的 `stream(tasks)` 仍为完成态。
+> 详见 `specs/b14f1-checkpointer-memory-saver/spec.md` 裁定 5 后注记 / FR-019 / D-09。
+
 交付 **关键接缝**：
 
 | 接缝 | 落法 |
@@ -133,7 +139,7 @@
 | **R-1** | **消解已登记的偏离（B7F2 X-4）** | B7F2 的差分 D-77 与 `tests/facade/test_compile_validation.py::test_nv5`、`tests/facade/test_compiled_graph.py::test_non_store_objects_are_accepted` 都断言「非 saver 对象被接受」⇒ 本 feature 的编译期校验落地后**必红** | **拆分而不删**：① `test_nv5` 拆为「非法 checkpointer ⇒ `TypeError`」+「非法 store ⇒ 仍接受 + 1 warning」；② `test_non_store_objects_are_accepted` 拆为「非法 checkpointer ⇒ `TypeError`」+「非法 store ⇒ 接受」；③ `parity_probe.py` 的 D-77 判词由 `DIFF` 改为 **`SAME`**（两侧都 `TypeError`） | **不需要**（消解 B7F2 的 X-4 · 不改门禁判据） |
 | **R-2** | **消解 B10F1 的冻结断言** | `tests/runtime/test_interrupt_checkpoint.py::test_the_runtime_never_imports_a_saver_implementation` 断言 `src/freegraph/**` 内**零** `class MemorySaver` / `SqliteSaver` ⇒ 本 feature 落地后**必红** | **拆分而不删**：① 保留「`src/freegraph/runtime/**` 内**零** saver 实现」；② 改为「`src/freegraph/persistence/memory.py` 有 `MemorySaver`，但 `runtime/**` **不 import** `freegraph.persistence`」；③ 同步该测试的 docstring（B10F1 的 FR-019 仍成立：B10F1 未越界实现 saver） | **不需要**（不是门禁偏离 · 不是 L1 冻结面） |
 | **R-3** | **B10F1 V-1 的人工验证承接** | B10F1 在 M1 物理不可达成「恢复侧真跑一轮」 | `harness/verification/B14F1/manual-verification.md` MUST 含真实 `MemorySaver` 的「`interrupt` → `Command(resume=…)` → 跑完」实测输出；旧记录不作废，追加「恢复侧实测」段 | **不需要**（由本 feature 补齐） |
-| **R-4** | **B8F2 D-2 的数据源边界** | B8F2 的 `checkpoints` 档 v1 恒空；本 feature 只交付 `on_checkpoint` + `list()` 数据源，**不**重写 `StreamSession` | 在 plan / research / contracts 写明「消费端接线归 B8F2 / B15F1」；`stream(checkpoints)` 的伪造事件数 == 0；**不**把「stream 已支持 checkpoint」写进任何文档 | **不需要**（能力边界 · 非偏离） |
+| **R-4** | **B8F2 D-2 的数据源边界** | B8F2 的 `checkpoints` 档 v1 恒空；本 feature 只交付 `on_checkpoint` + `list()` 数据源，**不**重写 `StreamSession` | 在 plan / research / contracts 写明「消费端接线归 B8F2 / B15F1」；`stream(checkpoints)` 的伪造事件数 == 0；**不**把「stream 已支持 checkpoint」写进任何文档 | **不需要**（能力边界 · 非偏离；⏳ B15F1 已交付/计划交付消费端） |
 | **R-5** | **README / demo 的过期文本** | `README.md:167` 写「checkpointer 的行为归 B14F1（本阶段只接受并记录，编译期不做类型校验）」；`harness/demo/README.md` 的待锁定清单仍列 `MemorySaver` 模块路径；`tests/facade/test_compiled_graph.py::test_readme_states_store_and_checkpointer_boundaries` 依赖旧文本 | **更新文本 + 同步测试**：README 改为「已由 B14F1 的 `MemorySaver` 落地；编译期校验已交付」；demo README 移除待锁定条目；测试断言同步为**新文本**（**不是**放宽）。⚠️ `MemorySaver` / `InMemorySaver` / `CheckpointTuple` 的 **3 行**兼容矩阵按 spec **D-07** 由 **B24F1 / B25F1** 增加；B14F1 只更新 `Checkpointer` 行 | **不需要**（文档事实订正） |
 | **R-6** | **运行期接缝的私有扩展** | `_run_round` 被 `run_super_step` / `run_super_steps` / `_run_graph_loop` 三处调用；若改返回类型会波及两个低层入口 | 只给 `_run_round` 增 **keyword-only** 私有参数 `checkpoint_id: str \| None = None`（缺省 ⇒ 既有调用零改动）；「真异常 + 中断」的收集用 **L2 私有 contextvar**，**不改** `_run_round` 的返回类型 / 不往异常上挂字段 | **不需要**（私有实现 · 行为面不变） |
 | **R-7** | **范围 / 行数登记** | 立项书 1,200 行（实现 560 / 测试 640）；运行期接线 + 差分探针可能超预算 | 实施期实测：实现 **986** / 测试 **1,767** / 合计 **2,753** ⇒ 已在 `tasks.md` §行数预算表**如实登记**；**未削减任何 FR / SC**；超支追认按发起者授权流程登记 | **已登记（发起者已授权实施）** |

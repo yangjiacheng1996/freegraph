@@ -78,7 +78,7 @@ def stream(
 |---|---|---|---|
 | `values` | 初始状态 + 每个完成的 super-step | 完整状态 `dict` | 初始 1 条 + 每步 1 条 |
 | `updates` | 每个完成的 task | `{节点名: {通道: 值 \| 元组}}` | 每 task 1 条 |
-| `checkpoints` | **空序列** | —— | 0 条（B14F1） |
+| `checkpoints` | **B8F2 v1：空序列**；⚠️ **B15F1 起**：有 saver + `thread_id` 且 `checkpoints` mode 时按本次运行产出 | `StateSnapshot`（B15F1） | v1 0 条；B15F1 每成功 `put` 1 条 |
 | `tasks` | 每个完成的 task（含被中断） | `PregelTask` | 每 task 1 条 |
 | `debug` | 每个 `tasks` 事件的包裹 | `{step, timestamp, type, payload}` | 每 task 1 条 |
 | `messages` | **空序列** | —— | 0 条（freechain） |
@@ -142,6 +142,8 @@ def stream(
 
 - 两者 v1 **恒为空序列**（零事件、零异常）。
 - `checkpoints` 真实源归 **B14F1**；`messages` 的 LangChain 抽取归 **freechain**。
+- ✅ **B15F1 起**：`checkpoints` 在有 saver + `thread_id` 且 `checkpoints` mode 时按本次运行产出
+  （每成功 `put` 一条；无 saver / 无 `thread_id` 仍空；不恢复历史）；其余六档语义不变（`checkpoints` 档按 B15F1 承接产出）。
 - MUST NOT 伪造事件；MUST NOT 把 `SuperStepResult.state` 伪装成 checkpoint。
 
 ---
@@ -178,8 +180,10 @@ finally：复原 contextvar token；零悬挂线程
   `config`（`RunConfig` / 普通映射 / `None` · **逐字**）⇒ 与 `invoke` 的第二参同口径。
 - **静态断点**：`interrupt_before` / `interrupt_after` 在 stream v1 **不支持**；复用 V-26 的
   `ValueError`（首次迭代抛出，点名「静态断点只在图级 `run_graph` 生效」）⇒ MUST NOT 静默忽略。
-- **checkpointer**：`StreamSession` MUST **忽略** `checkpointer`（不读/写快照、不触发恢复）；
-  其存在 MUST NOT 改变七档语义。
+- **checkpointer**：本 feature v1 的 `StreamSession` MUST **忽略** `checkpointer`（不读/写快照、
+  不触发恢复）；其存在 MUST NOT 改变**非 `checkpoints` 六档**语义。⚠️ **B15F1 起（✅ 已交付）**：
+  `checkpoints` 档 carve-out —— 有 saver + `thread_id` 时由 B15F1 的 `StreamCheckpointWriter`
+  写盘并产事件；仍不恢复历史。
 - **并发度**：`max_concurrency` 由流式会话从 `config`（`RunConfig.max_concurrency` 或普通
   映射同名字段）解析后传给 L2 单轮入口；`stream()` **不新增**该关键字。
 - **运行标识载体**：`run_id` / `thread_id` 由 `StreamSession` 绑定 L2 私有 contextvar
@@ -255,7 +259,7 @@ finally：复原 contextvar token；零悬挂线程
 | IS-6 | `tasks` 每条是 `PregelTask`；每完成 task 一条 |
 | IS-7 | `debug` 键集 + `type == "task_result"` + 1 起 step（含中断轮）+ `timestamp` 可被 `datetime.fromisoformat` 解析且为 UTC |
 | IS-8 | `custom` 轮末批量产出，顺序 = TaskId 升序 + 任务内写入序（P-23 / X-6） |
-| IS-9 | `checkpoints` / `messages` 长度 == 0 且不抛 |
+| IS-9 | `checkpoints` / `messages` 长度 == 0 且不抛（v1 无 saver）；⚠️ B15F1 起 `checkpoints` 有 saver + thread 时按本次运行产出 |
 | IS-10 | 非法 mode ⇒ 调用时 `ValueError` |
 | IS-11 | 惰性：不迭代 ⇒ 零执行 |
 | IS-12 | 提前停止 ⇒ 零悬挂线程 |
@@ -294,7 +298,7 @@ finally：复原 contextvar token；零悬挂线程
 
 - `astream` / 异步流（v2）。
 - trace span 生产 / `TraceSink` 接入（B18F1 / B19F1）。
-- `checkpoints` 真实源（B14F1）· `messages` LangChain 抽取（freechain）。
+- `checkpoints` 真实源（B14F1）与消费端（B15F1，✅ 已交付/计划交付）· `messages` LangChain 抽取（freechain）。
 - 会话连续 / `Command` 恢复 / checkpoint 持久化（B14F1 / B15F1 / B16F1）。
 - 静态断点（`interrupt_before` / `interrupt_after`）在 `stream()` 下的行为（v1 显式拒绝 · V-26 口径）。
 - 节点别名解析（B8F3）· 图导出（B22F1 / B23F1）· 前端 UI（B26）。

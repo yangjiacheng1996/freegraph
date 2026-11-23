@@ -41,7 +41,7 @@
 | P-06 | `updates` 粒度 / 同通道多写 | `types.py:129-130` · `_loop.py:1452-1459` · `_io.py:118-174` · E-2 | 每完成 task 一条；元组 | DIFF | 仅值形态 ⇒ X-1 子项 |
 | P-07 | `tasks` 粒度 / 载荷 | `_loop.py:580`/`:674`/`:1461-1466` · `debug.py:41-70`/`:106-125` · E-3/E-14 | 每完成 task 一条 + `PregelTask` | DIFF | X-3 |
 | P-08 | `debug` 包裹 | `_loop.py:1389-1412` · E-4/E-14 | 同形 + `PregelTask`；无 checkpoint | DIFF | X-4 |
-| P-09 | `checkpoints` 源 | `_loop.py:631-636` · `debug.py:144` · `_loop.py:1081` · E-5 | v1 空序列 | 能力尚未交付 | B14F1 · D-2 |
+| P-09 | `checkpoints` 源 | `_loop.py:631-636` · `debug.py:144` · `_loop.py:1081` · E-5 | v1 空序列；⏳ B15F1 已交付（计划交付消费端）（有 saver + thread 时按本次运行产出） | 能力已由 B15F1 补齐 | B14F1 · B15F1 · D-2 |
 | P-10 | `messages` 源 | `types.py:132` · E-6 | v1 空序列；有源时原样透传 | 能力尚未交付 | freechain |
 | P-11 | `custom` 载体 | `config.py:126`/`:195-196` · `_executor.py:64`（`copy_context()`）/`:71`（`ctx.run`）/`:164`（async `copy_context()`）· E-7 | contextvar + 每任务 `copy_context()` | SAME | 照抄；⚠️ 仅指载体，产出时机见 P-23 / X-6 |
 | P-12 | 无流 writer | `config.py:13-14` · E-9 | no-op | SAME | 照抄 |

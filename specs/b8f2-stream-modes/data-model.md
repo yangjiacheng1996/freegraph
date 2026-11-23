@@ -138,7 +138,7 @@
 
 | mode | v1 行为 | 边界 |
 |---|---|---|
-| `checkpoints` | **恒为空序列**（零事件、零异常） | 真实源归 **B14F1** |
+| `checkpoints` | **v1 恒为空序列**（零事件、零异常）；✅ **B15F1 起**有 saver + `thread_id` 且 `checkpoints` mode 时按本次运行产出 | 真实源归 **B14F1**；消费端归 **B15F1** |
 | `messages` | **恒为空序列**（零事件、零异常） | LangChain LLM token 流归 freechain；有源时**原样透传** |
 
 ### 2.10 `run_id` / `thread_id`
@@ -185,7 +185,7 @@ StateGraph.compile()
    │ 第一次 next()
    ▼
 [会话初始化]  ← 输入写入 / bind_run / contextvar / run_id / thread_id
-   │  ← checkpointer 被忽略（不读/写快照、不触发恢复）
+   │  ← checkpointer 被忽略（不读/写快照、不触发恢复；B15F1 起 `checkpoints` 档 carve-out，✅ 已交付）
    │  ← 含静态断点（interrupt_before/after）⇒ ValueError（V-26 口径）
    │
    ├── values 请求 ? → 产出「初始状态」事件
@@ -265,7 +265,7 @@ StateGraph.compile()
 | **IS-6** | `tasks` 每条 `payload` 是 `PregelTask`；每完成 task 恰一条 | `isinstance` + 计数 |
 | **IS-7** | `debug` 每条键集 == `{step, timestamp, type, payload}`；`type == "task_result"`；`step` 1 起且同轮相同（含中断轮）；`timestamp` 可被 `datetime.fromisoformat` 解析且为 UTC | 等值 / 解析断言 |
 | **IS-8** | `custom` 在**轮末批量**产出，顺序 == TaskId 升序 + 任务内写入序（P-23 / X-6） | 序列等值 |
-| **IS-9** | `checkpoints` / `messages` 长度 == 0 且不抛 | 计数 |
+| **IS-9** | `checkpoints` / `messages` v1 长度 == 0 且不抛；B15F1 起 `checkpoints` 有 saver + thread 时按本次运行产出 | 计数 |
 | **IS-10** | 非法 mode ⇒ 调用时 `ValueError` | `pytest.raises` |
 | **IS-11** | 惰性：不迭代 ⇒ 节点执行次数 == 0 | 计数 |
 | **IS-12** | 提前停止 ⇒ `freegraph-node` 线程数 == 0 | `threading.enumerate` |
@@ -305,6 +305,7 @@ StateGraph.compile()
 - `messages` 的 LangChain 消息抽取（freechain）。
 - checkpoint 持久化 / 会话连续 / `Command` 恢复（B14F1 / B15F1 / B16F1）。
 - 静态断点（`interrupt_before` / `interrupt_after`）在 `stream()` 下的行为：v1 **显式拒绝**（`ValueError` · V-26 口径）。
-- `checkpointer` 的读写 / 调用：`StreamSession` **忽略**它（FR-028）。
+- `checkpointer` 的读写 / 调用：本 feature v1 的 `StreamSession` **忽略**它（FR-028）；
+  ⚠️ **B15F1 起（✅ 已交付）** `checkpoints` 档 carve-out 例外（由 B15F1 的 `StreamCheckpointWriter` 写盘）。
 - trace span 的生产 / `TraceSink` 接入（B18F1 / B19F1）。
 - 前端 / UI 消费（B26）。

@@ -1972,6 +1972,45 @@ def _restore_channels(
     state.channels = instances
 
 
+#: **保留 write 通道**（不进入 ``values`` 的待写入）—— 与 B14F1 / 上游逐字一致。
+_RESERVED_WRITE_CHANNELS = frozenset(
+    ("__error__", "__scheduled__", "__interrupt__", "__resume__")
+)
+
+
+def merge_pending_writes(
+    spec: GraphSpec,
+    values: Mapping[str, Any],
+    pending_writes: Sequence[tuple[str, str, Any]],
+) -> dict[str, Any]:
+    """把 pending writes **按运行期同款归约语义**合并进 ``values`` 的**副本**。
+
+    * 只读：新建临时 :class:`SchedulerState`，**不**推进版本 / **不**写存储；
+    * 跳过保留通道（``__error__`` / ``__scheduled__`` / ``__interrupt__`` / ``__resume__``）；
+    * 普通通道的值**按给定顺序逐条** ``Channel.update([value])``（与运行期单写一致）；
+    * 未知 key ⇒ ``InvalidUpdateError``（与运行期同款）。
+
+    ``pending_writes`` 的给定顺序 MUST 已是 ``(task_path, task_id, idx)`` 升序
+    （由 ``CheckpointTuple`` 保证）。
+    """
+    state = SchedulerState()
+    _restore_channels(spec, state, values)
+    channels = _run_channels(spec, state)
+
+    grouped: dict[str, list[Any]] = {}
+    for _task_id, channel, value in pending_writes:
+        if channel in _RESERVED_WRITE_CHANNELS:
+            continue
+        grouped.setdefault(channel, []).append(value)
+    _reject_unknown_keys(grouped, channels)
+    for channel, pending in grouped.items():
+        target = channels[channel]
+        for value in pending:
+            target.update([value])
+    return read_channels(channels)
+
+
+
 def _apply_input_writes(
     spec: GraphSpec, state: SchedulerState, values: Mapping[str, Any]
 ) -> set[str]:

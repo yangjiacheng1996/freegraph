@@ -13,6 +13,11 @@ description: "Task list for B14F1 · Checkpointer 协议 + MemorySaver"
 **Tests**: **包含**。spec 的 SC-001…SC-025 与宪法原则 VI「判据级可追溯」要求每条判据有可判定测试；
 每个用户故事先写失败测试，再实现，再跑定向回归；差分场景 D-01…D-15 落 `tests/differential/`。
 
+> ⚠️ **B15F1 回溯修订（2026-11-23）**：本 feature 已交付的存储型 `tasks`（本轮完成态 /
+> 挂起 `()`）保留为历史 / 流数据源；**自 B15F1 起**，`get_state` / `get_state_history` /
+> `stream(checkpoints)` 的 `tasks` 由 B15F1 读取层按上游 **next-tasks** 重建，**不**回写本
+> feature 的实现或测试。见 `spec.md` 裁定 5 后注记 / FR-019 / D-09。
+
 **Organization**: 按 `spec.md` 的 **6** 个用户故事分组；US1–US3 为 P1，US4–US5 为 P2，US6 为 P3。
 Setup / Foundational / Polish 为跨切面，不带故事标签。
 

@@ -223,21 +223,21 @@ class TestCompileIsWired:
     def test_compile_returns_a_product_but_capability_methods_are_not_implemented(
         self, facade: object
     ) -> None:
-        """产物返回后，6 个能力面方法仍抛 ``NotImplementedError``（未越界）。"""
+        """产物返回后，剩余能力面方法仍抛 ``NotImplementedError``（未越界）。"""
         graph = _valid_graph(facade)
         compiled = graph.compile()  # type: ignore[attr-defined]
         assert not hasattr(graph, "invoke")
-        calls = (
-            ("get_state", ({},)),
-            ("get_state_history", ({},)),
-            ("update_state", ({}, {})),
-        )
         from freegraph.contracts.graph import Graph
 
         assert isinstance(compiled.get_graph(), Graph)
-        for name, args in calls:
-            with pytest.raises(NotImplementedError):
-                getattr(compiled, name)(*args)
+        # ⚠️ 拆分而不删（B15F1 · R-1）：get_state / get_state_history 已交付 ⇒ 移出列表，
+        # 改为「未挂 saver ⇒ ValueError」；保留 update_state → B16F1 的未实现断言。
+        with pytest.raises(NotImplementedError):
+            compiled.update_state({}, {})
+        with pytest.raises(ValueError):
+            compiled.get_state({"thread_id": "t"})
+        with pytest.raises(ValueError):
+            compiled.get_state_history({"thread_id": "t"})
         # ⚠️ **拆分而不删**（B8F2）：``stream`` 已交付 ⇒ 从列表中提出，改为可流式断言。
         assert list(compiled.stream({}))
         try:

@@ -156,8 +156,8 @@
 | `invoke` | `(input: StateDict, config: RunConfig \| None = None) -> StateDict` | **完整状态字典** |
 | `stream` | `(input: StateDict, config: RunConfig \| None = None, *, stream_mode: str \| Sequence[str] = "values") -> Iterator[dict[str, Any]]` | **事件迭代器**（**元素类型 = `dict[str, Any]`**，纯数据字典）· ⚠️ **2026-11-20 · B8F2 回溯修订 T-3（只补注记）**：自 B8F2 起 `config` 放宽为 `RunConfig \| Mapping[str, Any] \| None`、`stream_mode` 默认 `None`（解析为 `"updates"`）；原 `"values"` 写法仍合法 |
 | `get_graph` | `(*, xray: bool = False) -> Graph` | **图结构** |
-| `get_state` | `(config: RunConfig) -> StateSnapshot \| None` | **状态快照**（**查不到返回空值**，不抛异常） |
-| `get_state_history` | `(config: RunConfig) -> Iterator[StateSnapshot]` | **状态快照迭代器** |
+| `get_state` | `(config: RunConfig \| Mapping[str, Any] \| None) -> StateSnapshot \| None` | **状态快照**（**查不到返回空值**，不抛异常）· ⚠️ **2026-11-22 · B15F1 回溯修订（✅ 已落地）**：`config` 注解**已**放宽为 `RunConfig \| Mapping[str, Any] \| None`；返回类别不变 |
+| `get_state_history` | `(config: RunConfig \| Mapping[str, Any] \| None) -> Iterator[StateSnapshot]` | **状态快照迭代器** · ⚠️ **2026-11-22 · B15F1 回溯修订（✅ 已落地）**：`config` 注解**已**放宽为 `RunConfig \| Mapping[str, Any] \| None`；返回类别不变 |
 | `update_state` | `(config: RunConfig, values: StateDict, as_node: str \| None = None) -> StateSnapshot` | **状态快照** |
 
 - **已冻结**：六个方法的**返回类别** + **参数名（占位名 · B2F1 复核裁定）** +
@@ -332,7 +332,7 @@
 | `StateDict` | `NodeFunc.__call__` 的入参类型 / `CompiledGraph.invoke` 的入参 | ❌ 不改 |
 | `Command` | `NodeFunc.__call__` 的返回形态之一 | ❌ 不改 |
 | `StateSnapshot` | `CompiledGraph.get_state` / `get_state_history` / `update_state` 的返回类型 | ❌ 不改 |
-| `RunConfig` | `Checkpointer` 与 `CompiledGraph` 的 `config` 参数类型；**承载 `thread_id`** | ❌ 不改（**且不得新增字段**——`run_id` 不进 `RunConfig`，C22 · D11） |
+| `RunConfig` | `Checkpointer` 与 `CompiledGraph` 的 `config` 参数类型；**承载 `thread_id`**；⚠️ **自 B15F1 起（✅ 已交付）** `get_state` / `get_state_history` 的 `config` 也接受普通 `Mapping`（协议已放宽为 `RunConfig \| Mapping[str, Any] \| None` · 见 §2.5） | ❌ 不改（**且不得新增字段**——`run_id` 不进 `RunConfig`，C22 · D11） |
 | 异常体系 | 本层**不抛**任何异常（零构造期值校验 ⇒ 无校验失败路径） | ❌ 不改 |
 
 ---

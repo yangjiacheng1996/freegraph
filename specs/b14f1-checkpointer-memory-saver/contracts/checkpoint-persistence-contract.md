@@ -60,6 +60,10 @@ effective_checkpointer = checkpointer
 > **`tasks` 口径**：只有「每轮执行完成」的 `put_step` 填本轮 `PregelTask`；所有
 > **挂起快照**（动态中断 / `interrupt_before` / `interrupt_after` / F-10）的
 > `tasks` **恒为 `()`** —— 与 B10F1 的冻结挂起写及 `_suspend_metadata` 一致。
+> ⚠️ **自 B15F1 起（✅ 已交付 · B15F1）**：上述 `tasks` 仅为本 feature 的**存储 / 流数据源**；
+> `CompiledGraph.get_state` / `get_state_history` / `stream(checkpoints)` 的 `tasks` 由 B15F1
+> 读取层按上游 **next-tasks** 重建（`snapshot.next` + `.scheduler["fanout"]` + pending
+> `__interrupt__`），**MUST NOT** 直接使用本契约的 `snapshot.tasks`。
 
 ### 2.1 快照计数
 

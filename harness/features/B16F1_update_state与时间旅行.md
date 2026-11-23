@@ -184,3 +184,10 @@
 - **D-03（B14F1 → B16F1 · M3 · checkpoint 定位）**：`update_state` / 时间旅行 MUST 以 B14F1 的 checkpoint 顺位 id 与 `StateSnapshot.parent_config` 父链为定位依据；MUST NOT 另造 id 空间或重排父链。
 - **D-08（B14F1 → B16F1 · M3 · `NotImplementedError` 边界）**：B14F1 的 `MemorySaver.delete_for_runs` / `copy_thread` 在 v1 抛 `NotImplementedError`；本 feature 实现运行级删除 / 线程复制时 MUST 重新评估该边界，且 MUST NOT 回改 B14F1 的 `MemorySaver` 行为。
 - **落点**：`specs/b14f1-checkpointer-memory-saver/spec.md` 的「下游承接」D-03 / D-08。
+
+## 下游承接（B15F1 → 本 feature · 2026-11-23 · 只接线 · 逐条最小改动）
+
+- **D-01（B15F1 → B16F1 · M3 · checkpoint 顺位 id / 父链）**：`update_state` / 时间旅行 MUST 以 B15F1 的 checkpoint 顺位 id 与 `StateSnapshot.parent_config` 父链为定位依据；MUST NOT 另造 id 空间；新快照 MUST 通过同一 `put` 渠道追加，`get_state_history` 继续可枚举且倒序。
+- **D-02（B15F1 → B16F1 · M3 · 组装口径复用）**：`update_state` / 分叉 MUST NOT 破坏原历史快照；`get_state` / `get_state_history` 的组装口径（含 `interrupts` 投影；`get_state` 无 id 时合并 pending、历史不合并）MUST 保持一致；MUST NOT 另写第二套快照组装路径。
+- **D-03（B15F1 → B16F1 · M3 · 静态快照可作重放起点）**：从历史静态快照恢复 MUST NOT 要求动态中断载荷；`interrupts == ()` + `suspension_kind` / `static_ack` 的历史快照 MUST 可直接作为重放起点。
+- **落点**：`specs/b15f1-sqlite-saver-state-history/spec.md` 的「下游承接」D-01 / D-02 / D-03。

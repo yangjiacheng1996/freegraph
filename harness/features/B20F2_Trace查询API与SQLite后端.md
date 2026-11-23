@@ -197,3 +197,8 @@
 - 落点：`specs/b20f1-local-trace-jsonl/spec.md` 的 `FileTraceStore` 形态锁定 ·
   `specs/b20f1-local-trace-jsonl/contracts/jsonl-record-contract.md` ·
   `harness/verification/B20F1/manual-verification.md`。
+
+## 下游承接（B15F1 → 本 feature · 2026-11-23 · 只接线）
+
+- **D-06（B15F1 → B20F2 · M3 · 两套 SQLite 存储）**：trace 的 SQLite 后端与本 feature 的 checkpoint SQLite 后端是**两套存储**；MUST NOT 共用表 / 文件 / 连接；`SqliteTraceStore` 的 schema 与 `SqliteSaver` 的 schema 互不影响。
+- **落点**：`specs/b15f1-sqlite-saver-state-history/spec.md` 的「下游承接」D-06。

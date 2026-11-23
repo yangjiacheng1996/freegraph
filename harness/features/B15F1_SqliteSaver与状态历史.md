@@ -8,7 +8,7 @@
 > | feature ID | `B15F1` |
 > | 所属 功能块 | B15（`SqliteSaver` + `get_state_history`） |
 > | 架构层 | L4 持久化层 |
-> | 里程碑 | M3 可诊断（第 27 个） |
+> | 里程碑 | M3 可诊断（第 28 个，对齐 `harness/features/README.md` 开发序） |
 > | 前置依赖 | **B14F1** |
 > | 规模 | 1,240 行（实现 620 / 测试 620）· 3 人日 |
 > | 建议 short-name | `b15f1-sqlite-saver-state-history` |

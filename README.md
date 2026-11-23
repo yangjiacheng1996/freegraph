@@ -122,7 +122,7 @@ uv run --no-project --python .venv python harness/scripts/gates/gate_G21_depende
 | `Checkpointer` | `langgraph.checkpoint.base.BaseCheckpointSaver` | 行为等价 | **八**方法的**方法名与参数名**逐字对齐（**上游同款** · 2026-11-12 上游对齐 P3 · 由六增八：新增 `delete_for_runs` / `copy_thread` —— 二者在**上游是必须实现**的 ⇒ **上游形状的 saver 直接满足本协议**）；freegraph **纯抽象、无默认实现**，上游是带实现的基类；**未含**上游的**异步变体**（v1 无 async）；**返回类型与载荷形状已由 B14F1 的 `MemorySaver` 落地**；上游来源 `langgraph/checkpoint/base/__init__.py:239`（`get_tuple`）/ `:253`（`list`）/ `:277`（`put`）/ `:300`（`put_writes`）/ `:320`（`delete_thread`）/ `:331`（`delete_for_runs`）/ `:350`（`copy_thread`）/ `:692`（`get_next_version`） |
 | `TraceSink` | 无上游对应（自由设计） | 不支持 | 契约条目 **C23 / C24**（可观测挂钩 / 当前 span 上下文）——上游**无 span 推送协议**，其 `callbacks` / `tracers` 是**非同名**物 |
 | `Store` | `langgraph.store.base.BaseStore` | 行为等价 | 六方法与**参数名**逐字镜像上游（`search` 的 `namespace_prefix` 是位置参数、`list_namespaces` 的 `prefix` 是关键字参数——上游的这个命名分歧**照抄不统一**）；**命名空间类型收紧为 `tuple[str, ...]`**（**上游同款** · 2026-11-12 上游对齐 P3 · 上游 `langgraph/store/base/__init__.py:311` 的 `NamespacePath`）⇒ **上游形状的 store 直接满足本协议**；**未含**上游的**异步变体**（v1 无 async）；`batch` 操作表示挂起 v2；上游来源 `langgraph/store/base/__init__.py:733`（`batch`）/ `:756`（`get`）/ `:779`（`search`）/ `:856`（`put`）/ `:937`（`delete`）/ `:946`（`list_namespaces`） |
-| `CompiledGraph` | `langgraph.pregel.Pregel` | 部分等价 | 六方法的**返回类别**与**参数名（占位名）**已对齐（`invoke` → 完整状态字典 / `stream` → `dict[str, Any]` 事件迭代器 / `get_state` 查不到返回空值）；**`stream` 已交付**（B8F2 · 七种 mode · 四键信封 · `custom` 轮末批量 X-6）· **行为细节挂起** B15F1 / B16F1；上游来源 `langgraph/pregel/main.py:3783`（`invoke`）/ `:2655`（`stream`）/ `:845`（`get_graph`）/ `:1392`（`get_state`）/ `:1480`（`get_state_history`）/ `:2515`（`update_state`） |
+| `CompiledGraph` | `langgraph.pregel.Pregel` | 部分等价 | 六方法的**返回类别**与**参数名（占位名）**已对齐（`invoke` → 完整状态字典 / `stream` → `dict[str, Any]` 事件迭代器 / `get_state` 查不到返回空值）；**`stream` 已交付**（B8F2 · 七种 mode · 四键信封 · `custom` 轮末批量 X-6）· **`get_state` / `get_state_history` 已交付**（B15F1 · 上游 **next-tasks** 语义 · 历史按 `checkpoint_id` 倒序 · `checkpoints` 档已接线）· **`update_state` / 时间旅行**由 B16F1 交付；上游来源 `langgraph/pregel/main.py:3783`（`invoke`）/ `:2655`（`stream`）/ `:845`（`get_graph`）/ `:1392`（`get_state`）/ `:1480`（`get_state_history`）/ `:2515`（`update_state`） |
 | `Graph` | `langchain_core.runnables.graph.Graph` | 部分等价 | **同名但自有实现**——不复用、不复制上游代码；freegraph 的节点 / 边集合是**不可变元组**（上游是 `dict[str, Node]` / `list[Edge]`）；**B22F1 起**提供 `draw_mermaid()`（纯本地、零出站）；**B23F1 起**提供 `draw_mermaid_png()`（v1 固定示意图标占位 PNG，零出站、离线不阻断）；上游来源 `langchain_core/runnables/graph.py:255` |
 | `Node` | `langchain_core.runnables.graph.Node` | 部分等价 | **同名但自有实现**；freegraph 的 `name` 缺省**归一为 `id`**、`metadata` 是纯映射（上游 `Node.data` 装的是可调用对象 / pydantic 对象）；上游来源 `langchain_core/runnables/graph.py:95` |
 | `Edge` | `langchain_core.runnables.graph.Edge` | 部分等价 | **同名但自有实现**；freegraph 多一个 `conditional` 位并显式**不可哈希**（上游是 `NamedTuple`，可哈希）；上游来源 `langchain_core/runnables/graph.py:65` |
@@ -166,6 +166,11 @@ uv run --no-project --python .venv python harness/scripts/gates/gate_G21_depende
 > **v1 不支持 `Store`**——该参数只被记录并发出 1 条 warning，不会生效。
 > **checkpointer 的行为已由 B14F1 的 `MemorySaver` 落地**：`compile(checkpointer=...)`
 > 在编译期校验类型，挂载真实 saver 后可按 `thread_id` 持久化 / 恢复。
+> **B15F1 增补**：新增 `SqliteSaver`（磁盘 · 默认推荐）与
+> `compiled.get_state(config)` / `compiled.get_state_history(config)`（`config` 接受
+> `RunConfig` / 普通映射 / `None`；`None` 解析后缺 `thread_id` ⇒ `ValueError`）；
+> `stream(stream_mode="checkpoints")` 在挂 saver 且 `thread_id` 非空时为本次运行每次成功
+> `put` 产出一条 `StateSnapshot` 事件，未挂 saver ⇒ 0 条。
 
 **证据来源**（截至 2026-11-05，按 LangGraph 1.2.19 / langchain-core 1.7.6 源码核实）：
 `langgraph/types.py:711`（`StateSnapshot`）· `:738`（`Send`）· `:833`（`Command`）·

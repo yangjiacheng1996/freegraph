@@ -43,7 +43,7 @@
 | # | 承接方 | 里程碑 | 动作 | 本 spec 落点 |
 |---|---|---|---|---|
 | **D-1** | **B8F2 → B8F3** | **M2** | **收缩（C25 正式作废）**：`stream_mode="updates"` 的载荷键 MUST 与 `invoke` / 图结构使用**同一套内部节点名口径**（沿用 B8F1 的 `path_map` 查表口径）；**不存在别名解析**，B8F3 MUST NOT 为 `stream()` 另造命名映射。 | FR-004 · FR-016 · H-10 |
-| **D-2** | **B8F2 → B14F1** | **M3** | **`checkpoints` 档的真实数据源**：本 feature 的 `checkpoints` 档在 v1 **恒为空序列**（无伪造事件）⇒ ⇒ B14F1 交付 `MemorySaver` / checkpointer 后 MUST 提供「每创建一个 checkpoint 一条事件」的数据源，并复用 `_loop.py:631-636` / `debug.py:144`（`map_debug_checkpoint`）的「checkpoint 事件 vs `get_state()` 同形」口径。 | FR-017 · 裁定 5 |
+| **D-2** | **B8F2 → B14F1** | **M3** | **`checkpoints` 档的真实数据源**：本 feature 的 `checkpoints` 档在 v1 **恒为空序列**（无伪造事件）⇒ ⇒ B14F1 交付 `MemorySaver` / checkpointer 后 MUST 提供「每创建一个 checkpoint 一条事件」的数据源，并复用 `_loop.py:631-636` / `debug.py:144`（`map_debug_checkpoint`）的「checkpoint 事件 vs `get_state()` 同形」口径。⇒ ✅ **B15F1 已交付（消费端）**（有 saver + `thread_id` 时按本次运行每成功 `put` 一条；无 saver / 无 `thread_id` 仍空；只在 `checkpoints` mode 写；不恢复历史；payload 的 `tasks` / `interrupts` 由 B15F1 读取层按上游 **next-tasks** 投影，与本 feature 的 `stream(tasks)` 完成态语义分开）。 | FR-017 · 裁定 5 |
 | **D-3** | **B8F2 → B18F1 / B19F1** | **M3** | **两条事件通道独立、按 id 合并**：`stream()` 的事件与 `TraceSink` 的 span **不互为前置**；二者 MUST 共享同一 `run_id` / `thread_id`（D11 已冻结）⇒ ⇒ **载体 = L2 私有 contextvar**（`_STREAM_RUN_ID` / `_STREAM_THREAD_ID` · 由 `StreamSession` 绑定；B18F1 / L2 `_run_round` MUST 读取同一对 contextvar；B19F1 从节点 start `Span` 继承 `run_id` / `thread_id`，不直接读取 `_stream_context`）⇒ ⇒ B18F1 / B19F1 MUST NOT 反向要求 `stream()` 先落地，亦 MUST NOT 把 trace 数据塞进 `stream()` 的信封。 | FR-013 · FR-027 · H-9 · SC-010 |
 | **D-4** | **B8F2 → B22F1 / B23F1** | **M2** | **图导出与流式互不影响**：`get_graph` / `draw_mermaid_png` MUST NOT 依赖 `stream()` 的副作用；`stream()` MUST NOT 调用图导出 ⇒ ⇒ 两者只在「同一张编译产物」上共享只读规格。 | FR-006 · SC-013 · Out of Scope |
 
@@ -144,7 +144,10 @@
 
 - `checkpoints`：真实数据源属 **B14F1**（`MemorySaver` / checkpointer）⇒ 本 feature
   **MUST NOT** 伪造 checkpoint 事件、MUST NOT 把 `SuperStepResult.state` 伪装成 checkpoint
-  ⇒ 下游承接 **D-2**。
+  ⇒ 下游承接 **D-2**。✅ **B15F1 已交付（消费端）**：有 saver + `thread_id` 时按本次运行每成功
+  `put` 一条；无 saver / 无 `thread_id` / 非 `checkpoints` mode 仍为空；其余六档语义不变（`checkpoints` 档按 B15F1 承接产出）。
+  **payload 的 `tasks` / `interrupts` 由 B15F1 读取层按上游 next-tasks 重建**（与本 feature 的
+  `stream(tasks)` 完成态语义分开）。
 - `messages`：上游的语义是「LLM token 流 + metadata」（`langgraph/types.py:132`），属
   **LangChain 特有**、归 freechain；freegraph v1 **没有 LLM 回调源** ⇒ 恒为空序列；
   未来有源时 MUST **原样透传**（不抽取、不改写、不假设 LangChain 消息类型）。
@@ -183,6 +186,13 @@
   「四字段零改动」裁定 ⇒ 走 **T-2**（**T-2 是本 spec 新发现的受影响面**）。
 
 落点：FR-010 · FR-020 · 裁定 6 · SC-006 · 破冻结面 **T-1 / T-2**。
+
+> ⚠️ **自 B15F1 起（✅ 已交付 · B15F1）**：本 feature 的 `tasks` 档 =
+> **每完成一个 task 一条（完成态）**；这与 `StateSnapshot.tasks` 从 B15F1 起采用的
+> **上游 next-tasks（下一轮待执行任务）** 是**两个不同语义面**。B15F1 的
+> `get_state` / `get_state_history` / `stream(checkpoints)` 的 `tasks` 在读取层重建，
+> **MUST NOT** 复用本 feature 的完成态 `SuperStepResult.tasks` / 存储 `snapshot.tasks`
+> 作为权威；本 feature 的 `tasks` 流事件语义与载荷**零改动**。
 
 #### Q7（`StreamWriter` 的载体与作用域）
 
@@ -234,8 +244,11 @@
   （`run_graph` 的 `_first_graph` 中已落地的同一套步骤；允许把这些步骤抽成
   **私有初始化助手**）⇒ **MUST NOT** 在 L3 直接 `channel.update(...)`，
   亦 **MUST NOT** 另写一套通道写入。⚠️ **`checkpointer` 与 `_resume_graph` 的恢复路径
-  在本 feature 不参与**（FR-028）：`StreamSession` MUST **忽略** `checkpointer`
-  （不读快照、不写快照、不触发恢复）⇒ MUST NOT 因 `checkpointer` 改变七档语义。
+  在本 feature 不参与**（FR-028）：本 feature v1 的 `StreamSession` **忽略** `checkpointer`
+  （不读快照、不写快照、不触发恢复）⇒ **非 `checkpoints` 六档** MUST NOT 因 `checkpointer`
+  改变语义。⚠️ **B15F1 起（✅ 已交付）**：`checkpoints` 档 carve-out —— 有 saver +
+  `thread_id` 且 `checkpoints` mode 时，由 B15F1 的 `StreamCheckpointWriter` 写盘并产事件；
+  仍不恢复历史。
   **主循环本身 MUST 只调用 L2 单轮入口**
   （**MUST NOT** 复用 `_run_graph_loop` 的整图循环 · **MUST NOT** 自己求值路由 / 触发）。
   ⇒ 允许在 L2 **内部新增私有生成器 / 私有助手**（前导下划线 · **不进**
@@ -311,7 +324,7 @@ SC-013 / SC-016 / SC-022 / SC-023。
 | **裁定 2** | `stream_mode` 接受单值与序列；非法 / 空序列 ⇒ `ValueError`；重复去重保序 | Q2 · FR-002 / FR-014 |
 | **裁定 3** | `values` = 初始状态 + 每完成步一条；归一复用 `_full_state`（L3） | Q3 · FR-003 / FR-012 / FR-015 |
 | **裁定 4** | `updates` = 每完成 task 一条；同通道多次写入 ⇒ 元组；合并按通道归约 | Q4 · FR-004 / FR-016 |
-| **裁定 5** | `checkpoints` / `messages` v1 恒为空序列；语义边界写死 | Q5 · FR-017 / FR-018 |
+| **裁定 5** | `checkpoints` / `messages` v1 恒为空序列；语义边界写死。⚠️ **B15F1 起**：`checkpoints` 在有 saver + `thread_id` 且 `checkpoints` mode 时按本次运行产出；无 saver / 无 `thread_id` 仍空；`messages` 仍空 | Q5 · FR-017 / FR-018 |
 | **裁定 6** | `tasks` = 每完成 task 一条 + `PregelTask`；`SuperStepResult` 追加 `tasks` | Q6 · FR-010 / FR-020 |
 | **裁定 7** | `StreamWriter` = contextvar getter + 每任务 `copy_context()` + 参数名 `writer` 的关键字注入；无流 no-op | Q7 · FR-005 / FR-011 / FR-021 / FR-036 |
 | **裁定 8** | L3 主循环反复驱动 L2 单轮入口（公开 `run_super_step` 或私有 `_stream_tick`）；`_stream_tick` 与 `run_super_step` 共享同一执行/路由/触发实现；惰性；提前停止零泄漏；零新增公开 L2 入口 | Q8 · FR-001 / FR-006 / FR-009 |
@@ -481,7 +494,8 @@ SC-013 / SC-016 / SC-022 / SC-023。
 - 消费者不迭代 ⇒ **零执行**（惰性）；消费者提前 `close()` ⇒ 只执行到已完成的轮次。
 - `input` 是 `Command` ⇒ 调用时仍返回惰性迭代器；**首次 `next()`** 抛 `TypeError`
   （不执行节点；恢复路径归 B14F1 / B15F1）。
-- `checkpoints` / `messages` ⇒ 恒为空序列且不抛异常（v1 边界）。
+- `checkpoints` / `messages` ⇒ v1 恒为空序列且不抛异常；⚠️ **B15F1 起** `checkpoints` 在
+  有 saver + `thread_id` 且 `checkpoints` mode 时按本次运行产出（无 saver 仍空）；`messages` 仍空。
 - `values` 的最后一个 `payload` 含 `"__interrupt__"` 时，与 `invoke` 的中断结果**逐字相等**
   （元组形态）。
 - `thread_id` 未提供 ⇒ 所有事件的 `thread_id == None`；提供 `configurable["thread_id"]` ⇒
@@ -512,7 +526,7 @@ SC-013 / SC-016 / SC-022 / SC-023。
 | P-06 | `updates` 的粒度与同通道多写 | `langgraph/types.py:129-130`· `_loop.py:1452-1459`· `_io.py:118-174`· 实测 **E-2** | 每完成 task 一条；同通道多写 ⇒ **元组**（上游包成 `{"$writes": [...]}`） | DIFF | 归约语义不变、仅值形态不同 ⇒ **X-1** 的子项 |
 | P-07 | `tasks` 的粒度与载荷 | `_loop.py:580` / `:674`（开始）· `:1461-1466`（完成）· `debug.py:41-70` / `:106-125`· 实测 **E-3**（每 task 两条、普通 dict） | 每完成 task 一条、载荷 = `PregelTask` | DIFF | 提示词 FR-010 冻结 ⇒ **X-3** |
 | P-08 | `debug` 的包裹形态 | `_loop.py:1389-1412`· 实测 **E-4**（`{step,timestamp,type,payload}`） | 同形包裹，`type="task_result"`，`payload` = `PregelTask`；无 checkpoint 事件 | DIFF | 载荷换 `PregelTask` ⇒ **X-4** |
-| P-09 | `checkpoints` 的数据源 | `_loop.py:631-636`（`_emit("checkpoints", map_debug_checkpoint, …)`）· `debug.py:144`（`map_debug_checkpoint`）· `_loop.py:1081`（`_put_checkpoint`）· 实测 **E-5**（挂 checkpointer 时 3 条） | v1 恒为空序列（真实源归 B14F1） | 能力尚未交付 | 走 Out of Scope / 下游承接 **D-2**；**不记偏离** |
+| P-09 | `checkpoints` 的数据源 | `_loop.py:631-636`（`_emit("checkpoints", map_debug_checkpoint, …)`）· `debug.py:144`（`map_debug_checkpoint`）· `_loop.py:1081`（`_put_checkpoint`）· 实测 **E-5**（挂 checkpointer 时 3 条） | v1 恒为空序列（真实源归 B14F1）；✅ **B15F1 已交付（消费端）**（有 saver + thread 时按本次运行产出） | 能力已由 B15F1 补齐 | 走 Out of Scope / 下游承接 **D-2**；**不记偏离** |
 | P-10 | `messages` 的数据源 | `langgraph/types.py:132`· 实测 **E-6**（无 LLM 时 0 条） | v1 恒为空序列；有源时**原样透传**，不做 LangChain 抽取 | 能力尚未交付 | LangChain 特有，归 freechain；**不记偏离** |
 | P-11 | `custom` 的载体 | `langgraph/config.py:126` / `:195-196`（contextvar 取 writer）· `_executor.py:64`（`copy_context()`）/ `:71`（`ctx.run`）/ `:164`（async `copy_context()`）· 实测 **E-7** | 同款：运行级 contextvar + 每任务 `copy_context()` | SAME | 原则 XI ① 照抄机制；⚠️ **仅指载体**，产出时机另见 **P-23 / X-6** |
 | P-12 | 无流时 `get_stream_writer()` | `langgraph/config.py:13-14`（`_no_op_stream_writer`）· 实测 **E-9**（`invoke` 期间返回可调用对象、不抛） | 返回 no-op 可调用对象 | SAME | 照抄 |
@@ -664,7 +678,9 @@ D-130 / D-131 / D-132 / D-133 / D-135 / D-136）+ **DIFF 4**（D-125 / D-126 / D
   无会话历史的运行，把全部 `updates` 按**通道归约语义**逐条应用后 MUST 等于 `invoke()` 的
   最终状态（MUST NOT 用简单 `dict.update` 冒充合并）。
 - **FR-017**: `checkpoints` 档 MUST 被接受且 v1 **恒为空序列**；MUST NOT 伪造 checkpoint
-  事件；真实数据源归 **B14F1**（下游承接 D-2）。
+  事件；真实数据源归 **B14F1**（下游承接 D-2）。⚠️ **B15F1 起**：有 saver + `thread_id`
+  且 `checkpoints` mode 时按本次运行每成功 `put` 一条；无 saver / 无 `thread_id` 仍空；
+  本 feature 的其余六档语义不变（`checkpoints` 档按 B15F1 承接产出）。
 - **FR-018**: `messages` 档 MUST 被接受且 v1 **恒为空序列**；MUST NOT 实现 LangChain 消息
   抽取；未来有源时 MUST **原样透传**（归 freechain）。
 - **FR-019**: `debug` 档 MUST 为每个 `tasks` 事件产出一条包裹事件：
@@ -709,9 +725,13 @@ D-130 / D-131 / D-132 / D-133 / D-135 / D-136）+ **DIFF 4**（D-125 / D-126 / D
   `StreamSession` MUST 把该 `run_id` / `thread_id` 绑定到 L2 私有 contextvar
   （`_STREAM_RUN_ID` / `_STREAM_THREAD_ID`），供 **B18F1 / L2** 的 span 读取；B19F1 从 span 继承
   （D-3 / H-9）⇒ MUST NOT 新增公开符号，MUST NOT 改 `run_super_step` / `run_super_steps` 签名。
-- **FR-028**: `stream()` v1 MUST **不**提供会话连续 / checkpoint 持久化 / `Command` 恢复路径
-  （这些属 B14F1 / B15F1 / B16F1）；`StreamSession` MUST **忽略** `checkpointer`
-  （不读快照、不写快照、不触发恢复）；`checkpointer` 的存在 MUST NOT 改变本 feature 的七档语义。
+- **FR-028**: `stream()` v1 MUST **不**提供会话连续 / `Command` 恢复路径（归 B14F1 / B16F1）；
+  本 feature v1 的 `StreamSession` MUST **忽略** `checkpointer`（不读快照、不写快照、不触发恢复）；
+  `checkpointer` 的存在 MUST NOT 改变**非 `checkpoints` 六档**语义。
+  ⚠️ **B15F1 起（✅ 已交付）**：`checkpoints` 档 carve-out —— 有 saver + `thread_id`
+  且 `checkpoints` mode 时按本次运行每成功 `put` 一条（由 B15F1 的 `StreamCheckpointWriter`
+  写盘 · 四键信封不变）；无 saver / 无 `thread_id` / 其余六档仍忽略 `checkpointer`；不恢复历史。
+  该 carve-out 由 B15F1 **登记 + 回溯修订**，不改本 feature 的四键信封与其它六档语义。
   **静态断点**（`interrupt_before` / `interrupt_after`，B13F1）在 stream v1 **不支持**：
   MUST 复用 `_reject_static_points_for_low_level` 的 `ValueError`（V-26 口径）⇒
   在**第一次迭代**抛 `ValueError`（点名「静态断点只在图级 `run_graph` 生效」）⇒
@@ -773,7 +793,7 @@ D-130 / D-131 / D-132 / D-133 / D-135 / D-136）+ **DIFF 4**（D-125 / D-126 / D
 
 - `astream` / 异步流（v2，未排 feature）。
 - trace span 的生产（B18F1）与 `TraceSink` 接入（B19F1）；本 feature 只保证 id 对齐。
-- `checkpoints` 档的真实数据源（B14F1）；本 feature 只产出**空序列**。
+- `checkpoints` 档的真实数据源（B14F1）与消费端接线（B15F1）——✅ **B15F1 已交付**；本 feature 的其余六档语义不变（`checkpoints` 档按 B15F1 承接产出）。
 - `messages` 档的 LangChain 消息抽取（freechain）；freegraph 只做**原样透传**的边界声明。
 - `stream(Command(...))` 的恢复路径 / 会话连续 / checkpoint 持久化（B14F1 / B15F1 / B16F1）。
 - 静态断点（`interrupt_before` / `interrupt_after`）在 `stream()` 下的行为（v1 显式拒绝 · V-26 口径）。
@@ -802,7 +822,8 @@ D-130 / D-131 / D-132 / D-133 / D-135 / D-136）+ **DIFF 4**（D-125 / D-126 / D
 - **SC-007**: `debug` 每条事件的键集恰为 `{step, timestamp, type, payload}`，`type` ==
   `task_result`（100%）；`step` 与轮次一致、中断轮也有独立序号（100%）；`timestamp`
   可被 `datetime.fromisoformat` 解析且 `utcoffset() == timedelta(0)`（100%）。
-- **SC-008**: `checkpoints` 档序列长度 == **0** 且不抛异常（100%）。
+- **SC-008**: `checkpoints` 档序列长度 == **0** 且不抛异常（v1 无 saver；100%）。⚠️ **B15F1 起**：
+  有 saver + `thread_id` 时按本次运行产出；无 saver / 无 `thread_id` 仍为 0；本 feature 判据只收紧。
 - **SC-009**: `messages` 档序列长度 == **0** 且不抛异常（100%）。
 - **SC-010**: 每条事件是 `dict` 且键集恰为四键（100%）；`run_id` 非空 `str`（100%）；
   `thread_id` 与配置一致（100%）。
@@ -889,8 +910,9 @@ D-130 / D-131 / D-132 / D-133 / D-135 / D-136）+ **DIFF 4**（D-125 / D-126 / D
 - `checkpoints` / `messages` 的 v1 空序列是**能力边界**，不是「未实现」；验收脚本 MUST 判
   「零事件且不抛」，MUST NOT 用 `NotImplementedError` 当判据。
 - `stream()` v1 只支持**全新运行**（`input: StateDict`；运行期允许 `None` = 无输入写入）；
-  会话连续 / `Command` 恢复 / checkpoint 持久化由 B14F1 / B15F1 / B16F1 承接；
-  `checkpointer` 在 stream v1 **被忽略**，静态断点（`interrupt_before` / `interrupt_after`）
+  会话连续 / `Command` 恢复由 B14F1 / B16F1 承接；checkpoint 持久化由 B15F1 承接（✅ 已交付）：
+  **非 `checkpoints` 六档**仍忽略 `checkpointer`；`checkpoints` 档自 B15F1 起有 saver +
+  `thread_id` 时按本次运行产出。静态断点（`interrupt_before` / `interrupt_after`）
   **显式拒绝**（首次迭代 `ValueError` · V-26 口径）。
   ⚠️ **注解与运行期的口径**：L1 的 `input` 注解保持 `StateDict`（B2F1 冻结面），
   但运行期 MUST 接受 `None`（= 无输入写入）；调用方若做静态类型检查，需按

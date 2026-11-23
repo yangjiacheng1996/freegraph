@@ -72,15 +72,19 @@ class TestCapabilitySurface:
 
     def test_each_unready_method_raises_not_implemented_naming_owner(self) -> None:
         compiled = build_minimal_graph().compile()
-        calls = {
-            "get_state": (({},), "B15F1"),
-            "get_state_history": (({},), "B15F1"),
-            "update_state": (({}, {}), "B16F1"),
-        }
-        for name, (args, owner) in calls.items():
-            with pytest.raises(NotImplementedError) as excinfo:
-                getattr(compiled, name)(*args)
-            assert owner in str(excinfo.value), (name, str(excinfo.value))
+        # ⚠️ 拆分而不删（B15F1 · R-1）：get_state / get_state_history 已交付 ⇒ 移出列表；
+        # 保留 update_state → B16F1 的「未实现 + 点名」断言。
+        with pytest.raises(NotImplementedError) as excinfo:
+            compiled.update_state({}, {})
+        assert "B16F1" in str(excinfo.value)
+
+    def test_get_state_is_delivered_without_a_saver(self) -> None:
+        """B15F1：已交付 ⇒ 未挂 saver / 缺 thread_id 时抛 ``ValueError``（不是 NotImplementedError）。"""
+        compiled = build_minimal_graph().compile()
+        with pytest.raises(ValueError):
+            compiled.get_state({"thread_id": "t"})
+        with pytest.raises(ValueError):
+            compiled.get_state_history({"thread_id": "t"})
 
     def test_get_graph_is_delivered(self) -> None:
         """B22F1：``get_graph`` 返回自有 ``Graph``。"""

@@ -25,9 +25,11 @@ def test_public_exports_and_alias() -> None:
         "MemorySaver",
         "InMemorySaver",
         "CheckpointTuple",
+        "SqliteSaver",
     ]
     assert persistence.InMemorySaver is persistence.MemorySaver
     assert persistence.CheckpointTuple is not None
+    assert persistence.SqliteSaver is not None
 
 
 def test_checkpoint_tuple_has_exactly_three_fields() -> None:
@@ -86,3 +88,10 @@ def test_facade_does_not_export_memory_saver() -> None:
     facade = importlib.import_module("freegraph.graph")
     assert not hasattr(facade, "MemorySaver")
     assert "MemorySaver" not in getattr(facade, "__all__", ())
+
+
+def test_facade_does_not_export_sqlite_saver() -> None:
+    """B15F1 · R-2：``SqliteSaver`` 只在 L4 公开，门面 **MUST NOT** 转出（G18）。"""
+    facade = importlib.import_module("freegraph.graph")
+    assert not hasattr(facade, "SqliteSaver")
+    assert "SqliteSaver" not in getattr(facade, "__all__", ())

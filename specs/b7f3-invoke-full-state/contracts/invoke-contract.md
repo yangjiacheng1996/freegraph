@@ -112,6 +112,9 @@
 | **CF-04** | **`checkpointer` 的落盘职责** | 门面**只透传**；落盘与 saver 归 B14F1 | **B14F1**（下游承接 **D-4**） |
 | **CF-05** | **`config` 注解放宽的**归属边界** | 本 feature 只放宽 `CompiledGraph.invoke` 的 `config` 注解（`RunConfig \| Mapping[str, Any] \| None` · 裁定 1）⇒ ⇒ L1 的 `stream` / `get_state` / `get_state_history` / `update_state` **仍**是 `RunConfig \| None` ⇒ ⇒ ⇒ **这 4 处的放宽归** B8F2 / B15F1 / B16F1 **各自**走「登记 + 回溯修订 + 发起者追认」（宪法 v1.8.0 / v1.9.0）⇒ ⇒ ⇒ ⚠️ **本 feature MUST NOT** 代为放宽（**追认额度 ≤ 1 次 / feature** · 已用尽）⇒ ⇒ ⇒ ⇒ **下游 MUST 复用本 feature 已定的载体边界**（`RunConfig` = 会话面 + `max_concurrency`；普通映射 = 运行期参数 ⇒ **原样**交给 L2 ⇒ **MUST NOT** 在门面层翻译成 `RunConfig`） | **B8F2 / B15F1 / B16F1**（下游承接 **D-5**） |
 
+> **状态更新（2026-11-22）**：B15F1 已交付`get_state` / `get_state_history` 的 `config`
+> 注解放宽；B8F2 已交付 `stream`；`update_state` 待 B16F1。
+
 ---
 
 ## 6. 本契约的**自检**（实现期 MUST 逐条断言）

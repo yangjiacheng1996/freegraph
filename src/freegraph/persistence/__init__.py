@@ -1,12 +1,13 @@
 # Copyright (c) 2026 杨家成 · MIT License · https://github.com/yangjiacheng1996/freegraph
 
-"""L4 持久化层 · **公开包** —— 属 **B14F1**。
+"""L4 持久化层 · **公开包**。
 
-公开面只有三个符号：
+公开面只有四个符号：
 
 * :class:`MemorySaver` —— 进程内 checkpointer（开发 / 调试定位）；
 * ``InMemorySaver`` —— ``MemorySaver`` 的同一对象别名；
-* :class:`CheckpointTuple` —— ``get_tuple`` / ``list`` 的读侧载体。
+* :class:`CheckpointTuple` —— ``get_tuple`` / ``list`` 的读侧载体；
+* :class:`SqliteSaver` —— 磁盘持久化 checkpointer（B15F1 · 标准库 ``sqlite3``）。
 
 **依赖纪律**（L4）：只依赖 L1 ``freegraph.contracts`` + 标准库；MUST NOT import
 L2 / L3 / L5；零第三方依赖、零环境变量、零出站。门面 ``freegraph.graph``
@@ -19,5 +20,6 @@ from __future__ import annotations
 
 from ._types import CheckpointTuple
 from .memory import InMemorySaver, MemorySaver
+from .sqlite import SqliteSaver
 
-__all__ = ["MemorySaver", "InMemorySaver", "CheckpointTuple"]
+__all__ = ["MemorySaver", "InMemorySaver", "CheckpointTuple", "SqliteSaver"]

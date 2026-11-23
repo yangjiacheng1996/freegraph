@@ -54,6 +54,7 @@ from .contracts import (
     GraphInterrupt,
     RunConfig,
     StateDict,
+    StateSnapshot,
     Store,
     StreamWriter,
 )
@@ -68,7 +69,10 @@ from .runtime import (
     parse_state_schema,
     run_graph,
 )
+from .runtime import _state_read
+from .runtime._checkpoint import bind_error_interrupts, reset_error_interrupts
 from .runtime._stream import StreamSession
+from .runtime._stream_checkpoint import StreamCheckpointWriter
 from .runtime._recursion import resolve_config
 from .runtime._span_hook import current_span_tracer
 from .runtime._stream_context import bind_run_ids, get_stream_writer
@@ -766,6 +770,23 @@ class CompiledGraph:
             trace_cm = nullcontext()
         with trace_cm, StreamSession(spec, input, config, run_id=run_id) as session:
             thread_id = session.thread_id
+            run_config = resolve_config(config)
+            writer: StreamCheckpointWriter | None = None
+            if (
+                "checkpoints" in modes
+                and self.checkpointer is not None
+                and not isinstance(self.checkpointer, bool)
+                and thread_id
+            ):
+                writer = StreamCheckpointWriter(spec, self.checkpointer, run_config)
+                written = writer.prepare(session.state)
+                if written is not None:
+                    yield _event(
+                        "checkpoints",
+                        writer.snapshot_of(written),
+                        run_id,
+                        thread_id,
+                    )
             if "values" in modes:
                 yield _event(
                     "values",
@@ -778,6 +799,10 @@ class CompiledGraph:
             while True:
                 step = round_index
                 round_index += 1
+                if writer is not None:
+                    collector, token = bind_error_interrupts()
+                else:
+                    collector, token = [], None
                 try:
                     result = _stream_tick(
                         spec,
@@ -787,6 +812,8 @@ class CompiledGraph:
                         route_config=session.route_config,
                     )
                 except GraphInterrupt as exc:
+                    if token is not None:
+                        reset_error_interrupts(token)
                     interrupts = tuple(exc.args[0]) if exc.args else ()
                     for value in session.take_custom():
                         if "custom" in modes:
@@ -814,12 +841,29 @@ class CompiledGraph:
                             run_id,
                             thread_id,
                         )
+                    if writer is not None:
+                        written = writer.on_interrupt(
+                            session.state, captured, interrupts
+                        )
+                        yield _event(
+                            "checkpoints",
+                            writer.snapshot_of(written),
+                            run_id,
+                            thread_id,
+                        )
                     break
                 except BaseException:
+                    if token is not None:
+                        reset_error_interrupts(token)
                     for value in session.take_custom():
                         if "custom" in modes:
                             yield _event("custom", value, run_id, thread_id)
+                    if writer is not None:
+                        writer.on_error(collector)
                     raise
+                else:
+                    if token is not None:
+                        reset_error_interrupts(token)
 
                 if result is None:
                     break
@@ -848,6 +892,14 @@ class CompiledGraph:
                         run_id,
                         thread_id,
                     )
+                if writer is not None:
+                    written = writer.after_result(session.state, result)
+                    yield _event(
+                        "checkpoints",
+                        writer.snapshot_of(written),
+                        run_id,
+                        thread_id,
+                    )
 
     def get_graph(self, *, xray: bool = False) -> Graph:
         """图结构导出（**B22F1 已交付** · C13）。
@@ -863,13 +915,62 @@ class CompiledGraph:
             self.interrupt_after_nodes,
         )
 
-    def get_state(self, config: Any) -> Any:
-        """状态查询——**未就绪**（由 **B15F1** 交付）。"""
-        raise NotImplementedError("get_state 由 B15F1 交付")
+    def get_state(
+        self, config: RunConfig | Mapping[str, Any] | None
+    ) -> StateSnapshot | None:
+        """状态查询（**B15F1**）—— 返回 8 字段 ``StateSnapshot`` 或 ``None``。
 
-    def get_state_history(self, config: Any) -> Any:
-        """状态历史——**未就绪**（由 **B15F1** 交付）。"""
-        raise NotImplementedError("get_state_history 由 B15F1 交付")
+        未指定 ``configurable["checkpoint_id"]``（含 ``None`` / 空串）⇒ 把 pending
+        writes 合并进 ``values`` 的副本；指定非空 id ⇒ 不合并。``tasks`` / ``interrupts``
+        按上游 **next-tasks** 语义重建（不使用存储的完成态 ``snapshot.tasks``）。
+        """
+        cfg = _state_read.resolve_read_config(config)
+        saver = _state_read.require_saver(self.checkpointer)
+        checkpoint_tuple = saver.get_tuple(cfg)
+        if checkpoint_tuple is None:
+            return None
+        configurable = cfg.configurable
+        has_id = bool(
+            isinstance(configurable, Mapping)
+            and configurable.get("checkpoint_id")
+        )
+        return _state_read.assemble_snapshot(
+            checkpoint_tuple.snapshot,
+            checkpoint_tuple.scheduler,
+            checkpoint_tuple.pending_writes,
+            apply_values=not has_id,
+            spec=self._spec,
+        )
+
+    def get_state_history(
+        self,
+        config: RunConfig | Mapping[str, Any] | None,
+        *,
+        filter: Mapping[str, Any] | None = None,
+        before: RunConfig | Mapping[str, Any] | None = None,
+        limit: int | None = None,
+    ) -> Iterator[StateSnapshot]:
+        """状态历史（**B15F1**）—— 按 ``checkpoint_id`` 倒序返回快照迭代器。
+
+        ``filter`` / ``before`` / ``limit`` 是 L3 实现体的 keyword-only 扩展（L1 协议
+        保持 ``config`` 单参数）；``values`` 不合并 pending writes。
+        """
+        cfg = _state_read.resolve_read_config(config)
+        saver = _state_read.require_saver(self.checkpointer)
+        tuples = list(
+            saver.list(cfg, filter=filter, before=before, limit=limit)
+        )
+        snapshots = [
+            _state_read.assemble_snapshot(
+                item.snapshot,
+                item.scheduler,
+                item.pending_writes,
+                apply_values=False,
+                spec=self._spec,
+            )
+            for item in tuples
+        ]
+        return iter(snapshots)
 
     def update_state(self, config: Any, values: Any, as_node: str | None = None) -> Any:
         """状态更新——**未就绪**（由 **B16F1** 交付）。"""

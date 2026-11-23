@@ -73,7 +73,7 @@
 | **H-5** | **B11F1 → B14F1** | **M3** | **`Send` 的 pending writes**：由 `Send` 产生的调用 MUST 与普通调用同款地进入 pending writes（标准 `task_id` = 节点名；fan-out `task_id` = `f"{节点名}:{TaskId}"`）⇒ MUST NOT 为 fan-out 另立载体；MUST 接受「一轮一个节点可有多个任务」 | `specs/b11f1-send-fanout/spec.md` FR-005 / FR-009 / FR-020 · 下游承接 D-3 · F-13 / F-14 | **FR-020** · 裁定 6 · SC-016 |
 | **H-6** | **B7F4 → B14F1** | **M3** | **跨 checkpoint 的屏障状态持久化**：MUST 让「屏障的已消费状态」跨 checkpoint 存活（否则暂停后恢复 ⇒ 屏障被重放 ⇒ 目标被重复触发）⇒ MUST NOT 自创持久化载体（沿用调度状态里的 `seen` / `versions_seen`） | `specs/b7f4-multisource-join/spec.md` 承接条款 D-4 · 登记项 PR-4 · FR-004 / FR-016 | **FR-019** · 裁定 9 · SC-017 |
 | **H-7** | **B7F2 → B14F1** | **M3** | **编译期 checkpointer 类型校验**：B7F2 只接受 + 记录 + 不报错；本 feature MUST 补上游同款的编译期校验（`ensure_valid_checkpointer` ⇒ `TypeError`）⇒ 校验口径由本 feature 冻结；`CompiledGraph.checkpointer` 是只读交接面，MUST NOT 要求 B7F2 改写记录方式 | `specs/b7f2-compile/spec.md` 下游承接 D-4 · FR-016 · 裁定 7 · 偏离登记 X-4 · SC-015 · `langgraph/types.py:109-118` | **FR-010** · 裁定 2 · SC-013 |
-| **H-8** | **B8F2 → B14F1** | **M3** | **`checkpoints` 档的真实数据源**：B8F2 的 `checkpoints` 档 v1 恒为空序列（无伪造事件）⇒ 本 feature MUST 提供「每创建一个 checkpoint 一条事件」的数据源，并复用 `_loop.py:631-636` / `debug.py:144` 的「checkpoint 事件 vs `get_state()` 同形」口径；`StreamSession` 在 v1 忽略 `checkpointer`（不读/写快照、不触发恢复） | `specs/b8f2-stream-modes/spec.md` 下游承接 D-2 · FR-017 · 裁定 5 | **FR-023** · 裁定 11 · SC-020 |
+| **H-8** | **B8F2 → B14F1** | **M3** | **`checkpoints` 档的真实数据源**：B8F2 的 `checkpoints` 档 v1 恒为空序列（无伪造事件）⇒ 本 feature MUST 提供「每创建一个 checkpoint 一条事件」的数据源，并复用 `_loop.py:631-636` / `debug.py:144` 的「checkpoint 事件 vs `get_state()` 同形」口径；`StreamSession` 在 v1 忽略 `checkpointer`（不读/写快照、不触发恢复）；⚠️ **B15F1 起（✅ 已交付）**：`checkpoints` 档 carve-out（有 saver + `thread_id` 时由 B15F1 的 `StreamCheckpointWriter` 写盘并产事件），其余六档不变 | `specs/b8f2-stream-modes/spec.md` 下游承接 D-2 · FR-017 · 裁定 5 | **FR-023** · 裁定 11 · SC-020 |
 | **H-9** | **B8F3 → B14F1** | **M3** | **`context` 不持久化**：MUST NOT 把 `context` 写入 checkpoint、MUST NOT 在恢复时从快照还原 `context`；checkpoint 契约 MUST NOT 为 `context` 预留持久化字段或「内存态恢复」旁路；MUST 以「`context` 已接线、alias 已移除」为前提，MUST NOT 回退到 `configurable` 承载 `context` | `specs/b8f3-node-alias-context/spec.md` 下游承接 D-1 / D-3 · FR-003 / FR-008 / FR-009 · 裁定 5 | **FR-024** · 裁定 12 · SC-021 |
 | **H-10** | **B18F1 → B14F1** | **M3** | **`checkpoint_id` 补值**：节点 span 接受运行期 `checkpoint_id`（v1 `None`），模型 / 工具 span 从节点 span 继承 ⇒ 本 feature 挂接 checkpointer 后 MUST 通过既有运行期接缝把当前 checkpoint 标识填入**节点 span** ⇒ MUST NOT 回改 `Span` 的 11 字段 · MUST NOT 要求 B18F1 重写子 span 继承 | `specs/b18f1-span-production/spec.md` 下游承接 D-4 · plan D-05 · tasks T057 | **FR-022** · 裁定 11 · SC-019 |
 | **H-11** | **B7F3 → B14F1** | **M3** | **checkpointer 的落盘职责**：B7F3 只透传编译产物持有的 `checkpointer`（MUST NOT 自己落盘 / 自己实现 saver）⇒ 落盘与 `MemorySaver` 归本 feature ⇒ 「挂起 → 恢复」路径在本 feature 落地后有正式载体；未挂 checkpointer 时 `Command(resume=...)` MUST 继续抛 `InterruptError(reason="checkpointer_required")` | `specs/b7f3-invoke-full-state/spec.md` 下游承接 D-4 · 契约 CF-04 | **FR-007** · **FR-028** · 裁定 2 / 7 · SC-014 |
@@ -170,11 +170,19 @@
 | 时机 | 写什么 | `next` | `interrupts` / `tasks` | 备注 |
 |---|---|---|---|---|
 | **初始（round 0）** | `put` | 第一轮将执行的节点名 | `()` / `()` | **惰性**：在第一个 `_run_round` **之前**写；若先命中 `interrupt_before`，则该挂起写**兼任初始快照**（不重复写） |
-| **每轮执行完成** | `put` | **下一轮**将执行的节点名；收敛 ⇒ `()` | `()` / 本轮 `tasks` | 在**写入合并成功之后**写 ⇒ 失败轮不写 |
+| **每轮执行完成** | `put` | **下一轮**将执行的节点名；收敛 ⇒ `()` | `()` / 本轮 `tasks`（**历史 / 流数据源**；⚠️ 自 **B15F1** 起，`get_state` / `get_state_history` / `stream(checkpoints)` 的 `tasks` 由读取层按上游 **next-tasks** 重建，**MUST NOT** 直接使用本字段） | 在**写入合并成功之后**写 ⇒ 失败轮不写 |
 | **动态中断挂起** | `put` + `put_writes` | 挂起快照的 `next`（可为空） | 本轮中断 / `()` | **该写就是本轮的快照**（不再另写每轮快照）；**挂起快照的 `tasks` 恒为 `()`**（与 B10F1 的冻结挂起写一致） |
 | **静态 `interrupt_before` 挂起** | `put` | 待执行节点名 | `()` / `()` | 若**此前无任何快照**，它**兼任初始快照** |
 | **静态 `interrupt_after` 挂起** | `put` | `next` | `()` / `()` | **代替**该轮的每轮快照（不重复）；**挂起快照的 `tasks` 恒为 `()`** |
 | **静态恢复完成（F-10）** | `put`（由 B13F1 写一次） | `()` | `()` / `()` | 本 feature 的每轮策略 MUST NOT 与之重复 / 冲突 |
+
+> ⚠️ **自 B15F1 起（✅ 已交付 · B15F1）**：本 feature 存储的 `tasks`（「每轮完成态」/ 挂起 `()`）
+> 保留为**历史 / 流数据源**；**`CompiledGraph.get_state` / `get_state_history` /
+> `stream(checkpoints)` 的 `tasks` MUST 由读取层按上游 next-tasks 语义重建**
+> （`snapshot.next` + `.scheduler["fanout"]` + pending `__interrupt__`），**MUST NOT** 直接使用
+> `snapshot.tasks`。B8F2 的 `stream(tasks)` 仍是「每完成一个 task 一条」的完成态事件，二者
+> 语义边界写死。此为 B15F1 于 **2026-11-23** 按宪法原则 XII「最优设计优先」+ 原则 XI「上游优先」
+> 作出的**回溯修订**（**拆分而不删**：原存储口径保留）。
 
 **计数判据**：
 - **正常跑完**的图：快照数 == **实际执行过的 super-step 轮数 + 1**（初始）。
@@ -289,7 +297,8 @@ put_writes(config, *, writes, task_id, task_path="") -> None
   2. `list()` 的历史枚举。
   ⇒ 两者给出的快照 MUST 与 `get_tuple().snapshot` **同形**（8 字段 · 同 id · 同 values / next / tasks / interrupts）。
 - **边界**：本 feature **只交付数据源**；`stream(..., stream_mode="checkpoints")` 的**消费端接线**
-  仍归 **B8F2 / B15F1**（B8F2 v1 已明确忽略 `checkpointer`）⇒ 本 feature MUST NOT 伪造 stream 事件，
+  仍归 **B8F2 / B15F1**（B8F2 v1 忽略 `checkpointer`；⚠️ **B15F1 起（✅ 已交付）** `checkpoints` 档 carve-out）
+  ⇒ 本 feature MUST NOT 伪造 stream 事件，
   MUST NOT 在 `StreamSession` 里另立一条 checkpoint 路径。该边界列入 **Out of Scope**（能力边界 · **非偏离**）。
 
 ### 裁定 12 · `context` 不持久化
@@ -630,7 +639,9 @@ put_writes(config, *, writes, task_id, task_path="") -> None
   MUST NOT 为静态挂起额外要求动态中断载荷；**挂起快照的 `tasks` MUST 为 `()`**
   （与 B10F1 的冻结挂起写一致；仅「每轮执行完成」的 `put` 填本轮 `PregelTask`）；
   快照计数 MUST 按裁定 5 的「初始惰性写 + 挂起写计入该轮 + 不重复」策略
-  （**2026-11-22 用户确认选项 A**）。
+  （**2026-11-22 用户确认选项 A**）。⚠️ **自 B15F1 起**：存储的 `tasks` 仅作历史 / 流数据源；
+  `get_state` / `get_state_history` / `stream(checkpoints)` 的 `tasks` MUST 由读取层按上游
+  next-tasks 重建（见裁定 5 后注记；R-13 / B15F1 回溯修订）。
 - **FR-020**：系统 MUST 接受标准任务 `task_id` = 节点名、fan-out `task_id` = `f"{节点名}:{TaskId}"`；
   MUST 接受同一轮同一节点有多个任务；MUST NOT 为 fan-out 另立持久化载体。
 - **FR-021**：同一轮「真异常 + 中断同现」时，系统 MUST 先把该轮每个中断元组经
@@ -736,7 +747,7 @@ put_writes(config, *, writes, task_id, task_path="") -> None
 - **不实现** `update_state` / 时间旅行回放 / fork 分支（归 B16F1）。
 - **不实现** `Store` / `MemoryStore`（B17 已砍 · 2026-11-05；C20 契约仍冻结、实现后补 v2）。
 - **不实现** Postgres / 跨进程 / 跨机共享 thread（v2）。
-- **不实现** `stream(checkpoints)` 的消费端接线（归 B8F2 / B15F1；本 feature 只交付数据源）。
+- **不实现** `stream(checkpoints)` 的消费端接线（归 B8F2 / B15F1；本 feature 只交付数据源）。⏳ **B15F1 已交付（计划交付消费端；实现前仍为空）**。
 - **不实现** async saver 方法（`aget` / `aput` / …；freegraph v1 无 async）。
 - **不实现** `delete_for_runs` / `copy_thread` 的语义（v1 只保留方法面）。
 - **不实现** 子图的 checkpointer 继承（`True` / `False` 的子图语义 · C26 属 v2）。
@@ -844,8 +855,8 @@ put_writes(config, *, writes, task_id, task_path="") -> None
 - **`delete_for_runs` / `copy_thread`**：v1 只保留方法面并抛 `NotImplementedError`（上游内存 saver 同款）；
   运行级删除 / 线程复制属 B15F1 / B16F1。
 - **`context`**：B8F3 已接线；本 feature 明确**不**持久化、**不**从快照还原。
-- **`stream(checkpoints)`**：B8F2 v1 明确忽略 `checkpointer`；本 feature 只交付数据源，
-  消费端接线属 B8F2 / B15F1（Out of Scope · 能力边界 · 非偏离）。
+- **`stream(checkpoints)`**：B8F2 v1 忽略 `checkpointer`（⚠️ **B15F1 起 `checkpoints` 档 carve-out** · ✅ 已交付）；本 feature 只交付数据源，
+  消费端接线属 B8F2 / B15F1（Out of Scope · 能力边界 · 非偏离）。✅ **B15F1 已交付**。
 - **深拷贝**：状态载荷预期可被 `copy.deepcopy`；不可拷贝对象属用户侧异常，原异常传播。
 - **无 `thread_id`**：运行期跳过落盘（X-03）；这是为 SC-005 服务的明确取舍，不是静默共享会话。
 - **差分测试**：上游 `langgraph` 只在测试侧使用；生产依赖声明 MUST 保持 `dependencies = []`。
@@ -881,13 +892,14 @@ put_writes(config, *, writes, task_id, task_path="") -> None
 | # | 承接方 | 里程碑 | 动作 | 本 spec 落点 |
 |---|---|---|---|---|
 | **D-01** | **B15F1** | **M3** | `SqliteSaver` MUST 复用本 feature 冻结的读侧载体（`.snapshot` / `.pending_writes` / `.scheduler`）、写侧关键字（`values` / `metadata` / `writes` / `task_id` / `task_path`）、**`put_writes` 目标由 `configurable["checkpoint_id"]` 指定（缺 key ⇒ `KeyError`）**、**pending writes 去重 / 排序（`WRITES_IDX_MAP` + `writes_sort_key`）**、checkpoint id 排序语义与 `context` 不持久化口径；`get_state` / `get_state_history` 的对外方法归 B15F1 | FR-011…FR-016 · FR-024 · 裁定 3 / 4 / 6 / 12 |
-| **D-02** | **B15F1** | **M3** | `stream(checkpoints)` 的消费端接线由 B15F1 完成：消费本 feature 的 `on_checkpoint` / `list()` 数据源，事件与 `get_state()` 同形 | FR-023 · 裁定 11 · Out of Scope（能力边界） |
+| **D-02** | **B15F1** | **M3** | `stream(checkpoints)` 的消费端接线由 B15F1 完成：消费本 feature 的 `on_checkpoint` / `list()` 数据源，事件与 `get_state()` 同形。✅ **B15F1 已交付**：有 saver + `thread_id` 时按本次运行产出；无 saver 仍空；只在 `checkpoints` mode 写 | FR-023 · 裁定 11 · Out of Scope（能力边界） |
 | **D-03** | **B16F1** | **M3** | `update_state` / 时间旅行 MUST 以本 feature 的 checkpoint 顺位 id 与父链为定位依据；MUST NOT 另造 id 空间 | FR-005 · FR-012 · 裁定 4 / 5 |
 | **D-04** | **B18F1** | **M3** | 节点 span 的 `checkpoint_id` 由本 feature 的运行期接缝填值；B18F1 MUST NOT 重新实现子 span 继承 | FR-022 · 裁定 11 |
-| **D-05** | **B8F2** | **M3** | `checkpoints` 档的数据源已由本 feature 交付；消费端接线状态需在 B8F2 的执行记录中更新（**不改 B8F2 的七档语义**） | FR-023 · 裁定 11 · Out of Scope（能力边界） |
+| **D-05** | **B8F2** | **M3** | `checkpoints` 档的数据源已由本 feature 交付；消费端接线状态需在 B8F2 的执行记录中更新（**不改 B8F2 的其余六档语义**；`checkpoints` 档 carve-out 由 B15F1 承接） | FR-023 · 裁定 11 · Out of Scope（能力边界） |
 | **D-06** | **B21F1** | **M3** | OTLP 导出 MAY 复用 `span.checkpoint_id` 与 checkpoint 事件；MUST NOT 要求本 feature 增删 `Span` 字段 | FR-022 / FR-023 |
 | **D-07** | **B24F1 / B25F1** | **M4** | API 兼容矩阵 MUST 增加 `freegraph.persistence.MemorySaver` / `InMemorySaver` / `CheckpointTuple` 三行；`manual-verification.md` MUST 纳入发布前人工验收 | FR-009 / FR-026 |
 | **D-08** | **B15F1 / B16F1** | **M3** | 本 feature 的 `delete_for_runs` / `copy_thread` 的 `NotImplementedError` 边界 MUST 在后端实现时重新评估（若 B15F1 实现，则不得回改本 feature 的 `MemorySaver` 行为） | FR-029 · 裁定 6 |
+| **D-09** | **B15F1** | **M3** | **`tasks` 权威语义移交**：自 B15F1 起，`CompiledGraph.get_state` / `get_state_history` / `stream(checkpoints)` 的 `StateSnapshot.tasks` MUST 由 B15F1 读取层按上游 **next-tasks** 语义重建（`snapshot.next` + `.scheduler["fanout"]` + pending `__interrupt__`）；本 feature 存储的「本轮完成态」`tasks` 保留为历史 / 流数据源，**MUST NOT** 作为这些 API 的权威来源；B8F2 的 `stream(tasks)` 仍为完成态 | 裁定 5 后注记 · FR-019 · FR-020 |
 
 ---
 
@@ -901,7 +913,7 @@ put_writes(config, *, writes, task_id, task_path="") -> None
 | **B13F1** | D-5 | ✅ **已接线**（FR-019） |
 | **B7F4** | D-4 | ✅ **已接线**（FR-019） |
 | **B7F2** | D-4 | ✅ **已接线**（FR-010） |
-| **B8F2** | D-2 | ✅ **已接线**（FR-023 · 数据源；消费端归 B15F1） |
+| **B8F2** | D-2 | ✅ **已接线**（FR-023 · 数据源）· ✅ **B15F1 已交付（消费端）** |
 | **B8F3** | D-1 / D-3 | ✅ **已接线**（FR-024） |
 | **B18F1** | D-4 | ✅ **已接线**（FR-022） |
 | **B7F3** | D-4 | ✅ **已接线**（FR-007 / FR-028） |

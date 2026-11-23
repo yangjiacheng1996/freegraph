@@ -13,9 +13,10 @@
 
 | 项目 | 来源 | 许可证 | 引入方式 | 修改 | 版权声明保留位置 |
 |---|---|---|---|---|---|
-| （暂无条目） | — | — | — | — | — |
+| `langgraph-checkpoint-sqlite` 的**同步** `SqliteSaver` | `/home/ctyun/.cache/uv/archive-v0/UtTk-BJ9thKpSH0Q/langgraph/checkpoint/sqlite/__init__.py`（`langgraph-checkpoint-sqlite 3.1.1` · LangChain, Inc.） | MIT | **改编**（B15F1 的 `src/freegraph/persistence/sqlite.py`：连接 / `setup()` / WAL / `cursor()` / `from_conn_string` / `threading.Lock` / `delete_thread` 结构） | **移除** serde / msgpack / `aiosqlite` / `sqlite-vec` / `langchain_core` 依赖；序列化改为**标准库 `json`**；`put` / id 空间 / `CheckpointTuple` 三字段 / `task_path` 排序改为复用 B14F1 冻结契约；新增内部 `task_path` 列 | 本清单 §1 · 源文件署名头标注「改编自 langgraph-checkpoint-sqlite 3.1.1（MIT）」 |
 
-**当前状态**：`src/freegraph/` 下的全部代码为本项目**原创**，**不含**任何第三方代码。
+**当前状态**：`src/freegraph/` 下除上表的 **MIT 改编**外均为本项目原创；
+`langgraph-checkpoint-sqlite` 的原始版权归 **LangChain, Inc.**，按 MIT 保留声明。
 
 > 本节**从 F1P1 起即为活文档**——每个 Phase 若引入第三方代码，MUST 当场在此登记，
 > 不得累积到发布前补。补全与定稿归 **F24P1**。

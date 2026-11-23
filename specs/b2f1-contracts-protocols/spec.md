@@ -787,6 +787,10 @@ C1–C27 全部条目且无遗漏——即算独立交付。
   > **B7F3**（`invoke`）、**B8F2**（`stream`）、**B15F1**（`get_state` /
   > `get_state_history`）、**B16F1**（`update_state`）实现时 MUST 以这些占位名为基线；
   > 确需改名者走**契约修订**流程（宪法 §Governance），**MUST NOT 就地改型**。
+  > ⚠️ **2026-11-22 · B15F1 回溯修订（✅ 已落地）**：`get_state` / `get_state_history` 的
+  > `config` 注解**计划**自 B15F1 起放宽为 `RunConfig | Mapping[str, Any] | None`；
+  > **返回类别不变**；参数名 / 空值语义不变。详见
+  > `specs/b15f1-sqlite-saver-state-history/spec.md` 的 H-9 / FR-023。
   > **已完成的全局同步（2026-11-06）**：立项书 §5.4（P1 更名 `NodeFunc` + 新增 P5 /
   > DF5 / DF6 + DF4 补齐 11 字段 + 自有重写红线）· B18F1 提示词（`Span` 字段面归本
   > feature、11 字段逐字、MUST NOT 增删字段）· 立项书 §5.2 B2F1 行（补 `Span` /

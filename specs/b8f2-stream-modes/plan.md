@@ -34,7 +34,7 @@ B7F1 / B10F1 / B8F1 / B12F1 / B13F1 / B1F1 / B2F1 / B2F2 / B7F2 / B6F1（承接 
 | **`tasks`** | 每完成 task 的 `PregelTask` | `tasks` 事件含被中断 task；`SuperStepResult.tasks` 只累计成功返回的轮次 |
 | **`debug`** | `tasks` 的包裹事件 | `{step, timestamp, type:"task_result", payload}` · 1 起 step |
 | **`custom`** | 节点主动写入 | `get_stream_writer()` · 参数名 `writer` 的关键字注入 · 每任务 `copy_context()` · 线程安全 + **轮末批量** + TaskId 序（**P-23 / X-6**） |
-| **`checkpoints` / `messages`** | v1 空序列 | checkpoint 源归 B14F1 · messages 抽取归 freechain |
+| **`checkpoints` / `messages`** | v1 空序列；✅ B15F1 起 `checkpoints` 有 saver + thread 时按本次运行产出 | checkpoint 源归 B14F1 · 消费端归 B15F1 · messages 抽取归 freechain |
 | **差分场景组** | 与上游同场景对跑 | D-121…D-136 · SAME 10 / DIFF 4 / STRICTER 2 · 上游缺席即 skip |
 | **一键验收** | `harness/verification/B8F2/acceptance.py` | 退出码 0/1/2 · 打印 `B8F2 acceptance: PASS\|FAIL` · pytest 真跑 |
 
@@ -96,13 +96,13 @@ typing 构件上限 3.11（`contextvars` / `dataclasses` / `uuid` / `inspect` / 
 | `tasks` 载荷 MUST 是 `PregelTask`；`SuperStepResult` 追加 `tasks`，不删 4 字段 | FR-010 / FR-020 · SC-006 |
 | `StreamWriter` MUST 走 contextvar + `copy_context()` | FR-011 / FR-021 |
 | 节点签名声明 `writer` 时 MUST 以关键字注入 writer；`**kwargs` / 其它参数名 / 注解不匹配 ⇒ 不注入 | FR-036 · SC-021 |
-| `stream` 的 `input` 注解沿用 `StateDict`；运行期允许 `None` = 无输入写入；`Command` / 非法类型在**首次迭代**拒绝；`checkpointer` 被忽略；静态断点在**首次迭代**以 V-26 `ValueError` 拒绝 | FR-023 / FR-028 |
+| `stream` 的 `input` 注解沿用 `StateDict`；运行期允许 `None` = 无输入写入；`Command` / 非法类型在**首次迭代**拒绝；`checkpointer` 被忽略（**非 `checkpoints` 六档**；⚠️ B15F1 起 `checkpoints` 档 carve-out · ✅ 已交付）；静态断点在**首次迭代**以 V-26 `ValueError` 拒绝 | FR-023 / FR-028 |
 | 每条事件四键 + `run_id` / `thread_id` | FR-013 / FR-027 · SC-010 / SC-011 |
 | `run_id` / `thread_id` MUST 绑定 L2 私有 contextvar，供 B18F1 / L2 读取；B19F1 继承 | FR-027 · D-3 · H-9 |
 | 非法 mode / 空序列 ⇒ 调用时 `ValueError`；非 `str` / 非 `Sequence` / 非 `None` ⇒ 调用时 `TypeError` | FR-002 · SC-001 |
 | 中断：task 补发 + `__interrupt__` + 正常结束 | FR-025 · SC-017 |
 | 失败：custom 先出 + 原异常重抛 + 失败轮无 values/updates/tasks/debug | FR-026 · SC-013 |
-| `checkpoints` / `messages` 恒空序列且不抛 | FR-017 / FR-018 · SC-008 / SC-009 |
+| `checkpoints` / `messages` v1 恒空序列且不抛；✅ B15F1 起 `checkpoints` 有 saver + thread 时按本次运行产出 | FR-017 / FR-018 · SC-008 / SC-009 |
 | 公开面 == 门面 8 / 契约 22 / runtime 23；顶层包仍惰性 | FR-030 · SC-018 |
 | 差分 D-121…D-136 · 上游缺席即 skip | FR-032 · SC-015 |
 | 破冻结面 T-1…T-5 · 追认 == 1 次 | FR-033 · SC-020 |
@@ -212,7 +212,7 @@ MUST NOT 新增门禁编号 · MUST NOT 放宽依赖 / 许可证 / 商标 / 零�
 | # | 承接方 | 内容 | 目标提示词初稿 |
 |---|---|---|---|
 | D-1 | B8F3（M2） | 别名在流式事件中的可见性（`updates` 键 = 节点名；不另造映射） | `harness/features/B8F3_节点别名与context通道.md` |
-| D-2 | B14F1（M3） | `checkpoints` 档真实数据源（每 checkpoint 一条 · 与 `get_state()` 同形） | `harness/features/B14F1_Checkpointer协议与MemorySaver.md` |
+| D-2 | B14F1（M3）/ **B15F1（M3 · 消费端）** | `checkpoints` 档真实数据源（每 checkpoint 一条 · 与 `get_state()` 同形）；⏳ B15F1 已交付（计划交付消费端：有 saver + thread 时按本次运行产出；无 saver 仍空） | `harness/features/B14F1_Checkpointer协议与MemorySaver.md` · `harness/features/B15F1_SqliteSaver与状态历史.md` |
 | D-3 | B18F1 / L2（读取）· B19F1（继承）· M3 | 两条事件通道独立、共享 `run_id` / `thread_id`；**载体 = L2 私有 `_STREAM_RUN_ID` / `_STREAM_THREAD_ID` contextvar**（**ARCH-3 例外 · R-6，已收窄**）；B19F1 从节点 span 继承；trace 不塞进信封 | `harness/features/B18F1_Span数据类生产.md` / `B19F1_TraceSink与current_span.md` |
 | D-4 | B22F1 / B23F1（M2） | 图导出不依赖流式副作用；流式不调用图导出 | `harness/features/B22F1_get_graph与draw_mermaid.md` / `B23F1_draw_mermaid_png离线不阻断.md` |
 

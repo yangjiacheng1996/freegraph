@@ -1,6 +1,11 @@
 # Tasks: B8F2 · `stream()`：多模式流式输出 + `StreamWriter`
 
 > **2026-11-20 后续修订（C25 正式作废）**：C25 流式别名软断言已移除；本文件 T055/T067 中的 alias 文字保留为历史。
+>
+> **2026-11-23 后续修订（B15F1 · tasks 语义分界）**：本 feature 的 `tasks` 档仍是
+> **每完成一个 task 一条（完成态）**，语义与载荷零改动；`StateSnapshot.tasks` 自 B15F1 起
+> 改为上游 **next-tasks**（由 B15F1 读取层重建），**不得**复用本 feature 的
+> `SuperStepResult.tasks` / 存储 `snapshot.tasks` 作为 `get_state` 的权威。
 
 
 **Input**: Design documents from `/specs/b8f2-stream-modes/`
@@ -201,6 +206,10 @@
 
 - [X] T044 [US4] Write `tests/facade/test_stream_modes.py` `TestModeSurface` (先写、先失败): seven modes accepted; `stream_mode=None` accepted and produces `updates`-shaped events; `checkpoints` / `messages` length == 0 and no raise; `bogus` / `[]` ⇒ `ValueError` at call time (not at first iteration); `123` ⇒ `TypeError`; duplicate modes deduped preserving order; multi-mode events each carry the correct `stream_mode`; per-round order is `custom → updates → tasks → debug → values`
 - [X] T045 [US4] Implement `checkpoints` / `messages` in `src/freegraph/_stategraph.py`: accepted, but emit zero events and never raise; MUST NOT fabricate checkpoint events; MUST NOT attempt LangChain message extraction
+
+> **状态更新（2026-11-22）**：B15F1 已交付（计划交付 `checkpoints` 消费端）——无 saver / 无
+> `thread_id` 仍为 0 条；有 saver + `thread_id` 且 `checkpoints` mode 时按本次运行每成功
+> `put` 一条；T045 的「v1 零事件」保留为历史基线，其余六档语义不变（`checkpoints` 档按 B15F1 承接产出）。
 - [X] T046 [US4] Implement multi-mode normalization and ordering in `src/freegraph/_stategraph.py`: `Sequence[str]` dedupe preserving first occurrence; emit only requested modes; keep the fixed per-round order `custom → updates → tasks → debug → values`; single-mode and multi-mode share the same four-key envelope
 - [X] T047 [US4] Verify (do **not** reimplement) that invalid-mode validation from **T022** is call-time (not generator-time) in `src/freegraph/_stategraph.py`: `ValueError` message MUST name the offending value and list the seven legal values; `TypeError` message MUST name the type; if a gap is found, fix the single T022 implementation point
 - [X] T048 [US4] Run `pytest tests/facade/test_stream_modes.py -k "Mode or Surface or Checkpoints or Messages" -q`; record the real output in `harness/verification/B8F2/manual-verification.md` §2.5
