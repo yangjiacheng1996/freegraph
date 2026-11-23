@@ -106,37 +106,38 @@ def test_get_state_unknown_thread_returns_none_and_empty_history() -> None:
     assert list(compiled.get_state_history({"thread_id": "missing"})) == []
 
 
-def test_pending_writes_merge_only_without_checkpoint_id() -> None:
+def test_pending_writes_merge_only_for_tasks_in_next() -> None:
     saver = _sqlite()
-    compiled = _linear().compile(checkpointer=saver)
+    compiled = _linear().compile(checkpointer=saver, interrupt_before=["b"])
     compiled.invoke({"log": []}, {"thread_id": "t"})
 
     latest = saver.get_tuple(RunConfig(thread_id="t"))
     assert latest is not None
+    assert latest.snapshot.next == ("b",)
     latest_id = latest.snapshot.config.configurable["checkpoint_id"]
-    saver.put_writes(
-        RunConfig(thread_id="t", configurable={"checkpoint_id": latest_id}),
-        writes=[("log", ["pending"]), ("__error__", "ignored")],
-        task_id="a",
-    )
+    write_cfg = RunConfig(thread_id="t", configurable={"checkpoint_id": latest_id})
+    # task "b" is in next -> merged (upstream: tid in next_tasks)
+    saver.put_writes(write_cfg, writes=[("log", ["pending-b"])], task_id="b")
+    # task "a" is NOT in next -> stray pending, must NOT be merged
+    saver.put_writes(write_cfg, writes=[("log", ["pending-a"]), ("__error__", "x")], task_id="a")
 
     merged = compiled.get_state({"thread_id": "t"})
     assert merged is not None
-    assert merged.values["log"] == ["a", "b", "pending"]
+    assert merged.values["log"] == ["a", "pending-b"]
 
     by_id = compiled.get_state(
         {"thread_id": "t", "configurable": {"checkpoint_id": latest_id}}
     )
     assert by_id is not None
-    assert by_id.values["log"] == ["a", "b"]
+    assert by_id.values["log"] == ["a"]
 
     history_first = list(compiled.get_state_history({"thread_id": "t"}))[0]
-    assert history_first.values["log"] == ["a", "b"]
+    assert history_first.values["log"] == ["a"]
 
 
 def test_get_state_none_checkpoint_id_is_unspecified() -> None:
     saver = _sqlite()
-    compiled = _linear().compile(checkpointer=saver)
+    compiled = _linear().compile(checkpointer=saver, interrupt_before=["b"])
     compiled.invoke({"log": []}, {"thread_id": "t"})
     latest = saver.get_tuple(RunConfig(thread_id="t"))
     assert latest is not None
@@ -144,13 +145,13 @@ def test_get_state_none_checkpoint_id_is_unspecified() -> None:
     saver.put_writes(
         RunConfig(thread_id="t", configurable={"checkpoint_id": latest_id}),
         writes=[("log", ["pending"])],
-        task_id="a",
+        task_id="b",
     )
     via_none = compiled.get_state(
         {"thread_id": "t", "configurable": {"checkpoint_id": None}}
     )
     assert via_none is not None
-    assert via_none.values["log"] == ["a", "b", "pending"]
+    assert via_none.values["log"] == ["a", "pending"]
 
 
 def test_dynamic_interrupt_matches_invoke_interrupt_tuple() -> None:

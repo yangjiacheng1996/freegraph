@@ -220,7 +220,13 @@ def assemble_snapshot(
 ) -> StateSnapshot:
     """组装 8 字段 ``StateSnapshot``（``apply_values=True`` ⇒ 合并 pending writes）。"""
     if apply_values:
-        values = merge_pending_writes(spec, snapshot.values, pending_writes)
+        # 上游 ``_prepare_state_snapshot``：只合并 **next_tasks 中任务**的待写入
+        # （``if tid not in next_tasks: continue``）⇒ 冻结快照的游离 pending 不合并。
+        allowed = set(snapshot.next)
+        effective_pending = [
+            item for item in pending_writes if item[0] in allowed
+        ]
+        values = merge_pending_writes(spec, snapshot.values, effective_pending)
     else:
         values = dict(snapshot.values)
     tasks = assemble_tasks(snapshot.next, scheduler, pending_writes)

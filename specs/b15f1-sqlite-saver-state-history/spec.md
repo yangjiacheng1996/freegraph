@@ -235,9 +235,10 @@ SqliteSaver.from_conn_string(conn_string: str, *, on_checkpoint=None) -> Iterato
    视为**未指定**（取最新快照，并按下文合并 pending）；只有**非空字符串**才视为「指定 id」。
 3. `values`：
    - **未指定** `configurable["checkpoint_id"]` ⇒ 以 `t.snapshot.values` 为底，按运行期同款
-     的**通道归约语义**（C6）把 `t.pending_writes` 中**非保留通道**的写入按
-     `(task_path, task_id, idx)` 升序合并进一份**副本**
-     （上游 `apply_pending_writes=True` 同款 · `langgraph/pregel/main.py:1431`）；
+     的**通道归约语义**（C6）把 `t.pending_writes` 中**非保留通道且 `task_id ∈ snapshot.next`**
+     的写入按 `(task_path, task_id, idx)` 升序合并进一份**副本**
+     （上游 `apply_pending_writes=True` 同款 · `langgraph/pregel/main.py:1431` ·
+     `:1239-1248` 的 `if tid not in next_tasks: continue`）；
    - **指定** `checkpoint_id` ⇒ 直接用 `t.snapshot.values`（上游同款：不应用 pending writes）；
    - 任何情况下 MUST NOT 修改存储中的快照；归约失败 ⇒ 原异常传播，存储零变化。
 4. `next` / `config` / `metadata` / `created_at` / `parent_config` **原样**取自
@@ -616,7 +617,8 @@ pending writes，结束后每个线程的快照数 / `pending_writes` 内容正�
   identity 不变。
 - **收敛快照**：`next == ()` 且无 fan-out ⇒ `tasks == ()`（与上游同款）。
 - **`get_state` 无 `checkpoint_id` 且存在 pending writes**：`values` 按 C6 归约合并
-  （上游同款）；指定 `checkpoint_id` ⇒ 不合并；`get_state_history` ⇒ 不合并。
+  **`task_id ∈ snapshot.next`** 的非保留通道写入（上游同款）；游离 pending（任务不在
+  `next`）**不合并**；指定 `checkpoint_id` ⇒ 不合并；`get_state_history` ⇒ 不合并。
 - **`get_state` 无 id 与 `get_state_history` 首元素**：`interrupts` / `tasks` 可相同，
   但 `values` **可以不同**（前者含 pending 合并）⇒ MUST NOT 断言两者 `values` 必相等。
 - **`context` 非空**：不出现在快照 / metadata / scheduler / pending writes 中；
@@ -819,8 +821,9 @@ freegraph 口径。
   `ValueError`（点名 `thread_id`）；`configurable["checkpoint_ns"]` 非空 ⇒ `ValueError`
   （v1 无子图 · 明确失败；空串 / 缺失视为 `""`）。
 - **FR-015**：`get_state` 在**未指定** `configurable["checkpoint_id"]`（**含 `None` / 空串**）时
-  MUST 把 pending writes 中**非保留通道**的写入按运行期同款通道归约（C6）合并进 `values`
-  的**副本**（上游 `apply_pending_writes=True` 同款）；**指定非空** `checkpoint_id` 时 MUST
+  MUST 把 pending writes 中**非保留通道且 `task_id ∈ snapshot.next`** 的写入按运行期同款通道
+  归约（C6）合并进 `values` 的**副本**（上游 `apply_pending_writes=True` 同款 ·
+  `:1239-1248` 的 `if tid not in next_tasks: continue`）；**指定非空** `checkpoint_id` 时 MUST
   直接使用 `snapshot.values`（不合并）。`next` / `config` / `metadata` / `created_at` /
   `parent_config` MUST 原样取自 `get_tuple().snapshot`；`tasks` MUST 按 **FR-037 / 裁定 13**
   以**上游 next-tasks 语义**从 `snapshot.next` + `.scheduler["fanout"]` + pending
@@ -1063,7 +1066,8 @@ freegraph 口径。
 - **SC-024**：`SqliteSaver` 的 `on_checkpoint` 回调次数 == 成功 `put` 次数；回调抛错后
   `put` 成功率 == 100%、已提交快照回滚次数 == 0。
 - **SC-025**：`get_state` 无 `checkpoint_id` 且存在 pending writes 时，`values` 按 C6 归约合并
-  （与上游同款；差异 == 0）；带 `checkpoint_id` 时不合并（差异 == 0）；
+  **`task_id ∈ snapshot.next`** 的非保留通道写入（与上游 `if tid not in next_tasks: continue`
+  同款；游离 pending 不合并；差异 == 0）；带 `checkpoint_id` 时不合并（差异 == 0）；
   `get_state_history` 的 `values` 不合并（差异 == 0）；合并后存储快照 / 写入零变化（差异 == 0）。
 - **SC-026**：`SqliteSaver` 的 `filter` key 非法（不匹配 `^[a-zA-Z0-9_.-]+$`）⇒ `ValueError`
   的比率 == 100%；`SqliteSaver` 的 `filter` 的 `None` / `bool` / `dict` / `list` 值编码与上游

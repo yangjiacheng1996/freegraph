@@ -333,10 +333,10 @@ pending writes 正确；无 `database is locked` 泄漏；测试不带 `linux_on
 
 **Purpose**: 差分 D-01…D-21、文档 / 上游规格、人工验收、全量回归、行数与审计
 
-- [ ] T052 在 `tests/differential/test_b15f1_state_parity.py` 落 **D-01…D-05**（`get_state` 最新 / 按 id / 历史数量 / 顺序 / 过滤；**比较投影只含 `values` / `next`（非 fan-out）/ `tasks`（next-tasks）/ `interrupts`，排除 `metadata` / `created_at` / `config`**；上游缺席 `SKIP (source-aligned)`）⇒ FR-026 · SC-018
-- [ ] T053 在 `tests/differential/test_b15f1_state_parity.py` 落 **D-06…D-10**（动态中断 / 真异常 + 中断 / `context` / 无 checkpointer / 缺 `thread_id`）⇒ FR-026 · SC-018
-- [ ] T054 在 `tests/differential/test_b15f1_state_parity.py` 落 **D-11…D-15**（`checkpoints` 事件 / `delete_thread` / 双后端 / 跨实例 / 并发）⇒ FR-026 · SC-018
-- [ ] T055 在 `tests/differential/test_b15f1_state_parity.py` 落 **D-16…D-21**（不可序列化 / pending 合并 / 带 id / `from_conn_string` / filter key / **next-tasks 重建：普通 / 收敛 / 静态 / fan-out（含账本来源与 next 来源、以及标准任务与 fan-out 同轮的混合轮）/ 真异常**）⇒ FR-026 · SC-018
+- [x] T052 在 `tests/differential/test_b15f1_state_parity.py` 落 **D-01…D-05**（`get_state` 最新 / 按 id / 历史数量 / 顺序 / 过滤；**比较投影只含 `values` / `next`（非 fan-out）/ `tasks`（next-tasks）/ `interrupts`，排除 `metadata` / `created_at` / `config`**；上游缺席 `SKIP (source-aligned)`）⇒ FR-026 · SC-018
+- [x] T053 在 `tests/differential/test_b15f1_state_parity.py` 落 **D-06…D-10**（动态中断 / 真异常 + 中断 / `context` / 无 checkpointer / 缺 `thread_id`）⇒ FR-026 · SC-018
+- [x] T054 在 `tests/differential/test_b15f1_state_parity.py` 落 **D-11…D-15**（`checkpoints` 事件 / `delete_thread` / 双后端 / 跨实例 / 并发）⇒ FR-026 · SC-018
+- [x] T055 在 `tests/differential/test_b15f1_state_parity.py` 落 **D-16…D-21**（不可序列化 / pending 合并 / 带 id / `from_conn_string` / filter key / **next-tasks 重建：普通 / 收敛 / 静态 / fan-out（含账本来源与 next 来源、以及标准任务与 fan-out 同轮的混合轮）/ 真异常**）⇒ FR-026 · SC-018
 
 > ⚠️ **D-19 / 直接使用上游 `SqliteSaver` 的场景** MUST 额外 `pytest.importorskip("langgraph.checkpoint.sqlite")`；
 > D-01…D-18 的 state 读取对照可用已安装的 `MemorySaver`，不因 SQLite 子包缺席而 fail。

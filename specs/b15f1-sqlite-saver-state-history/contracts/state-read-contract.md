@@ -86,7 +86,7 @@ def get_state_history(
 
 | 条件 | `values` |
 |---|---|
-| 无 `checkpoint_id` + 有 pending writes | 以快照为底，按 `.pending_writes` 顺序合并**非保留通道**（C6） |
+| 无 `checkpoint_id` + 有 pending writes | 以快照为底，按 `.pending_writes` 顺序合并**非保留通道且 `task_id ∈ snapshot.next`** 的写入（C6 · 上游 `if tid not in next_tasks: continue`） |
 | 无 `checkpoint_id` + 无 pending writes | 快照 `values` |
 | 有 `checkpoint_id` | 快照 `values`（**不**合并） |
 

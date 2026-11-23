@@ -206,24 +206,25 @@ def v6_config_failures() -> None:
 
 def v7_pending_merge() -> None:
     saver = SqliteSaver(__import__("sqlite3").connect(":memory:", check_same_thread=False))
-    compiled = _linear().compile(checkpointer=saver)
+    compiled = _linear().compile(checkpointer=saver, interrupt_before=["b"])
     compiled.invoke({"log": []}, {"thread_id": "v7"})
     latest = saver.get_tuple(RunConfig(thread_id="v7"))
     assert latest is not None
     latest_id = latest.snapshot.config.configurable["checkpoint_id"]
-    saver.put_writes(
-        RunConfig(thread_id="v7", configurable={"checkpoint_id": latest_id}),
-        writes=[("log", ["pending"]), ("__error__", "ignored")],
-        task_id="a",
-    )
+    write_cfg = RunConfig(thread_id="v7", configurable={"checkpoint_id": latest_id})
+    saver.put_writes(write_cfg, writes=[("log", ["pending-b"])], task_id="b")
+    saver.put_writes(write_cfg, writes=[("log", ["pending-a"]), ("__error__", "ignored")], task_id="a")
     merged = compiled.get_state({"thread_id": "v7"})
-    check(merged is not None and merged.values["log"] == ["a", "b", "pending"], "V7 无 id ⇒ 合并 pending")
+    check(
+        merged is not None and merged.values["log"] == ["a", "pending-b"],
+        "V7 无 id ⇒ 仅合并 next 中任务（b）的 pending",
+    )
     by_id = compiled.get_state(
         {"thread_id": "v7", "configurable": {"checkpoint_id": latest_id}}
     )
-    check(by_id is not None and by_id.values["log"] == ["a", "b"], "V7 有 id ⇒ 不合并")
+    check(by_id is not None and by_id.values["log"] == ["a"], "V7 有 id ⇒ 不合并")
     history_first = list(compiled.get_state_history({"thread_id": "v7"}))[0]
-    check(history_first.values["log"] == ["a", "b"], "V7 历史 ⇒ 不合并")
+    check(history_first.values["log"] == ["a"], "V7 历史 ⇒ 不合并")
 
 
 def v8_dynamic_and_static_interrupts() -> None:

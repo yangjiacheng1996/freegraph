@@ -63,7 +63,7 @@ all keys == {stream_mode,payload,run_id,thread_id}: True
 ### 3.5 全量回归（实施后）
 
 ```text
-.venv/bin/python -m pytest -q ⇒ 2250 passed, 8 skipped（见实施后实跑；含新增 B15F1 测试）
+.venv/bin/python -m pytest -q ⇒ 2266 passed, 10 skipped（含 2 条上游 SQLite source-aligned skip）（见实施后实跑；含新增 B15F1 测试）
 ```
 
 ### 3.6 一键验收脚本
@@ -78,6 +78,18 @@ rc=0
 覆盖：协议 / 导出面 / CRUD / list / delete / 版本 / 跨实例持久化 / 跨进程持久化 /
 `get_state` 8 字段 / pending 合并口径 / next-tasks / 动态与静态挂起 / 历史倒序与按 id 相等 /
 `checkpoints` 流式事件 / 同实例并发 / 零 env 零出站。
+
+### 3.7 差分全量（D-01…D-21）
+
+```text
+$ .venv/bin/python -m pytest tests/differential/test_b15f1_state_parity.py -q
+20 passed, 2 skipped
+```
+
+覆盖 D-01…D-21；2 条 skip = 上游 `langgraph.checkpoint.sqlite` 未安装的
+`SKIP (source-aligned)`（D-19 / D-20 的 SQLite 对照）。
+D-17 对齐上游 `if tid not in next_tasks: continue`：仅合并 `snapshot.next` 中任务的
+待写入（游离 pending 不合并）。
 
 ## 4. 结论
 

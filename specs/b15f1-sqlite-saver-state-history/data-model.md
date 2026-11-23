@@ -288,7 +288,7 @@ def merge_pending_writes(
 ```
 
 1. 新建 `SchedulerState`；`_restore_channels(spec, state, values)`。
-2. 按 `pending_writes` 顺序收集**非保留通道**写入。
+2. 按 `pending_writes` 顺序收集**非保留通道且 `task_id ∈ snapshot.next`** 的写入（上游 `if tid not in next_tasks: continue`）。
 3. `_reject_unknown_keys`（未知 key ⇒ `InvalidUpdateError`）。
 4. 每通道 `Channel.update(values)`。
 5. 返回 `_sparse_state(spec, state)` 的新 dict。
