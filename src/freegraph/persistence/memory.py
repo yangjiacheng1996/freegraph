@@ -245,17 +245,31 @@ class MemorySaver:
 
         with self._lock:
             store = self._threads.get(thread_id)
-            if store is None:
-                store = _ThreadStore()
-                self._threads[thread_id] = store
+            explicit = _configurable(config).get("checkpoint_id")
+            explicit_id = (
+                explicit if isinstance(explicit, str) and explicit else None
+            )
+
+            parent_config = None
+            if explicit_id is not None:
+                if store is None or explicit_id not in store.snapshots:
+                    raise ValueError(
+                        f"checkpoint_id {explicit_id!r} does not exist "
+                        f"for thread {thread_id!r}"
+                    )
+                parent_config = store.snapshots[explicit_id].snapshot.config
+            else:
+                if store is None:
+                    store = _ThreadStore()
+                    self._threads[thread_id] = store
+                if store.latest_id is not None:
+                    parent_config = store.snapshots[
+                        store.latest_id
+                    ].snapshot.config
 
             sequence = store.next_seq
             store.next_seq += 1
             checkpoint_id = f"{sequence:032d}"
-
-            parent_config = None
-            if store.latest_id is not None:
-                parent_config = store.snapshots[store.latest_id].snapshot.config
 
             created_at = _now_iso()
             snapshot_config = RunConfig(

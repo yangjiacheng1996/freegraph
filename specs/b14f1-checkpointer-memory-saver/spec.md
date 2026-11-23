@@ -204,6 +204,11 @@ put_writes(config, *, writes, task_id, task_path="") -> None
 - `put`：
   - `values` MUST 是 `Mapping` ⇒ 存**深拷贝**；`metadata` MUST 是 `Mapping` ⇒ 存**深拷贝**；否则 `TypeError`。
   - 为当前 `thread_id` 生成**新的 checkpoint 顺位 id**，`parent_config` = 上一快照的 `config`（首个为 `None`）。
+    > ⚠️ **回溯修订（B16F1 · 2026-11-23 · 拆分而不删）**：自 B16F1 起，当
+    > `config.configurable["checkpoint_id"]` 为**非空字符串**时，`parent_config` = 该 id
+    > （显式父链，用于时间旅行分叉）；缺失 / 空串仍保持「上一快照（最新）」原语义。
+    > 运行期常规写盘携带「当前 checkpoint id」作 parent，可观察行为不变。
+    > 新口径见 `specs/b16f1-update-state-time-travel/spec.md` 裁定 3 / FR-017 / R-2。
   - 返回一个新的 `RunConfig`，其 `configurable["checkpoint_id"]` = 新 id（**上游同款**：`put` 返回带 id 的 config）；
     `thread_id` = 生效的 `thread_id`；`context` = `None`（见裁定 12）；**不**复制 `metadata` / `tags`。
   - 新快照的 8 字段按 FR-012 组装：`values` / `next` / `config` / `metadata` / `created_at` /

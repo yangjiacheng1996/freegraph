@@ -497,9 +497,10 @@ class TestCompatMatrixCoversTheFacade:
     #: （``invoke`` 已交付 ⇒ 不再挂起 B7F3），否则矩阵**过期**（与原则 X 的「MUST 更新
     #: 清单」相悖）。
     #: ⇒ **只放行这一行**；其余**契约层**行仍**逐字未改**（判据**只放宽一处**）。
-    #: ⚠️ **等价程度（第三列）MUST NOT 变差**（``CompiledGraph`` 保持 **部分等价** ——
-    #: ``invoke`` 已交付，但 ``stream`` / ``get_state`` / ``get_state_history`` /
-    #: ``update_state`` 仍**未交付** ⇒ ⇒ **不得**升为「行为等价」）。
+    #: ⚠️ **等价程度（第三列）MUST NOT 变差**：B7F3 放行时 ``CompiledGraph`` 保持
+    #: **部分等价**（``invoke`` 已交付，``stream`` / ``get_state`` / ``get_state_history`` /
+    #: ``update_state`` 尚未交付）；**B16F1 起**上述方法均已交付，但矩阵行仍按
+    #: B7F3 的历史放行口径处理（不得据此擅自升为「行为等价」，定稿归 B24F1）。
     MATRIX_ROWS_UPDATABLE_BY_B7F3 = frozenset({"CompiledGraph"})
 
     #: **B22F1 · T-1 / T-5**：`Command` 泛型化 + `Graph.draw_mermaid` 追加 ⇒

@@ -45,6 +45,12 @@
 > **状态更新（2026-11-22）**：B15F1 已交付`get_state` / `get_state_history` 的
 > `config` 注解放宽（`RunConfig | Mapping[str, Any] | None`；返回类别不变）；B8F2 已交付
 > `stream` 的同类放宽；`update_state` 待 B16F1。
+>
+> ⚠️ **回溯修订（B16F1 · 2026-11-23 · 拆分而不删）**：B16F1 的裁定 1 已冻结
+> `CompiledGraph.update_state` 的 `config` 注解放宽为 `RunConfig | Mapping[str, Any] | None`
+> **且返回类别改为 `RunConfig`**；自 B16F1 实现起生效，**参数名 / 顺序不变**。
+> 下游复用本 feature 的载体边界（`RunConfig` = 会话面 + `max_concurrency`；普通映射 = 运行期参数
+> ⇒ 原样交给 L2）。新口径见 `specs/b16f1-update-state-time-travel/spec.md` 裁定 1 / R-1。
 
 ---
 

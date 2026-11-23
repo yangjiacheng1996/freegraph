@@ -103,6 +103,10 @@
   > `data-model.md` §2.5 的签名**冻结**为**占位名**（`input` / `config` / `stream_mode` /
   > `xray` / `as_node`）；**行为语义**仍挂起；下游确需改名者走**契约修订**流程
   > （见 Assumptions「协议冻结的粒度」），MUST NOT 就地改型。
+  > ⚠️ **回溯修订（B16F1 · 2026-11-23 · 拆分而不删）**：`update_state` 的**返回类别**自 B16F1 起
+  > 改为 **`RunConfig`**（可继续执行的新分支 config），`config` 注解放宽为
+  > `RunConfig | Mapping[str, Any] | None`；**参数名 / 顺序不变**，其余五方法与字段面零改动。
+  > 原冻结注记保留为历史；新口径见 `specs/b16f1-update-state-time-travel/spec.md` 裁定 1 / R-1。
 - **Q9（span 的「开始 → 结束」两次回调收到什么）**：两次回调收到的是不是同一个对象？
   → **A：`Span` 冻结为不可变记录** —— 开始回调收到「`end_time` 为空」的实例，
   结束回调收到**同 `id`、`end_time` 已填的新实例**，两次**按 `id` 配对**。
@@ -388,6 +392,9 @@ C1–C27 全部条目且无遗漏——即算独立交付。
   **实现细节**（行为语义）MUST 挂起各自实现 feature（`invoke` → B7F3、
   `stream` → B8F2、状态查询 → B15F1、`update_state` → B16F1）；
   下游确需改参数名者 MUST 走**契约修订**流程，MUST NOT 就地改型。
+  > ⚠️ **回溯修订（B16F1 · 2026-11-23 · 拆分而不删）**：⑥ 的**返回类别**自 B16F1 起
+  > 由「状态快照」改为 **`RunConfig`**；原注记保留为历史。新口径见
+  > `specs/b16f1-update-state-time-travel/spec.md` 裁定 1 / R-1。
 
 - **FR-006**: 系统 MUST 定义**图结构数据类** —— `Graph`（图）/ `Node`（图节点元素）/
   `Edge`（边元素）。MUST 是**纯数据类**（不可变记录 + 字段级相等语义），MUST NOT 复用

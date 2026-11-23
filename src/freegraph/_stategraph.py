@@ -70,6 +70,7 @@ from .runtime import (
     run_graph,
 )
 from .runtime import _state_read
+from .runtime import _time_travel
 from .runtime._checkpoint import bind_error_interrupts, reset_error_interrupts
 from .runtime._stream import StreamSession
 from .runtime._stream_checkpoint import StreamCheckpointWriter
@@ -972,9 +973,29 @@ class CompiledGraph:
         ]
         return iter(snapshots)
 
-    def update_state(self, config: Any, values: Any, as_node: str | None = None) -> Any:
-        """状态更新——**未就绪**（由 **B16F1** 交付）。"""
-        raise NotImplementedError("update_state 由 B16F1 交付")
+    def update_state(
+        self,
+        config: RunConfig | Mapping[str, Any] | None,
+        values: StateDict,
+        as_node: str | None = None,
+    ) -> RunConfig:
+        """基于历史 checkpoint 修改状态并返回新分支的 ``RunConfig``（B16F1）。
+
+        * ``config`` —— ``RunConfig`` / 普通映射 / ``None``（``None`` 仅类型层接受；
+          解析后缺 ``thread_id`` ⇒ ``ValueError``）；
+        * ``values`` —— 状态写入映射（按 C6 归约 / 覆盖）；
+        * ``as_node`` —— 记录归属节点；省略时单节点兜底或从 ``versions_seen`` 推断。
+
+        真正的基准定位 / 合并 / 后继 / 写入全在 L2 ``runtime/_time_travel``；
+        本方法**不在门面层翻译 config**。
+        """
+        return _time_travel.update_state(
+            self._spec,
+            self.checkpointer,
+            config,
+            values,
+            as_node,
+        )
 
 
 class StateGraph:

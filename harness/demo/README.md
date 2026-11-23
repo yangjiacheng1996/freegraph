@@ -115,7 +115,7 @@ python harness/demo/acceptance.py --record harness/verification/freegraph/manual
 | 本地 trace 存储目录的参数名 | **已锁定（B20F1）**：`FileTraceStore(directory=...)`，见 `specs/b20f1-local-trace-jsonl/spec.md` §「形态锁定裁定」 |
 | 本地 trace 查询 API 与 SQLite 后端 | **已锁定（B20F2）**：`query(TraceQuery \| None) -> list[dict]`（JSONL / SQLite 同一签名）+ `SqliteTraceStore(database=...)`；表结构 / 文件格式是内部实现细节，Studio 只走 `query()` |
 | `MemorySaver` 的模块路径 | **已锁定（B14F1）**：`freegraph.persistence.MemorySaver`（`InMemorySaver` 同一对象别名） |
-| `update_state(...)` 的签名 | B16F1 未说签名 |
+| `update_state(...)` 的签名 | **已锁定（B16F1）**：`(config, values, as_node=None) -> RunConfig`；见 `specs/b16f1-update-state-time-travel/spec.md` 裁定 1 |
 
 **原则**：*验收脚本与它所验收的能力的 API 形态一起定*——
 章程已锁形态的（M1/M2）现在就写；章程未锁形态的（M3）**随定义它的 feature 一起写**，

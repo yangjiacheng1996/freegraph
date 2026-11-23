@@ -160,3 +160,8 @@ span 落盘成一行一条的 JSON 记录。本 feature 的判定是：**trace �
 - **D-2（B19F1 → B20F1 · M3 · 写入入口）**：写作入口 = 用户 sink 的可选鸭子类型方法 `on_trace_record(record)`（**不是** `TraceSink` 三方法协议成员）。本 feature 可实现一个 sink，在 `on_trace_record` 内调用 `record.to_jsonable()` 落 JSONL；MUST NOT 要求 B19F1 新增公开符号或改变 `TraceSink` 协议。
 - **D-3（B19F1 → B20F1 · M3 · span / record 关系）**：`TraceRecord` 与 `Span` 通过 `span_id` 关联，**不是** `Span` 字段；本 feature 可同时落 B18F1 `Span` 与 B19F1 `TraceRecord`（文件布局 / `kind` 字段由本 feature 的 spec 锁定），MUST NOT 把 record 塞进 `Span.attributes` / `Span.context`。
 - **D-4**：默认关闭；未注入 sink ⇒ 零文件 / 零目录；写入失败 MUST NOT 阻断图执行（原则 IV）。
+
+## 下游承接（B16F1 → 本 feature · 2026-11-23 · 只接线）
+
+- **D-05（B16F1 → B20F1 · M3 · 两套存储）**：checkpoint 与 trace 是两套存储；时间旅行 / `update_state` MUST NOT 写 trace 存储；重放产生的 trace 由既有 tracer 记录，与 checkpoint 历史互不影响。
+- **落点**：`specs/b16f1-update-state-time-travel/spec.md` 的「下游承接」D-05。

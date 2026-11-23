@@ -96,25 +96,15 @@ def test_the_error_symbol_set_is_unchanged() -> None:
     assert set(errors.__all__) == set(ERROR_EXPORT_SYMBOLS)
 
 
-@pytest.mark.parametrize(
-    ("method_name", "args", "owner"),
-    [
-        ("update_state", (None, {}), "B16F1"),
-    ],
-)
-def test_the_unimplemented_protocol_methods_still_name_their_owner(
-    method_name: str, args: tuple, owner: str
-) -> None:
-    """⑥ **未实现**的 L1 协议方法仍抛 ``NotImplementedError`` 且**点名归属 feature**。
+def test_update_state_is_delivered_without_a_saver() -> None:
+    """⑥ **B16F1 已交付**：``update_state`` 不再抛 ``NotImplementedError``。
 
-    ⚠️ 拆分而不删（B15F1 · R-1）：``get_state`` / ``get_state_history`` 已交付 ⇒ 从
-    参数化列表移出；保留 ``update_state`` → B16F1。已实现的读取面另见下方断言。
+    ⚠️ 拆分而不删（B16F1 · RED-3）：原参数化列表只余 ``update_state`` → B16F1；
+    交付后改为正面断言「未挂 saver ⇒ ``ValueError``」。
     """
     compiled = _compiled()
-    method = getattr(compiled, method_name)
-    with pytest.raises(NotImplementedError) as excinfo:
-        method(*args)
-    assert owner in str(excinfo.value)
+    with pytest.raises(ValueError):
+        compiled.update_state({"thread_id": "t"}, {})
 
 
 def test_state_read_methods_are_delivered() -> None:

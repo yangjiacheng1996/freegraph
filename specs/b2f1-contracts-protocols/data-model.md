@@ -158,7 +158,7 @@
 | `get_graph` | `(*, xray: bool = False) -> Graph` | **图结构** |
 | `get_state` | `(config: RunConfig \| Mapping[str, Any] \| None) -> StateSnapshot \| None` | **状态快照**（**查不到返回空值**，不抛异常）· ⚠️ **2026-11-22 · B15F1 回溯修订（✅ 已落地）**：`config` 注解**已**放宽为 `RunConfig \| Mapping[str, Any] \| None`；返回类别不变 |
 | `get_state_history` | `(config: RunConfig \| Mapping[str, Any] \| None) -> Iterator[StateSnapshot]` | **状态快照迭代器** · ⚠️ **2026-11-22 · B15F1 回溯修订（✅ 已落地）**：`config` 注解**已**放宽为 `RunConfig \| Mapping[str, Any] \| None`；返回类别不变 |
-| `update_state` | `(config: RunConfig, values: StateDict, as_node: str \| None = None) -> StateSnapshot` | **状态快照** |
+| `update_state` | `(config: RunConfig, values: StateDict, as_node: str \| None = None) -> StateSnapshot` | **状态快照** · ⚠️ **2026-11-23 · B16F1 回溯修订（拆分而不删）**：自 B16F1 起返回类别改为 **`RunConfig`**、`config` 注解放宽为 `RunConfig \| Mapping[str, Any] \| None`；参数名 / 顺序不变；原冻结注记保留为历史 |
 
 - **已冻结**：六个方法的**返回类别** + **参数名（占位名 · B2F1 复核裁定）** +
   `get_state` 的**空值语义**（不抛异常）。

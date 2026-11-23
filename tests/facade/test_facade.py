@@ -220,20 +220,20 @@ class TestCompileIsWired:
         graph.compile()  # type: ignore[attr-defined]
         assert set(vars(graph)) == before
 
-    def test_compile_returns_a_product_but_capability_methods_are_not_implemented(
+    def test_compile_returns_a_product_with_capability_methods_delivered(
         self, facade: object
     ) -> None:
-        """产物返回后，剩余能力面方法仍抛 ``NotImplementedError``（未越界）。"""
+        """产物返回后，能力面方法已交付；未挂 saver 时显式失败。"""
         graph = _valid_graph(facade)
         compiled = graph.compile()  # type: ignore[attr-defined]
         assert not hasattr(graph, "invoke")
         from freegraph.contracts.graph import Graph
 
         assert isinstance(compiled.get_graph(), Graph)
-        # ⚠️ 拆分而不删（B15F1 · R-1）：get_state / get_state_history 已交付 ⇒ 移出列表，
-        # 改为「未挂 saver ⇒ ValueError」；保留 update_state → B16F1 的未实现断言。
-        with pytest.raises(NotImplementedError):
-            compiled.update_state({}, {})
+        # ⚠️ 拆分而不删（B16F1 · RED-2）：原断言 update_state 抛 NotImplementedError；
+        # 交付后改为「未挂 saver ⇒ ValueError」。
+        with pytest.raises(ValueError):
+            compiled.update_state({"thread_id": "t"}, {})
         with pytest.raises(ValueError):
             compiled.get_state({"thread_id": "t"})
         with pytest.raises(ValueError):

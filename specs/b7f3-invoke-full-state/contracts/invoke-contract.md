@@ -114,6 +114,11 @@
 
 > **状态更新（2026-11-22）**：B15F1 已交付`get_state` / `get_state_history` 的 `config`
 > 注解放宽；B8F2 已交付 `stream`；`update_state` 待 B16F1。
+>
+> ⚠️ **回溯修订（B16F1 · 2026-11-23 · 拆分而不删）**：B16F1 的裁定 1 已冻结
+> `CompiledGraph.update_state` 的 `config` 注解放宽为 `RunConfig | Mapping[str, Any] | None`
+> **且返回类别改为 `RunConfig`**；自 B16F1 实现起生效，**参数名 / 顺序不变**。
+> 载体边界仍按本 feature 裁定 5 / CF-05。新口径见 B16F1 spec 裁定 1 / R-1。
 
 ---
 

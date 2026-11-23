@@ -70,13 +70,12 @@ class TestCapabilitySurface:
         for name in CAPABILITY_METHODS:
             assert hasattr(compiled, name), name
 
-    def test_each_unready_method_raises_not_implemented_naming_owner(self) -> None:
+    def test_update_state_is_delivered_without_a_saver(self) -> None:
         compiled = build_minimal_graph().compile()
-        # ⚠️ 拆分而不删（B15F1 · R-1）：get_state / get_state_history 已交付 ⇒ 移出列表；
-        # 保留 update_state → B16F1 的「未实现 + 点名」断言。
-        with pytest.raises(NotImplementedError) as excinfo:
-            compiled.update_state({}, {})
-        assert "B16F1" in str(excinfo.value)
+        # ⚠️ 拆分而不删（B16F1 · RED-1）：原断言 update_state 抛 NotImplementedError
+        # 且点名 B16F1；交付后改为正面断言：未挂 saver ⇒ ValueError。
+        with pytest.raises(ValueError):
+            compiled.update_state({"thread_id": "t"}, {})
 
     def test_get_state_is_delivered_without_a_saver(self) -> None:
         """B15F1：已交付 ⇒ 未挂 saver / 缺 thread_id 时抛 ``ValueError``（不是 NotImplementedError）。"""

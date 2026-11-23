@@ -49,9 +49,19 @@ class StreamCheckpointWriter:
         self._run_config = run_config
         self.current_checkpoint_id: str | None = None
 
+    def _write_config(self) -> RunConfig:
+        if self.current_checkpoint_id:
+            return config_for_checkpoint(
+                self._run_config, self.current_checkpoint_id
+            )
+        return self._run_config
+
     def prepare(self, state: Any) -> Any | None:
         """无历史 ⇒ 写惰性初始快照；有历史 ⇒ 只接续父链（返回 ``None``）。"""
-        history = self._saver.get_tuple(self._run_config)
+        # stream v1 不恢复历史：只按 thread_id 读最新，忽略用户 checkpoint_id。
+        history = self._saver.get_tuple(
+            RunConfig(thread_id=self._run_config.resolved_thread_id())
+        )
         if history is not None:
             config = getattr(history.snapshot, "config", None) or self._run_config
             self.current_checkpoint_id = checkpoint_id_of(config)
@@ -72,7 +82,7 @@ class StreamCheckpointWriter:
         """每次成功执行一轮 ⇒ 写该轮完成态快照。"""
         next_nodes = tuple(_determine_triggers(self._spec, state))
         written = put_step(
-            self._run_config,
+            self._write_config(),
             self._saver,
             state,
             _sparse_state(self._spec, state),
@@ -98,7 +108,7 @@ class StreamCheckpointWriter:
                 key = f"{task.name}:{task.path[1]}"
             produced[key] = task.interrupts[0]
         written = _write_suspend(
-            self._run_config,
+            self._write_config(),
             self._saver,
             state,
             _sparse_state(self._spec, state),

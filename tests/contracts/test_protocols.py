@@ -17,7 +17,7 @@ import inspect
 import os
 import subprocess
 import sys
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from pathlib import Path
 from typing import Any, get_args, get_origin, get_type_hints
 
@@ -28,6 +28,7 @@ from freegraph.contracts import (
     Command,
     CompiledGraph,
     NodeFunc,
+    RunConfig,
     Send,
     StateDict,
     StateSnapshot,
@@ -265,6 +266,12 @@ class TestCompiledGraph:
         """``get_state`` 的返回注解 MUST 含 ``None``（查不到返回空值）。"""
         hints = get_type_hints(CompiledGraph.get_state)
         assert hints["return"] == (StateSnapshot | None)
+
+    def test_update_state_config_and_return_are_widened(self) -> None:
+        """B16F1：``update_state`` 接受双形态 config，返回 ``RunConfig``。"""
+        hints = get_type_hints(CompiledGraph.update_state)
+        assert hints["config"] == (RunConfig | Mapping[str, Any] | None)
+        assert hints["return"] is RunConfig
 
     def test_stream_yields_pure_data_dicts(self) -> None:
         """``stream`` 的返回注解元素类型 MUST 是 ``dict[str, Any]``（**非** ``Any``）。"""

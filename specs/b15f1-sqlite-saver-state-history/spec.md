@@ -170,6 +170,11 @@ SqliteSaver.from_conn_string(conn_string: str, *, on_checkpoint=None) -> Iterato
 - 每线程从 `1` 开始单调递增；格式 `f"{n:032d}"` ⇒ 字典序 == 数值序。
 - 重启 / 新实例后，下一个 id = 该线程**已存最大 id + 1**（不是进程内计数器重置）。
 - `parent_config` = 该线程上一快照的 `config`（首条为 `None`）。
+  > ⚠️ **回溯修订（B16F1 · 2026-11-23 · 拆分而不删）**：自 B16F1 起，当
+  > `config.configurable["checkpoint_id"]` 为**非空字符串**时，`parent_config` = 该 id
+  > （显式父链，用于时间旅行分叉）；缺失 / 空串仍保持「上一快照（最新）」原语义。
+  > 运行期常规写盘携带「当前 checkpoint id」作 parent，可观察行为不变。
+  > 新口径见 `specs/b16f1-update-state-time-travel/spec.md` 裁定 3 / FR-017 / R-2。
 - `checkpoint_id` 是 `get_state` 按 id 定位、`get_state_history` 排序、`before` 过滤的**唯一**依据。
 - 同一实例内由 `threading.Lock` 串行化；`put` 的 `MAX+1` 在事务内完成。跨实例 / 跨进程不承诺严格同线程串行；id 冲突或 `database is locked` 按裁定 12 **原样传播，不额外重试**。MUST NOT 覆盖已有快照。
 
@@ -182,6 +187,9 @@ SqliteSaver.from_conn_string(conn_string: str, *, on_checkpoint=None) -> Iterato
   否则取该线程最新快照。
 - `put(config, *, values, metadata)` ⇒ 返回带新 `checkpoint_id` 的 `RunConfig`；
   `values` / `metadata` 必须是 `Mapping`（否则 `TypeError`）；快照 8 字段按 B14F1 组装。
+  > ⚠️ **回溯修订（B16F1 · 2026-11-23 · 拆分而不删）**：显式
+  > `configurable["checkpoint_id"]`（非空）⇒ `parent_config` = 该 id；缺失 / 空串仍为最新。
+  > 见 `specs/b16f1-update-state-time-travel/spec.md` 裁定 3 / FR-017 / R-2。
 - `put_writes(config, *, writes, task_id, task_path="")` ⇒ 目标由
   `configurable["checkpoint_id"]` 指定（缺 key ⇒ `KeyError`；指定 id 不存在 ⇒ `ValueError`）；
   `task_id` 非空 `str`（否则 `TypeError` / `ValueError`）。

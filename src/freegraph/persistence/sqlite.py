@@ -385,6 +385,9 @@ class SqliteSaver:
 
         values_json = _json.encode_values(values)
         metadata_json = _json.encode_metadata(metadata)
+        explicit = _checkpoint_id(config)
+        explicit_id = explicit if isinstance(explicit, str) and explicit else None
+        parent_id: str | None = None
 
         with self._lock:
             self._ensure_setup()
@@ -396,6 +399,19 @@ class SqliteSaver:
                     (thread_id,),
                 ).fetchone()
                 max_id = max_row[0] if max_row else None
+                parent_id = max_id
+                if explicit_id is not None:
+                    exists = cursor.execute(
+                        "SELECT 1 FROM checkpoints"
+                        " WHERE thread_id=? AND checkpoint_ns='' AND checkpoint_id=?",
+                        (thread_id, explicit_id),
+                    ).fetchone()
+                    if exists is None:
+                        raise ValueError(
+                            f"checkpoint_id {explicit_id!r} does not exist "
+                            f"for thread {thread_id!r}"
+                        )
+                    parent_id = explicit_id
                 sequence = int(max_id) + 1 if max_id else 1
                 checkpoint_id = f"{sequence:032d}"
                 created_at = _now_iso()
@@ -407,7 +423,7 @@ class SqliteSaver:
                     (
                         thread_id,
                         checkpoint_id,
-                        max_id,
+                        parent_id,
                         values_json,
                         metadata_json,
                         created_at,
@@ -435,9 +451,9 @@ class SqliteSaver:
                 parent_config=(
                     RunConfig(
                         thread_id=thread_id,
-                        configurable={"checkpoint_id": max_id},
+                        configurable={"checkpoint_id": parent_id},
                     )
-                    if max_id
+                    if parent_id
                     else None
                 ),
                 tasks=tuple(metadata.get("tasks") or ()),

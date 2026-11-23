@@ -2153,6 +2153,12 @@ def _run_graph_loop(
     initial_pending = bool(
         is_fresh and checkpointer is not None and current_checkpoint_id is None
     )
+
+    def _put_config() -> RunConfig:
+        if current_checkpoint_id:
+            return config_for_checkpoint(run_config, current_checkpoint_id)
+        return run_config
+
     triggered: list[str] | None = list(first_round) if first_round is not None else None
     while True:
         # ⚠️ **B8F1**：入口哨兵上的条件边 ⇒ **每轮之前**求值（**幂等**）。
@@ -2181,7 +2187,7 @@ def _run_graph_loop(
             )
             if checkpointer is not None:
                 written = _write_suspend(
-                    run_config,
+                    _put_config(),
                     checkpointer,
                     state,
                     result.state,
@@ -2197,7 +2203,7 @@ def _run_graph_loop(
             return result
         if initial_pending and checkpointer is not None:
             written = put_initial(
-                run_config,
+                _put_config(),
                 checkpointer,
                 state,
                 _sparse_state(spec, state),
@@ -2224,7 +2230,7 @@ def _run_graph_loop(
                 # ⚠️ **挂起时** MUST **写**快照 + **待写入**（FR-012）⇒ ⇒
                 # 挂起态**可被再次恢复**（闭环**可重复** · SC-013）。
                 written = _write_suspend(
-                    run_config,
+                    _put_config(),
                     checkpointer,
                     state,
                     result.state,
@@ -2279,7 +2285,7 @@ def _run_graph_loop(
             )
             if checkpointer is not None:
                 written = _write_suspend(
-                    run_config,
+                    _put_config(),
                     checkpointer,
                     state,
                     result.state,
@@ -2300,7 +2306,7 @@ def _run_graph_loop(
             )
             if not skip_step_snapshot:
                 written = put_step(
-                    run_config,
+                    _put_config(),
                     checkpointer,
                     state,
                     _sparse_state(spec, state),
@@ -2319,7 +2325,9 @@ def _run_graph_loop(
         tasks=tuple(tasks),
     )
     if static_resume and checkpointer is not None:
-        _clear_static_suspension(run_config, checkpointer, state, result.state)
+        _clear_static_suspension(
+            _put_config(), checkpointer, state, result.state
+        )
     return result
 
 
@@ -2545,6 +2553,30 @@ def run_graph(
         )
 
 
+def _write_branch_anchor(
+    run_config: RunConfig,
+    checkpointer: Any,
+    base_snapshot: Any,
+    base_id: str,
+    scheduler: Mapping[str, Any],
+) -> str:
+    """写一条 branch anchor（父链 = 基准；pending 不复制）。"""
+    anchor_metadata = {
+        "next": tuple(getattr(base_snapshot, "next", ()) or ()),
+        "interrupts": (),
+        "tasks": (),
+        "suspension_kind": scheduler.get("suspension_kind"),
+        "static_ack": scheduler.get("static_ack"),
+        "scheduler": dict(scheduler),
+    }
+    written = checkpointer.put(
+        config_for_checkpoint(run_config, base_id),
+        values=dict(base_snapshot.values),
+        metadata=anchor_metadata,
+    )
+    return checkpoint_id_of(written) or base_id
+
+
 def _first_graph(
     spec: GraphSpec,
     input: StateDict | None,
@@ -2558,9 +2590,30 @@ def _first_graph(
     route_config: Any = None,
 ) -> SuperStepResult | InterruptResult:
     """**首次运行路径**（输入**不是** ``Command`` · spec FR-013 末两行）。"""
-    history = None
-    if checkpointer is not None:
+    explicit_id = checkpoint_id_of(run_config)
+    if explicit_id:
+        checkpoint_ns = run_config.configurable.get("checkpoint_ns")
+        if checkpoint_ns not in (None, ""):
+            raise ValueError(
+                "checkpoint_ns is not supported in v1 (no subgraphs)"
+            )
+        if checkpointer is None:
+            raise ValueError(
+                "No checkpointer set: replay from checkpoint_id "
+                f"{explicit_id!r} requires compile(checkpointer=...)"
+            )
         history = checkpointer.get_tuple(run_config)
+        if history is None:
+            raise ValueError(
+                f"checkpoint_id {explicit_id!r} does not exist for "
+                f"thread_id {run_config.resolved_thread_id()!r}"
+            )
+    else:
+        history = (
+            checkpointer.get_tuple(run_config)
+            if checkpointer is not None
+            else None
+        )
     if history is None:
         # ⚠️ **全新会话** ⇒ 直接按输入写入通道 ⇒ ⇒ 入口节点由 ``__start__``
         # 边触发（**纯边触发**模型 · 上游同款）。
@@ -2587,8 +2640,49 @@ def _first_graph(
     current_checkpoint_id = checkpoint_id_of(snapshot_config)
     static_kind = scheduler_data.get("suspension_kind")
     static_ack = scheduler_data.get("static_ack")
+    snapshot_next = tuple(getattr(snapshot, "next", ()) or ())
+    scheduler_fanout = scheduler_data.get("fanout") or {}
+    snapshot_metadata = getattr(snapshot, "metadata", None)
+    is_branch_anchor = bool(
+        isinstance(snapshot_metadata, Mapping)
+        and snapshot_metadata.get(
+            "_freegraph_branch_anchor"
+        )
+    )
+
+    # **正常终态** replay 是 no-op：不执行节点、零新快照（SC-016）。
+    normal_terminal = bool(
+        not snapshot_next
+        and not scheduler_fanout
+        and static_kind not in (STATIC_BEFORE, STATIC_AFTER)
+        and not pending_writes
+    )
+    if normal_terminal and (
+        input is None or (isinstance(input, dict) and not input)
+    ):
+        _restore_scheduler(state, scheduler_data)
+        _restore_channels(spec, state, snapshot.values)
+        return SuperStepResult(
+            state=_sparse_state(spec, state),
+            executed=(),
+            node_writes={},
+            steps=0,
+            tasks=(),
+        )
+
     _restore_scheduler(state, scheduler_data)
     _restore_channels(spec, state, snapshot.values)
+
+    if explicit_id and not is_branch_anchor:
+        base_id = current_checkpoint_id or explicit_id
+        current_checkpoint_id = _write_branch_anchor(
+            run_config,
+            checkpointer,
+            snapshot,
+            base_id,
+            scheduler_data,
+        )
+
     interrupts = _pending_interrupts(pending_writes)
     is_static = static_kind in (STATIC_BEFORE, STATIC_AFTER) and not interrupts
     if input is None or (is_static and isinstance(input, dict) and not input):
@@ -2654,7 +2748,9 @@ def _resume_graph(
         raise InterruptError(reason=InterruptError.REASON_RESUME_VALUE_REQUIRED)
     if checkpointer is None:
         raise InterruptError(reason=InterruptError.REASON_CHECKPOINTER_REQUIRED)
-    history = checkpointer.get_tuple(run_config)
+    # B16F1 X-04：恢复**只读该 thread 的最新快照**（忽略旧 checkpoint_id）。
+    latest_config = RunConfig(thread_id=run_config.resolved_thread_id())
+    history = checkpointer.get_tuple(latest_config)
     if history is None:
         raise InterruptError(reason=InterruptError.REASON_NO_PENDING_INTERRUPT)
     snapshot = history.snapshot

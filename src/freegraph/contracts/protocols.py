@@ -245,7 +245,9 @@ class CompiledGraph(Protocol):
     ``get_graph``        ``(*, xray=False) -> Graph``                        **图结构**
     ``get_state``        ``(config) -> StateSnapshot | None``                **状态快照**
     ``get_state_history`` ``(config) -> Iterator[StateSnapshot]``            **状态快照迭代器**
-    ``update_state``     ``(config, values, as_node=None) -> StateSnapshot`` **状态快照**
+    ``update_state``     ``(config, values, as_node=None) -> RunConfig`` **新分支运行配置**
+                         ⚠️ **自 B16F1 起**：``config: RunConfig | Mapping[str, Any] | None``
+                         · 返回类别由 ``StateSnapshot`` 改为 ``RunConfig``
     =================== ================================================== ==========================
 
     **已冻结**：六个方法的**返回类别** + **参数名**（占位名，见下注）
@@ -263,7 +265,7 @@ class CompiledGraph(Protocol):
     下游 feature 确需改名者 MUST 走**契约修订**流程，MUST NOT 就地改型。
 
     **挂起**：各方法的**行为细节与实现** —— ``invoke`` → **B7F3（已交付 · 签名已放宽）**、``stream`` →
-    B8F2（mode 枚举）、状态查询 → B15F1、``update_state`` → B16F1。
+    B8F2（mode 枚举）、状态查询 → B15F1（已交付）、``update_state`` → B16F1（已交付）。
     **子图实现属 v2**（C26）；v1 只保 ``get_graph(xray=)`` 的**签名兼容**。
 
     **对应契约**：C10（编译）/ C11（执行）/ C12（流式）/ C13（图结构导出）。
@@ -294,5 +296,8 @@ class CompiledGraph(Protocol):
     ) -> Iterator[StateSnapshot]: ...
 
     def update_state(
-        self, config: RunConfig, values: StateDict, as_node: str | None = None
-    ) -> StateSnapshot: ...
+        self,
+        config: RunConfig | Mapping[str, Any] | None,
+        values: StateDict,
+        as_node: str | None = None,
+    ) -> RunConfig: ...

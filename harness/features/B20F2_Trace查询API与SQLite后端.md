@@ -202,3 +202,8 @@
 
 - **D-06（B15F1 → B20F2 · M3 · 两套 SQLite 存储）**：trace 的 SQLite 后端与本 feature 的 checkpoint SQLite 后端是**两套存储**；MUST NOT 共用表 / 文件 / 连接；`SqliteTraceStore` 的 schema 与 `SqliteSaver` 的 schema 互不影响。
 - **落点**：`specs/b15f1-sqlite-saver-state-history/spec.md` 的「下游承接」D-06。
+
+## 下游承接（B16F1 → 本 feature · 2026-11-23 · 只接线）
+
+- **D-05（B16F1 → B20F2 · M3 · 两套存储）**：checkpoint 与 trace 是两套存储；时间旅行 / `update_state` MUST NOT 写 trace 存储；重放产生的 trace 由既有 tracer 记录，与 checkpoint 历史互不影响。
+- **落点**：`specs/b16f1-update-state-time-travel/spec.md` 的「下游承接」D-05。
