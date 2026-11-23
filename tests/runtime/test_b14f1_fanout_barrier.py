@@ -90,7 +90,8 @@ def test_barrier_seen_survives_checkpoint_and_target_runs_once() -> None:
     cfg = RunConfig(thread_id="barrier")
     paused = run_graph(spec, checkpointer=saver, config=cfg)
     assert isinstance(paused, InterruptResult)
-    assert calls == ["a", "b"]
+    # a / b 同轮并发 ⇒ 记录顺序不可观察；只断言两者都跑过（屏障语义）。
+    assert sorted(calls) == ["a", "b"]
 
     resumed = run_graph(spec, None, checkpointer=saver, config=cfg)
     assert not isinstance(resumed, InterruptResult)
