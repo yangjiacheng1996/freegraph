@@ -24,3 +24,5 @@
 tests/gates/test_gates.py::test_egress_attribution_records_user_egress :: 需要建立一次真实连接以验证「用户出站」归因（FR-010 ③(b1)）；断网下该连接必然失败（属假红，非 freegraph 缺陷）
 tests/gates/test_gates.py::test_g22_isolated_env_closure_is_empty :: 需联网安装隔离 venv 并解析依赖（FR-010 ③(b2)）；断网下 `uv venv` + `uv pip install` 必然失败（属假红，非 freegraph 缺陷）
 tests/gates/test_gates.py::test_g22_isolated_env_negative_case :: 需联网安装隔离 venv 并解析依赖（FR-010 ③(b2)）；断网下 `uv venv` + `uv pip install` 必然失败（属假红，非 freegraph 缺陷）
+tests/observability/test_b21f1_transport.py::test_minimal_grpc_receiver_parses_all_complete_spans :: 需本地回环 gRPC 接收端（bind + connect 127.0.0.1）；断网命名空间无任何网络接口（含回环）⇒ 语义上必须能建立连接（FR-010 ③(b)）
+tests/runtime/test_acceptance_script.py::test_b21f1_one_click_acceptance_script_passes :: B21F1 一键验收内含最小 gRPC 接收端（本地回环）；断网命名空间无回环 ⇒ 语义上必须能建立连接（FR-010 ③(b)）
