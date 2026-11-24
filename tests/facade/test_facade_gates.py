@@ -104,7 +104,11 @@ def _degree_downgrade_violations(
         prev_deg = degree_rank(previous[name])
         curr_deg = degree_rank(current[name])
         if name in MATRIX_ROWS_UPDATABLE_BY_B24F1:
-            if (prev_deg, curr_deg) != (DEGREE_RANK["行为等价"], DEGREE_RANK["部分等价"]):
+            allowed = curr_deg == prev_deg or (
+                prev_deg,
+                curr_deg,
+            ) == (DEGREE_RANK["行为等价"], DEGREE_RANK["部分等价"])
+            if not allowed:
                 violations.append((name, previous[name], current[name]))
         elif curr_deg < prev_deg:
             violations.append((name, previous[name], current[name]))
