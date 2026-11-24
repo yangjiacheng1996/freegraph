@@ -5,6 +5,10 @@
 [architecture-gates.md](./architecture-gates.md)（G21 / G22 / G23）· [research.md](../research.md)（D-02 ~ D-06）
 **契约性质**: **冻结面** —— 本文件定义**依赖红线的可判定口径**；改口径 = 改冻结面
 
+> **2026-11-24 更新（B21F1 / 宪法 v1.17.0）**：extras 面新增 **v1.0 `[otlp]` 具名例外**；
+> 其余四个 extra 仍归 v2.0。完整 extras 闭包由 **12 → 19 个包**；本文件中「四个 extra」
+> 的表述在 B21F1 落地后应理解为 **4 个 v2.0 extras + 1 个 v1.0 `[otlp]`**。
+>
 > **作用域（D12 · 裁定 6）**：本契约约束的对象是 **freegraph 自己**——
 > 它的**依赖声明**、它的 **import**、它的**网络行为**；
 > **不**约束用户脚本装了什么。
@@ -16,7 +20,7 @@
 
 | 环境 | 装什么 | 断言 | 门禁 |
 |---|---|---|---|
-| ① **依赖断言环境** | **7/7 全装环境**（基础包 **+ 四个 extras 的传递依赖已安装** —— 否则 G21 的递归展开**无法取证**）<br>**⚠️ v1.0（裁定 26）**：装的是「**v2.0 预验证依赖**」，**不是** v1.0 的依赖（v1.0 发行元数据零依赖）；判据对象 = `contracts/extras-v2.toml` | 递归展开 freegraph 自身 `Requires-Dist`（**含全部 extras 变体**）无 `langsmith` / `langchain*` / `langgraph*` / `deepagents`；`import freegraph` 后 `sys.modules` 中无 `langsmith` / `langchain_core` / `langgraph` | **G21** · **G23** |
+| ① **依赖断言环境** | **7/7 全装环境**（基础包 **+ 四个 extras 的传递依赖已安装** —— 否则 G21 的递归展开**无法取证**）<br>**⚠️ v1.0（裁定 26 · 宪法 v1.17.0）**：装的是「**extras 预验证依赖**」（四个 v2.0 extras + v1.0 `[otlp]` 具名例外），**除 `[otlp]` 外** v1.0 发行元数据不声明依赖；判据对象 = `contracts/extras-v2.toml` | 递归展开 freegraph 自身 `Requires-Dist`（**含全部 extras 变体**）无 `langsmith` / `langchain*` / `langgraph*` / `deepagents`；`import freegraph` 后 `sys.modules` 中无 `langsmith` / `langchain_core` / `langgraph` | **G21** · **G23** |
 | ② **隔离环境** | **只装基础包的隔离 venv**（零必装依赖 · 不装任何 extra） | 第三方依赖闭包 **== 空集** + `import freegraph` 后 `sys.modules` 无 langchain 家族（SC-002 · FR-005 ②） | **G22** |
 | ③ **验收环境** | freegraph + **脚本自带的** `langchain` 系 | **反向断言**：freegraph **运行期从不** import `langchain` / `langchain_core`；freegraph 自身**零出站** | **G25**（导入图）· **G27**（零出站） |
 
@@ -100,8 +104,8 @@ png       = ["playwright>=1.40"]
 > MUST **判失败并指名该包**（「未安装 ⇒ 无法取证」），**MUST NOT** 静默 `except` 跳过 ——
 > 静默跳过会让「闭包只展开到第一层」伪装成「闭包干净」，使**间接引入**的黑名单包永远抓不到
 > （spec Edge Case「递归展开 MUST 走到闭包末端」）。
-> ⇒ 推论：**CI 必须装齐四个 extras 的依赖**（ci-matrix §2 **步骤 5.5** · **实测**：四个 extras 的完整闭包
-> **恰好 12 个包**，与 G3 的白名单逐一命中）。
+> ⇒ 推论：**CI 必须装齐 extras 的依赖**（ci-matrix §2 **步骤 5.5** · **实测**：四个 v2.0 extras
+> + v1.0 `[otlp]` 的完整闭包 **12 → 19 个包**，与 G3 的白名单逐一命中）。
 
 > ⚠️ **既有门禁 G3 的 `with_extras=True` 语义与此不同**（它把传递依赖的 extras 也展开）⇒ **本 feature 修正 G3**（见 §6）。
 > **📌 失配机制订正（2026-11-08 分析轮订正 · H9⑥）**：**实际变红的是「白名单子集断言」**；
@@ -241,7 +245,7 @@ MIT  ·  Apache-2.0  ·  BSD-2-Clause  ·  BSD-3-Clause  ·  PSF-2.0
 
 | 项 | 现状 | 本 feature 改为 | 方向 |
 |---|---|---|---|
-| `CONSTITUTION_DEPENDENCY_WHITELIST` | 4 个**占位**包名 | **四个 extra 的真实闭包确切包名集合**（有限 · 逐个列名 · **无通配符 · 无前缀匹配**） | **更精确** |
+| `CONSTITUTION_DEPENDENCY_WHITELIST` | 4 个**占位**包名 | **四个 v2.0 extras + v1.0 `[otlp]` 的真实闭包确切包名集合**（有限 · 逐个列名 · **无通配符 · 无前缀匹配**） | **更精确** |
 | extras 变体枚举 | `with_extras=True` ⇒ 传递依赖的 extras 也展开（**过近似**） | **只枚举 freegraph 自身的 extras 变体**（§2.3） | **更正确** |
 | 许可证取值 | `License-Expression` → `License`（**2 级**）+ **skip-on-missing** | **不动**（判据零改动） | — |
 

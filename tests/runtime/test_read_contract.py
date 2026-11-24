@@ -518,17 +518,22 @@ def test_the_kernel_imports_no_upstream_package() -> None:
     assert offenders == []
 
 
-def test_the_release_metadata_declares_no_requirement_at_all() -> None:
-    """判据 **A5** · SC-008：``Requires-Dist`` **整体为空**。"""
-    assert importlib.metadata.requires("freegraph") in (None, [])
+def test_the_release_metadata_declares_no_base_requirement() -> None:
+    """判据 **A5** · SC-008：基础 ``Requires-Dist`` 为空；仅 `[otlp]` 具名例外。"""
+    requires = importlib.metadata.requires("freegraph") or []
+    non_extra = [item for item in requires if "extra ==" not in item]
+    assert non_extra == [], non_extra
+    for item in requires:
+        _head, _sep, marker = item.partition(";")
+        assert "extra ==" in marker and "otlp" in marker, item
 
 
-def test_the_project_declares_no_optional_dependency_extra() -> None:
-    """宪法 v1.7.0：v1.0 的 ``pyproject.toml`` MUST **NOT** 含
-    ``[project].optional-dependencies``。"""
+def test_the_project_declares_only_the_otlp_optional_dependency_extra() -> None:
+    """宪法 v1.17.0：v1.0 的 ``[project].optional-dependencies`` 只允许 `otlp`。"""
     data = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
-    assert "optional-dependencies" not in data.get("project", {})
+    extras = data.get("project", {}).get("optional-dependencies", {})
+    assert set(extras) == {"otlp"}, extras
 
 
 # ── T030 · 冻结面断言 ─────────────────────────────────────────────────

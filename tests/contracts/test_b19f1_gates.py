@@ -50,16 +50,27 @@ def test_new_modules_have_no_forbidden_imports_or_env_reads(src_dir: Path) -> No
         src_dir / "freegraph" / "observability" / "_query.py",
         src_dir / "freegraph" / "observability" / "_sqlite_store.py",
         src_dir / "freegraph" / "runtime" / "_span_hook.py",
+        src_dir / "freegraph" / "observability" / "_otlp_mapping.py",
+        src_dir / "freegraph" / "observability" / "_otlp_transport.py",
+        src_dir / "freegraph" / "observability" / "_otlp_exporter.py",
     ]
     forbidden_roots = {"langchain", "langgraph", "langsmith", "opentelemetry"}
+    otlp_files = {"_otlp_mapping.py", "_otlp_transport.py", "_otlp_exporter.py"}
+    otlp_allowed = {"opentelemetry", "grpc"}
     for path in paths:
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    assert alias.name.split(".")[0] not in forbidden_roots, (path, alias.name)
+                    root = alias.name.split(".")[0]
+                    if path.name in otlp_files and root in otlp_allowed:
+                        continue
+                    assert root not in forbidden_roots, (path, alias.name)
             elif isinstance(node, ast.ImportFrom) and node.module:
-                assert node.module.split(".")[0] not in forbidden_roots, (path, node.module)
+                root = node.module.split(".")[0]
+                if path.name in otlp_files and root in otlp_allowed:
+                    continue
+                assert root not in forbidden_roots, (path, node.module)
             elif isinstance(node, ast.Name) and node.id in {"environ", "getenv"}:
                 raise AssertionError(f"{path} reads environment variable")
 
@@ -73,7 +84,18 @@ def test_no_network_client_is_used_by_new_modules(src_dir: Path) -> None:
         "_payloads.py",
         "_query.py",
         "_sqlite_store.py",
+        "_otlp_mapping.py",
+        "_otlp_exporter.py",
     ):
         text = (src_dir / "freegraph" / "observability" / name).read_text(encoding="utf-8")
         assert "socket" not in text
         assert "requests" not in text
+    transport = (src_dir / "freegraph" / "observability" / "_otlp_transport.py").read_text(
+        encoding="utf-8"
+    )
+    assert "socket" not in transport
+    assert "requests" not in transport
+    assert "grpc" in transport
+    for name in ("_otlp_mapping.py", "_otlp_exporter.py"):
+        text = (src_dir / "freegraph" / "observability" / name).read_text(encoding="utf-8")
+        assert "grpc" not in text, name

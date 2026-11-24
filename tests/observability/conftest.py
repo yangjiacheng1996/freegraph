@@ -411,3 +411,76 @@ def assert_rows_equal(left: list[dict[str, Any]], right: list[dict[str, Any]]) -
 def query_by_kind(rows: list[dict[str, Any]], kind: str) -> list[dict[str, Any]]:
     """按 ``kind`` 过滤查询结果（测试辅助，不改变原列表）。"""
     return [row for row in rows if row.get("kind") == kind]
+
+
+# ── B21F1 共享 helpers ───────────────────────────────────────────────────
+
+
+class RecordingSpanExporter:
+    """捕获 ``ReadableSpan`` 的鸭子类型 exporter（返回 ``None`` = 成功）。"""
+
+    def __init__(self) -> None:
+        self.spans: list[Any] = []
+        self.calls = 0
+
+    def export(self, spans: Any) -> None:
+        self.calls += 1
+        self.spans.extend(spans)
+        return None
+
+
+def make_model_span(**overrides: Any) -> Any:
+    """构造节点内模型 span（``gen_ai.operation.name="chat"``）。"""
+    values: dict[str, Any] = {
+        "name": "chat test-model",
+        "attributes": {
+            "gen_ai.operation.name": "chat",
+            "gen_ai.request.model": "test-model",
+        },
+    }
+    values.update(overrides)
+    return make_span(**values)
+
+
+def make_tool_span(*, tool_name: str = "add", call_id: str | None = None, **overrides: Any) -> Any:
+    """构造节点内工具 span（``gen_ai.operation.name="execute_tool"``）。"""
+    attributes: dict[str, Any] = {
+        "gen_ai.operation.name": "execute_tool",
+        "gen_ai.tool.name": tool_name,
+    }
+    if call_id is not None:
+        attributes["gen_ai.tool.call.id"] = call_id
+    values: dict[str, Any] = {
+        "name": f"execute_tool {tool_name}",
+        "attributes": attributes,
+    }
+    values.update(overrides)
+    return make_span(**values)
+
+
+def assert_readable_span(
+    readable: Any,
+    *,
+    name: str | None = None,
+    span_id: int | None = None,
+    parent_span_id: int | None = None,
+    trace_id: int | None = None,
+    attributes: dict[str, Any] | None = None,
+) -> None:
+    """校验一个官方 ``ReadableSpan`` 的关键字段。"""
+    if name is not None:
+        assert readable.name == name
+    if span_id is not None:
+        assert readable.context.span_id == span_id
+    if trace_id is not None:
+        assert readable.context.trace_id == trace_id
+    if parent_span_id is not None:
+        if parent_span_id == 0:
+            assert readable.parent is None or readable.parent.span_id == 0
+        else:
+            assert readable.parent is not None
+            assert readable.parent.span_id == parent_span_id
+    if attributes is not None:
+        for key, value in attributes.items():
+            assert key in readable.attributes
+            assert readable.attributes[key] == value

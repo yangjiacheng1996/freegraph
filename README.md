@@ -46,13 +46,15 @@ run graph-based AI workflows without LangSmith or external account dependencies.
 
 ## 依赖面
 
-**v1.0 零依赖** —— 发行元数据里**没有任何依赖包名**（`Requires-Dist` 为空）：
+**基础安装零依赖** —— `pip install freegraph` 的 `dependencies` 为空；
+发行元数据里**唯一**的可选依赖是 B21F1 的 `[otlp]` 具名例外（宪法 v1.17.0）：
 
 ```bash
-pip install freegraph     # site-packages 里只有 freegraph 自己
+pip install freegraph          # site-packages 里只有 freegraph 自己
+pip install "freegraph[otlp]"  # 可选：OTLP gRPC 导出（默认不装）
 ```
 
-> **v2.0 预告**：计划提供四个**可选 extra**（`[pydantic]` 结构化状态 schema ·
+> **v2.0 预告**：另有四个**可选 extra**（`[pydantic]` 结构化状态 schema ·
 > `[checkpoint]` checkpoint 序列化 · `[otel]` OpenTelemetry 可观测内核 ·
 > `[png]` 本地 PNG 渲染）—— 它们的声明与**许可证 / 黑名单预验证**已在仓库内完成
 > （`specs/b3f1-scaffold-ci-gates/contracts/extras-v2.toml`），**v2.0 落地时才进入
@@ -92,6 +94,39 @@ uv run --no-project --python .venv python harness/scripts/gates/gate_G21_depende
 > 模型 span 名称：`chat <model>`（可读模型名时）或 `chat`；节点 span 名称 = 节点内部名。
 > 本 feature **不写** `gen_ai.system`（已弃用）；provider 标识如未来写入只使用
 > `gen_ai.provider.name`。
+
+## OTLP 导出（B21F1 · 可选 `[otlp]`）
+
+把 freegraph 自有的 `Span` 以**标准 OTLP** 导出到用户**显式提供**的端点 / 导出器；
+默认关闭、无默认端点、不读环境变量、导出失败不阻断图执行。
+
+```python
+from freegraph.observability import OtlpExporter
+
+# 端点模式（gRPC；本地明文示例）
+exporter = OtlpExporter(endpoint="127.0.0.1:4317", insecure=True)
+graph = builder.compile(tracer=exporter)
+
+# 导出器模式（例如用户自装官方 HTTP exporter）
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+exporter = OtlpExporter(exporter=OTLPSpanExporter(endpoint="http://127.0.0.1:4318/v1/traces"))
+```
+
+- `endpoint=` 只接受 `host:port`（不带 URL scheme）；`insecure=False` 默认 TLS。
+- `headers` / `timeout` 仅端点模式；`exporter=` 模式由用户对象自行负责 TLS / 认证。
+- `[otlp]` 只含官方 gRPC 协议实现 + OTel SDK；**不含** `certifi` / HTTP exporter /
+  `opentelemetry-exporter-otlp` 元包。
+- 三个后端示例：[`harness/examples/B21F1/`](harness/examples/B21F1/)（OpenLIT / Langfuse / Phoenix）。
+
+**能力分工 / 重叠说明**：freegraph 负责**本地运行时诊断**（图视图、状态快照、
+checkpoint / time-travel、交互式调试）；OpenLIT / Langfuse / Phoenix 负责**外部 trace
+浏览 / 分析 / 评测 / Prompt 管理**——重叠是**分层互补**，不是替代关系。
+**三示例并列、无默认推荐后端**。
+
+**已知失效风险**：OpenLIT 旧路径 `openlit.io/docs` **404**，现行文档为
+`https://docs.openlit.io/latest/overview`（as-of 2026-11-24，仓库 README 可作回退）；
+OTel 后端 API / 版本变更可能使示例失效；HTTP exporter 是**用户侧依赖**（其闭包含
+`certifi`（MPL-2.0），不进 freegraph 的 `[otlp]`）；Phoenix 为 Elastic-2.0 ⇒ **只连不嵌**。
 
 ## API 兼容矩阵
 

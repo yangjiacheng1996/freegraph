@@ -6,6 +6,13 @@
 [research.md](../research.md)（D-08 · D-10 · D-13 · D-14）
 **契约性质**: **冻结面** —— 矩阵的**形状**与**分层**即实现契约
 
+> **2026-11-24 更新（B21F1 / 宪法 v1.17.0）**：extras 面新增 **v1.0 `[otlp]` 具名例外**
+> （仅此一个 extra 进入 v1.0；其余四个仍归 v2.0）。因此本文件中「四个 extras」的
+> 安装范围 / 闭包数量在 B21F1 落地后应理解为 **4 个 v2.0 extras + 1 个 v1.0 `[otlp]`**；
+> 完整闭包由 **12 → 19 个包**。步骤 5.5 MUST 追加
+> `opentelemetry-exporter-otlp-proto-grpc>=1.20`（或 `.[otlp]`），其余安装范围 / 7 作业形状
+> / required check 名 **不变**。
+
 ---
 
 ## 1. 作业矩阵（7 个作业 · FR-015 ④ · SC-012）
@@ -95,7 +102,7 @@
 | 3.5 | **`uv venv --python <矩阵档位>`** | **建 venv**（**必做** —— `uv pip install` 在**无活动虚拟环境**时报 `error: No virtual environment found` 并以**退出码 2** 失败（**实测**）⇒ 无此步则**步骤 4 在 7/7 作业上直接失败**。`setup-python` 的产物与本 venv **不是同一个解释器**；真正的解释器由本步决定（用**矩阵档位**而非 `setup-python` 的解释器，以保证 Python 版本与矩阵一致） |
 | 4 | `uv pip install --python .venv --group dev` | 装**开发期依赖组**（`pytest` + `packaging` · PEP 735）—— **不进发行包**、**不进 `Requires-Dist`** ⇒ 基础闭包仍为空集（G3 不受影响）。**显式 `--python .venv`**（**跨平台** · 不依赖隐式环境变量 ⇒ 后续 step 漏传 env 也不会跑偏） |
 | 5 | `uv pip install --python .venv -e .` | 装**发行形态**（`src/` 布局 ⇒ 可编辑安装） |
-| 5.5 | `uv pip install --python .venv "pydantic>=2.0" "ormsgpack>=1.0" "opentelemetry-api>=1.20" "opentelemetry-sdk>=1.20" "playwright>=1.40"` | **v2.0 extras 的「预验证」依赖**（**不是** v1.0 的依赖 · 裁定 26 · 宪法 v1.7.0）—— 只装 Python 包、不装浏览器二进制。**全部 7 个作业 MUST 执行** ⇒ G21 / G23 对 `contracts/extras-v2.toml` 的递归取证可完成（architecture-gates G21 / G23） |
+| 5.5 | `uv pip install --python .venv "pydantic>=2.0" "ormsgpack>=1.0" "opentelemetry-api>=1.20" "opentelemetry-sdk>=1.20" "opentelemetry-exporter-otlp-proto-grpc>=1.20" "playwright>=1.40"` | **extras 的「预验证」依赖**（v2.0 extras + **v1.0 `[otlp]` 具名例外** · 裁定 26 / 宪法 v1.17.0）—— 只装 Python 包、不装浏览器二进制。**全部 7 个作业 MUST 执行** ⇒ G21 / G23 对 `contracts/extras-v2.toml` 的递归取证可完成（architecture-gates G21 / G23） |
 | 5.6 | `uv pip install --python .venv --group differential` | **差分夹具的依赖组**（PEP 735 · `langgraph` · **不进发行包**、**不进 `Requires-Dist`**）—— 使差分夹具在 CI 中**真实执行**（非 skip）⇒ 避免「永远 skip ⇒ 假绿」。<br>⚠️ **作业范围（2026-11-09 · B5F2 契约修订 · R-2）**：**至少 1 个作业 MUST 执行**（**实测通过**的那档 · Linux 全量档优先）· 其余作业 **MAY** 执行 ⇒ 若某档装不上上游（**3.14 / Windows / arm64** · **未实测**），该档**不装**该组并**登记** ⇒ 该档的差分用例 **skip**（**非失败**）· **MUST NOT** 静默不跑。<br>⚠️ **实测结论回填（2026-11-10 · B5F2 实现期 · T035）**：**Linux x86_64 的 3.11 与 3.14 两档实测通过**（`langgraph==1.2.11` **可安装 · 可导入** · 差分用例 **12 条全绿**）⇒ 这两档**装**该组；**macOS / Windows / arm64 四档未实测**（本机无该平台）⇒ **不装**并**登记**（`harness/verification/B5F2/manual-verification.md` §4）。<br>⚠️ **位置约束（2026-11-09 · B5F2 契约修订 · R-2）**：本步 MUST 位于**步骤 6（全量测试套件）之前** —— 否则差分用例在步骤 6 执行时**尚未装上游** ⇒ **永远 skip** ⇒ 差分证据退化为「主张」。<br>⚠️ **步骤 5.5 一字不动**（保持「只做 v2.0 extras 预验证」的**单一语义**）· §1 的 **7 个作业形状**与 §4.1 的 **7 个 required check 名零变更**（⇒ **分支保护零变更**） |
 | 6 | `uv run --no-project --python .venv python -m pytest tests/ -ra ${{ matrix.pytest_args }}`（环境变量 `FREEGRAPH_TEST_INSTALLED=1` **写在 job 的 `env:` 段**） | **全量测试套件**（平台专属用例按标记排除）· ⚠️ 本步 MUST 在**步骤 5.6 之后**执行（否则差分夹具永远 skip） |
 | 7 | **逐条**调用门禁：`uv run --no-project --python .venv python harness/scripts/gates/gate_GNN_*.py`（**G21 / G23 追加 `--project specs/b3f1-scaffold-ci-gates/contracts/extras-v2.toml`** · 裁定 26 ⇒ 判据对象 = v2.0 清单） | FR-016 · 退出码即判定 · **本步 MUST NOT 含 G22 / G27 / G28**（它们在步骤 9；**2026-11-08 分析轮订正 · M4** —— 否则 Linux 作业上 G22 / G28 会被**跑两遍**） |
@@ -145,7 +152,7 @@
 >    ⇒ **两者皆不可接受 ⇒ MUST 取并集口径**（被检查集 =（闭包包集）∪（`--root` 下扫到的 dist-info）· spec **裁定 25** / architecture-gates G23 📌 块）；
 > ② **G21** 的递归展开在第一层就终止 ⇒ spec Edge Case「递归展开 MUST 走到闭包末端」**不可判定**
 >    （「某个允许的依赖间接拉进 `langsmith`」这类违规抓不到）；
-> ③ **G3** 的 extras 闭包只剩 5 个**直接**依赖名 ⇒ 裁定 8 登记的 **12 名白名单永不触达**
+> ③ **G3** 的 extras 闭包只剩 5 个**直接**依赖名 ⇒ 裁定 8 登记的 **19 名白名单永不触达**
 >    ⇒ 「净效果 = 变严」在 CI 中**得不到兑现**。
 > ⇒ **这 5 个包的安装是 G21 / G23（对 v2.0 清单）可判定的前置条件，不是可选项**。
 > **⚠️ v1.0 的发行元数据仍是零依赖**（宪法 v1.7.0）—— 本步装的包**不进发行包、
@@ -159,12 +166,15 @@
 > 不装浏览器二进制）⇒ 安装成本可接受。
 > **⚠️ G23 的子集归属（2026-11-08 分析轮订正 · H6）**：**G23 已纳入非 Linux 子集**（§1）⇒
 > 上面的 ① 在 **7/7 作业**上都是**硬前置**（不再只是 Linux 作业的前置）。
-> **实测基准（2026-11-07 · uv 0.12.7 解析四个 extras）**：完整闭包 **恰好 12 个包**
-> —— `annotated-types` · `greenlet` · `opentelemetry-api` · `opentelemetry-sdk` ·
-> `opentelemetry-semantic-conventions` · `ormsgpack` · `playwright` · `pydantic` ·
-> `pydantic-core` · `pyee` · `typing-extensions` · `typing-inspection`
-> ⇒ **与 T003 的 12 名白名单逐一命中**（该白名单本就是「extras 已安装」环境下的产物；
-> **实测**：按 T003 ② 修正后的枚举语义，闭包**恰为**这 12 个包名）。
+> **实测基准（2026-11-07 · uv 0.12.7 解析四个 extras；2026-11-24 增补 `[otlp]` 后 19 个包）**：完整闭包 **12 → 19 个包**
+> —— `annotated-types` · `googleapis-common-protos` · `greenlet` · `grpcio` ·
+> `opentelemetry-api` · `opentelemetry-exporter-otlp-common` ·
+> `opentelemetry-exporter-otlp-proto-common` · `opentelemetry-exporter-otlp-proto-grpc` ·
+> `opentelemetry-proto` · `opentelemetry-sdk` · `opentelemetry-semantic-conventions` ·
+> `ormsgpack` · `playwright` · `protobuf` · `pydantic` · `pydantic-core` · `pyee` ·
+> `typing-extensions` · `typing-inspection`
+> ⇒ **与 T003 的 19 名白名单逐一命中**（该白名单本就是「extras 已安装」环境下的产物；
+> **实测**：按 T003 ② 修正后的枚举语义，闭包**恰为**这 19 个包名）。
 > **只装 Python 包、不装浏览器二进制**：`playwright install chromium` 由**用户**显式执行（research D-04）。
 > **⚠️ `[png]` 的后端 = `playwright`**（**宪法 v1.5.0 已列明** —— 包层白名单条里的「mermaid 相关」这一**类别式**表述**已被宪法 v1.5.0 取代**为确切包名；三条硬约束 = (a) 默认关闭 / (b) 许可证白名单 / (c) 运行期零出站）⇒ CI **只装 Python 包**即满足 (a) 与 (b) 的取证前提，**(c) 由 G27 的零出站动态断言承担**。
 > **G22 的隔离 venv 仍只装基础包**（它断言的正是「基础安装闭包 == 空集」）。

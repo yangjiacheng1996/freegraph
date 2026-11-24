@@ -5,7 +5,7 @@
 MUST NOT 出现下列网络客户端的 import 或使用 ——
 
 ``socket`` · ``ssl`` · ``http`` · ``http.client`` · ``urllib.request`` ·
-``urllib3`` · ``requests`` · ``httpx`` · ``aiohttp`` · ``websockets`` ·
+``urllib3`` · ``requests`` · ``httpx`` · ``aiohttp`` · ``websockets`` · ``grpc`` ·
 ``ftplib`` · ``smtplib`` · ``telnetlib`` · ``xmlrpc`` · ``asyncio.open_connection``
 
 **判定口径**：本扫描 MUST 以 **import 形式**判定 ⇒ 清单内的**纯 stdlib 常量
@@ -14,7 +14,7 @@ MUST NOT 出现下列网络客户端的 import 或使用 ——
 
 **唯一例外**（FR-009 ① · FR-018 ① 的「已写死的、具名例外」）：**可选的 OTLP
 exporter 模块** —— 例外 MUST 以**显式名单**表达，MUST NOT 放宽扫描域本身。
-**当前该例外名单为空**（OTLP exporter 属 B21F1）。
+**例外名单（B21F1 起）**：`freegraph.observability._otlp_transport`（仅此一个模块）。
 
 **CLI 契约**（architecture-gates.md §2.1）：``--root <路径>`` —— 被检的树根。
 
@@ -40,14 +40,25 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 SCAN_SUBPATH = "src/freegraph"
 
 
+def _source_module(rel: str) -> str:
+    """把仓库相对路径转成点号模块名（`src/freegraph/a/b.py` → `freegraph.a.b`）。"""
+    parts = list(Path(rel).with_suffix("").parts)
+    if parts and parts[0] == "src":
+        parts = parts[1:]
+    if parts and parts[-1] == "__init__":
+        parts = parts[:-1]
+    return ".".join(parts)
+
+
 def evaluate(root: Path) -> list[_gatekit.Violation]:
     """判定被检树内核的网络客户端调用 ⇒ 违规清单（空 = 合规）。"""
     violations: list[_gatekit.Violation] = []
     package_dir = root / SCAN_SUBPATH
     for path in _gatekit.iter_python_files(package_dir):
         rel = _gatekit.relative_to_root(path, root)
+        source_module = _source_module(rel)
         for lineno, module in _gatekit.scan_network_calls(path):
-            if module in _gatekit.G26_EXCEPTED_MODULES:
+            if source_module in _gatekit.G26_EXCEPTED_MODULES:
                 continue
             violations.append(
                 _gatekit.Violation(

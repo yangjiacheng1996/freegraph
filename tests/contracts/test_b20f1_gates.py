@@ -51,4 +51,4 @@ def test_base_install_dependency_closure_is_still_empty() -> None:
     data = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     project = data["project"]
     assert project.get("dependencies", []) == []
-    assert "optional-dependencies" not in project
+    assert set(project.get("optional-dependencies", {})) == {"otlp"}

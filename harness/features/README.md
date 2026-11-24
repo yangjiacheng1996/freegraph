@@ -77,8 +77,12 @@
 >
 > **状态更新（2026-11-22）**：**B20F2 已交付**（`FileTraceStore.query()` +
 > `SqliteTraceStore` 写 / 查询；四类过滤 / 组合 / 空过滤器 / 稳定排序 / 两后端逐条等价；
-> 一键验收 **A1–A6 · 35 项 PASS**；全量 **2111 passed / 8 skipped**）⇒ 下一步 **B21F1**
-> （OTLP 导出插件 + 后端对接文档；**不消费** B20F2 查询 API）。
+> 一键验收 **A1–A6 · 35 项 PASS**；全量 **2111 passed / 8 skipped**）。
+>
+> **状态更新（2026-11-24）**：**B21F1 已交付**（`OtlpExporter` + `[otlp]` 可选 extra +
+> 三后端示例；默认关闭 / 零 env / 失败隔离；一键验收 **A1–A5 · 25 项 PASS**；
+> 全量 **2426 passed / 10 skipped**）⇒ 下一步 **B24F1**（打包分发 + API 兼容矩阵 +
+> `THIRD_PARTY_NOTICES`；注意 v1.0 唯一具名例外 `[otlp]`）。
 
 > **B17（`Store` 长期记忆）已于 2026-11-05 砍掉**——理由：freegraph 是**通用图框架**
 > （智能体 / RPA 自动化 / 脚本编排 / 在一定程度上替代 `main` 函数 / 可视化工作流编排），

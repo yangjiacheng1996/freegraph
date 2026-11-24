@@ -58,6 +58,7 @@ __all__ = [
     "git_show",
     "license_evidence",
     "list_tracked_files",
+    "normalize_prose_license",
     "load_layer_registry",
     "make_isolated_copy",
     "read_requires_dist",
@@ -139,6 +140,7 @@ NETWORK_CLIENT_MODULES = (
     "httpx",
     "aiohttp",
     "websockets",
+    "grpc",
     "ftplib",
     "smtplib",
     "telnetlib",
@@ -146,10 +148,18 @@ NETWORK_CLIENT_MODULES = (
     "asyncio.open_connection",
 )
 
-#: G26 的**具名例外**（模块路径逐个列出）—— **当前为空**（OTLP exporter 属 B21F1）。
+#: G26 的**具名例外**（模块路径逐个列出）—— B21F1 起只放开 OTLP 传输模块。
 #:
 #: 例外 MUST 以**显式名单**表达，MUST NOT 放宽扫描域本身（FR-009 ① · FR-018 ①）。
-G26_EXCEPTED_MODULES: tuple[str, ...] = ()
+G26_EXCEPTED_MODULES: tuple[str, ...] = (
+    "freegraph.observability._otlp_transport",
+)
+
+#: B21F1 / 宪法 v1.17.0：**仅** `protobuf` 的散文标识归一（依据其 LICENSE 文件）。
+#: MUST NOT 扩展为通用对照表 / 家族判定 / 豁免入口（裁定 18）。
+SPDX_PROSE_NORMALIZATION: dict[str, dict[str, str]] = {
+    "protobuf": {"3-Clause BSD License": "BSD-3-Clause"},
+}
 
 #: 环境变量读取 API（属性链形态 + 导入形态）—— 与既有
 #: `tests/facade/_gatesupport.py` 的 `env_and_io_violations` **同口径**。
@@ -920,6 +930,20 @@ def license_evidence(
     if text is not None:
         return ("dist-info/licenses/ 授权文件原文", text)
     return None
+
+
+def normalize_prose_license(package: str, identifier: str) -> str:
+    """把**具名例外**中的散文标识归一为 SPDX id（其它一律原样返回）。
+
+    唯一映射：`protobuf` + 精确字符串 `3-Clause BSD License` → `BSD-3-Clause`
+    （依据其 LICENSE 文件）。MUST NOT 引入通用对照表 / 家族判定（裁定 18 ·
+    宪法 v1.17.0）。
+    """
+    normalized = normalize_package_name(package)
+    mapping = SPDX_PROSE_NORMALIZATION.get(normalized)
+    if not mapping:
+        return identifier
+    return mapping.get(identifier.strip(), identifier)
 
 
 def spdx_leaves(expression: str) -> set[str]:

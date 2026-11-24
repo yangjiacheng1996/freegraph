@@ -60,12 +60,25 @@
 >   `greenlet`（`MIT AND PSF-2.0` —— **两叶皆白名单**）· `pyee`（`MIT`）·
 >   `typing-extensions`（`PSF-2.0`）。**浏览器二进制需用户显式执行
 >   `playwright install chromium`**（属**安装期**动作，不是运行期依赖）。
+> * **`[otlp]`**（B21F1 · OTLP gRPC 导出 · **v1.0 唯一具名例外** · 宪法 v1.17.0）：
+>   `opentelemetry-api`（`Apache-2.0`）· `opentelemetry-sdk`（`Apache-2.0`）·
+>   `opentelemetry-semantic-conventions`（`Apache-2.0`）·
+>   `opentelemetry-exporter-otlp-proto-grpc`（`Apache-2.0`）·
+>   `opentelemetry-exporter-otlp-proto-common`（`Apache-2.0`）·
+>   `opentelemetry-exporter-otlp-common`（`Apache-2.0`）·
+>   `opentelemetry-proto`（`Apache-2.0`）· `googleapis-common-protos`（`Apache-2.0`）·
+>   `grpcio`（`Apache-2.0`）· `protobuf`（元数据为散文 `3-Clause BSD License`，
+>   依据其 LICENSE 文件经**仅此一包**的具名 SPDX 归一为 `BSD-3-Clause`）·
+>   `typing-extensions`（`PSF-2.0`）。
+>   **MUST NOT** 含 `opentelemetry-exporter-otlp` 元包 / HTTP exporter /
+>   `requests` / `certifi`（它们的闭包含 `certifi`（**MPL-2.0**）⇒ 必被 G23 拒）。
+>   基础安装 `dependencies = []` 不变；`[otlp]` 默认关闭。
 >
-> ⇒ **基础安装的零第三方依赖承诺不受影响**（四个 extra **默认关闭**）。
+> ⇒ **基础安装的零第三方依赖承诺不受影响**（四个 v2.0 extra + `[otlp]` **默认关闭**）。
 > ⇒ 门禁：**G23**（4 级证据链 · 5 个精确 SPDX id · fail-on-missing）逐包判定；
-> 既有 **G3** 断言 extras 闭包 ⊆ **12 名**白名单（**判据句零改动**）。
+> 既有 **G3** 断言 extras 闭包 ⊆ **19 名**白名单（**判据句零改动** · 宪法 v1.17.0）。
 > ⇒ **`[otel]` MUST NOT** 含 `opentelemetry-exporter-otlp`——其闭包含
-> `certifi`（**MPL-2.0**，不在白名单）⇒ exporter 归 **B21F1**。
+> `certifi`（**MPL-2.0**，不在白名单）⇒ exporter 归 **B21F1**（已由 `[otlp]` 的 gRPC-only 路径解决）。
 >
 > **2026-11-05 修订（宪法 v1.2.0）**：本节原登记 `typing-extensions`（`>=4.7.0`），
 > 现已**从基础安装剥离**，故**必装**登记项清空。

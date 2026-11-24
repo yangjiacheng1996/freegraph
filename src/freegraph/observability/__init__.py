@@ -9,7 +9,8 @@
 * :func:`current_span` —— 当前上下文中**最内层**的活动 span（B19F1 · C24）；
 * :class:`TraceRecord` —— 每节点任务一条补充 trace 记录（B19F1）；
 * :class:`FileTraceStore` —— 本地 JSONL 写入 + 查询后端（B20F1 / B20F2）；
-* :class:`SqliteTraceStore` —— 本地 SQLite 写入 + 查询后端（B20F2）。
+* :class:`SqliteTraceStore` —— 本地 SQLite 写入 + 查询后端（B20F2）；
+* :class:`OtlpExporter` —— 可选 OTLP gRPC 导出器（B21F1 · 默认关闭）。
 
 **不是公开门面**（``freegraph.graph``）的组成部分；``import freegraph``
 不会加载本模块（ARCH-2）。本模块零 L2 import、零第三方依赖、零环境变量。
@@ -23,12 +24,14 @@ from freegraph.contracts.trace import Span
 
 from ._file_store import FileTraceStore
 from ._invoke import invoke_model, invoke_tool
+from ._otlp_exporter import OtlpExporter
 from ._producer import SpanProducer, current_tracer
 from ._record import TraceRecord
 from ._sqlite_store import SqliteTraceStore
 
 __all__ = [
     "FileTraceStore",
+    "OtlpExporter",
     "SpanProducer",
     "SqliteTraceStore",
     "TraceRecord",

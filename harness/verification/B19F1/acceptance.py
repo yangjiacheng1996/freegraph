@@ -369,7 +369,8 @@ def _surface_and_dependencies() -> None:
     data = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     check(data["project"]["dependencies"] == [], "A7 基础安装依赖闭包为空")
 
-    forbidden_roots = {"langchain", "langgraph", "langsmith", "opentelemetry"}
+    forbidden_roots = {"langchain", "langgraph", "langsmith", "opentelemetry", "grpc"}
+    otlp_files = {"_otlp_mapping.py", "_otlp_transport.py", "_otlp_exporter.py"}
     files = list((SRC_DIR / "freegraph" / "observability").glob("*.py"))
     files.append(SRC_DIR / "freegraph" / "runtime" / "_span_hook.py")
     violations: list[str] = []
@@ -387,6 +388,8 @@ def _surface_and_dependencies() -> None:
                 continue
             for root in roots:
                 if root in forbidden_roots:
+                    if path.name in otlp_files and root in {"opentelemetry", "grpc"}:
+                        continue
                     violations.append(f"{path.name}: import {root}")
     check(violations == [], f"A7 新源码无禁用 import / env 读取（{violations}）")
 

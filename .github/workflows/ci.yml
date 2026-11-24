@@ -82,15 +82,14 @@ jobs:
       - name: Install package
         run: uv pip install --python .venv -e .
 
-      # 5.5 ── **v2.0 extras 的「预验证」依赖**（**不是** v1.0 的依赖！）
-      #       v1.0 的发行元数据**零依赖包名**（宪法 v1.7.0）⇒ 本步装的包
-      #       **不进发行包、不进 `Requires-Dist`**，只为让 G21 / G23 能对
-      #       **v2.0 清单**（`contracts/extras-v2.toml`）完成**预验证**
-      #       （许可证 ∈ 5 个精确 SPDX id · 无黑名单包）⇒ 违规的依赖**进不了 v2.0**。
+      # 5.5 ── **extras 的「预验证」依赖**（v2.0 四个 + v1.0 `[otlp]` 具名例外）
+      #       v1.0 的发行元数据**除 `[otlp]` 外零依赖包名**（宪法 v1.7.0 / v1.17.0）
+      #       ⇒ 本步装的包只为让 G21 / G23 能对 `contracts/extras-v2.toml`
+      #       完成**预验证**（许可证 ∈ 5 个精确 SPDX id · 无黑名单包）。
       #       **只装 Python 包、不装浏览器二进制**（`playwright install chromium`
       #       由用户显式执行 · 属安装期动作 · v2.0 专项调研后再定）。
-      - name: Install v2.0 extras (pre-validation only)
-        run: uv pip install --python .venv "pydantic>=2.0" "ormsgpack>=1.0" "opentelemetry-api>=1.20" "opentelemetry-sdk>=1.20" "playwright>=1.40"
+      - name: Install extras (pre-validation only)
+        run: uv pip install --python .venv "pydantic>=2.0" "ormsgpack>=1.0" "opentelemetry-api>=1.20" "opentelemetry-sdk>=1.20" "opentelemetry-exporter-otlp-proto-grpc>=1.20" "playwright>=1.40"
 
       # 5.6 ── **差分夹具的依赖组**（PEP 735 · **测试侧** · **不进发行包**）
       #       ⇒ 让 `tests/differential/` 的差分用例在 CI 里**真实执行**

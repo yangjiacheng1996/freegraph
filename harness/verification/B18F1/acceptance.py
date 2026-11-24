@@ -282,7 +282,8 @@ def _surface_and_dependencies() -> None:
         requires = importlib.metadata.requires("freegraph") or []
     except importlib.metadata.PackageNotFoundError:
         requires = []
-    check(requires == [], "A5 基础安装依赖闭包为空")
+    non_extra = [item for item in requires if "extra ==" not in item]
+    check(non_extra == [], "A5 基础安装依赖闭包为空（仅 [otlp] 具名例外）")
 
     import ast
 
@@ -291,12 +292,14 @@ def _surface_and_dependencies() -> None:
         "langgraph",
         "langsmith",
         "opentelemetry",
+        "grpc",
         "socket",
         "http",
         "urllib",
         "requests",
         "httpx",
     }
+    otlp_files = {"_otlp_mapping.py", "_otlp_transport.py", "_otlp_exporter.py"}
     files = list((SRC_DIR / "freegraph" / "observability").glob("*.py"))
     files.append(SRC_DIR / "freegraph" / "runtime" / "_span_hook.py")
     violations: list[str] = []
@@ -312,6 +315,8 @@ def _surface_and_dependencies() -> None:
             elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
                 roots.add(node.module.split(".")[0])
         for root in sorted(roots & forbidden_roots):
+            if path.name in otlp_files and root in {"opentelemetry", "grpc"}:
+                continue
             violations.append(f"{path.name}: import {root}")
     check(violations == [], f"A5 新源码无禁用 import / env 读取（{violations}）")
 

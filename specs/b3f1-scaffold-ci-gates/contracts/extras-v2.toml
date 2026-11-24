@@ -1,11 +1,12 @@
-# B3F1 · v2.0 的 extras 清单（**不进发行包** · 宪法 v1.7.0）
+# B3F1 · extras 清单（**不进发行包** · 宪法 v1.17.0）
 #
-# **这是什么**：freegraph **v2.0** 计划引入的**四个可选 extra** 的依赖声明。
+# **这是什么**：freegraph **v2.0** 的四个可选 extra + **v1.0 的 `[otlp]` 具名例外**
+# （B21F1 · 宪法 v1.17.0 · 2026-11-24）的依赖声明。
 #
 # **为什么在 v1.0 不放在 `pyproject.toml` 里**（宪法 v1.7.0 · 发起者 2026-11-08 决定）：
 # 「freegraph v1.0 不希望看到依赖包，所有依赖包放到 v2.0」⇒ v1.0 的**发行元数据**
-# MUST NOT 出现任何依赖包名 ⇒ v1.0 的 `pyproject.toml` **不含**
-# `[project.optional-dependencies]`。
+# **除 `[otlp]` 具名例外外** MUST NOT 出现任何依赖包名 ⇒ v1.0 的 `pyproject.toml`
+# **不含** `[project.optional-dependencies]`（`[otlp]` 例外见下）。
 #
 # **为什么还要留着它**（而不是删掉了事）：
 # ① 门禁 **G21**（依赖黑名单）与 **G23**（许可证白名单）**对这份清单取证**
@@ -44,12 +45,17 @@ checkpoint = ["ormsgpack>=1.0"]
 # **MUST NOT** 含任何 OTLP exporter：其闭包含 `certifi`（**MPL-2.0**，不在白名单）
 # ⇒ 必被 G23 拒（裁定 21 · exporter 归 B21F1）。
 otel = ["opentelemetry-api>=1.20", "opentelemetry-sdk>=1.20"]
+# OTLP gRPC 导出（B21F1）—— **v1.0 唯一具名例外**（宪法 v1.17.0 · 2026-11-24）。
+# **不是** v2.0 extra：仅 `[otlp]` 进入 v1.0 发行元数据；其余四个 extra 仍归 v2.0。
+# 只含 gRPC 协议实现 + OTel SDK，**MUST NOT** 含 `opentelemetry-exporter-otlp` 元包 /
+# HTTP exporter / `requests` / `certifi`；`protobuf` 的散文标识经仅此一包的 SPDX 归一。
+otlp = ["opentelemetry-api>=1.20", "opentelemetry-sdk>=1.20", "opentelemetry-exporter-otlp-proto-grpc>=1.20"]
 # 本地 PNG 渲染（B23F1）—— **默认关闭**；**渲染后端待 v2.0 专项调研**（见文件头）。
 png = ["playwright>=1.40"]
 
 [tool.freegraph.extras_v2]
 # 说明性小节 —— **不参与门禁判定**（判定只看 `[project.optional-dependencies]`）。
-target_version = "v2.0"
+target_version = "v2.0（唯一例外：v1.0 的 [otlp] 具名例外 · 宪法 v1.17.0）"
 license_whitelist = ["MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "PSF-2.0"]
 forbidden = [
     "langsmith",
@@ -61,11 +67,18 @@ forbidden = [
 png_backend = "playwright（唯一实测可行的白名单内后端）—— **渲染后端方向待 v2.0 专项调研**"
 closed_closure = [
     "annotated-types",
+    "googleapis-common-protos",
     "greenlet",
+    "grpcio",
     "opentelemetry-api",
+    "opentelemetry-exporter-otlp-common",
+    "opentelemetry-exporter-otlp-proto-common",
+    "opentelemetry-exporter-otlp-proto-grpc",
+    "opentelemetry-proto",
     "opentelemetry-sdk",
     "opentelemetry-semantic-conventions",
     "ormsgpack",
+    "protobuf",
     "playwright",
     "pydantic",
     "pydantic-core",

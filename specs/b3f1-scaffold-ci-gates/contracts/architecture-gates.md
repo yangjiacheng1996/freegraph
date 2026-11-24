@@ -6,6 +6,11 @@
 [ci-matrix.md](./ci-matrix.md) · [research.md](../research.md)
 **契约性质**: **冻结面** —— 每条门禁的**判定方式**即实现契约；改判定方式 = 改冻结面
 
+> **2026-11-24 更新（B21F1 / 宪法 v1.17.0）**：extras 面新增 **v1.0 `[otlp]` 具名例外**；
+> 其余四个 extra 仍归 v2.0。本文件中「四个 extras / 12 个包」的表述在 B21F1 落地后应理解为
+> **4 个 v2.0 extras + 1 个 v1.0 `[otlp]` / 19 个包**。G23 的 `protobuf` 归一与 G26 的
+> `grpc` 扫描例外见对应小节。
+
 > G1–G13 **继承自 B2F1**（`specs/b1f1-contracts-core/contracts/architecture-gates.md`），
 > G14–G20 **继承自 B2F2**（`specs/b2f2-public-api-facade/contracts/architecture-gates.md`），
 > 本 feature **新增 G21–G30**（spec 裁定 4）。
@@ -75,9 +80,9 @@
 > **传递依赖自身的元数据** ⇒ 该依赖**未安装**时 MUST **显式报「未安装 ⇒ 无法取证」并判失败**（指名该包），
 > **MUST NOT** 静默 `except` 跳过 —— 静默跳过会把「闭包只到第一层」伪装成「闭包干净」，
 > 使「间接引入的黑名单包」**永远抓不到**（spec Edge Case「递归展开 MUST 走到闭包末端」）。
-> ⇒ 这正是 **CI 必须装齐四个 extras 的依赖**的原因（ci-matrix §2 的「为什么 extras 必须装」）。
+> ⇒ 这正是 **CI 必须装齐 extras（四个 v2.0 + v1.0 `[otlp]`）的依赖**的原因（ci-matrix §2 的「为什么 extras 必须装」）。
 > **⚠️ 由此得出的 CI 约束（2026-11-07 分析轮补入）**：本规则要求 extras 的**传递依赖已安装**才能完成取证 ⇒
-> **全部 7 个作业（含 macOS / Windows）MUST 装齐四个 extras 的依赖**（ci-matrix §2 **步骤 5.5** · **不再仅限 Linux 全量作业**）——
+> **全部 7 个作业（含 macOS / Windows）MUST 装齐 extras（四个 v2.0 + v1.0 `[otlp]`）的依赖**（ci-matrix §2 **步骤 5.5** · **不再仅限 Linux 全量作业**）——
 > 否则非 Linux 作业上 G21 会因「未安装 ⇒ 判失败」而**必然变红**（**实测**：仅装基础包时 `importlib.metadata.requires('pydantic')` 抛 `PackageNotFoundError`）。
 
 **黑名单**（三族 + 点名名单 + `deepagents` + 全部 provider 包）：
@@ -164,10 +169,12 @@
 **禁用清单**：出现 `Elastic-2.0` / `AGPL` / `SSPL` / `BUSL` / `GPL-2` / `GPL-3` / `MPL-2.0` / `LGPL` 等
 ⇒ **失败**（宪法原则 IX 的传染性 / 限制性名单）。
 
-> **📌 v1.0 的闭包来源 = v2.0 清单**（2026-11-08 · 裁定 26 · 宪法 v1.7.0）：
+> **📌 v1.0 的闭包来源 = `extras-v2.toml`（含 v1.0 `[otlp]` 具名例外）**
+> （2026-11-08 · 裁定 26 · 宪法 v1.7.0；2026-11-24 宪法 v1.17.0 增补）：
 > 本门禁的「依赖闭包」取自 **`--project`** 指向的**依赖声明文件**
 > （**同名同义**于 G21 的 `--project`；**MUST NOT** 当作 `--root` 的别名）
-> —— v1.0 ⇒ `contracts/extras-v2.toml`（预验证）；v2.0 ⇒ `pyproject.toml`。
+> —— v1.0 ⇒ `contracts/extras-v2.toml`（预验证；其中 `otlp` 是 v1.0 具名例外，
+> 其余四个 extra 仍归 v2.0）；v2.0 ⇒ `pyproject.toml`。
 >
 > **📌 `--root` 的取证作用域 = **并集口径**（2026-11-08 分析轮订正 · MUST 照此实现 · 与 §2.1 的 CLI 契约配套 · spec 裁定 25）**：
 > `--root` = **被检的环境根** —— 它界定「**许可证据的取证作用域**」。
@@ -175,7 +182,7 @@
 > **被检查的包集合 =（依赖闭包中的包）∪（在该根目录下扫到的 `*.dist-info` / `*.egg-info` 所对应的包）** —— **两部分都要查**。
 > **许可证据的读取顺序（先到先得）**：① 该根目录下的 `<name>-<version>.dist-info/METADATA`（或 `.egg-info/PKG-INFO`）⇒ ② 该包**已安装**的元数据（`importlib.metadata`）。
 >
-> ⇒ **正常路径**：闭包里的 12 个包（其元数据在 venv 的 site-packages，**不在** `--root` 下）⇒ 由 ② 取证 ⇒ 门禁**非空**（MUST NOT 退化为空门禁）。
+> ⇒ **正常路径**：闭包里的 19 个包（其元数据在 venv 的 site-packages，**不在** `--root` 下）⇒ 由 ② 取证 ⇒ 门禁**非空**（MUST NOT 退化为空门禁）。
 > ⇒ **反向路径**：`<root>` 下注入的假元数据 ⇒ 由 ① 取证 ⇒ 进入被检查集 ⇒ 命中 `AGPL-3.0-or-later` ⇒ 失败并指名。
 > ⇒ **反向用例的假元数据 MUST 落成 `<root>/<name>-<version>.dist-info/METADATA`**，
 > 其中 `METADATA` MUST 至少含 **`Metadata-Version` / `Name` / `Version` / `License-Expression`** 四个头，
@@ -192,7 +199,9 @@
 **边界（裁定 18）**：
 - MUST **不**引入等价标识符对照表 / 许可证家族判定 / 豁免入口；
 - MUST **不**使用「子串包含」判定（`"MIT" in upper` 会放行 `MIT-CMU`）；
-- 散文式标识（如 `protobuf` 的 `3-Clause BSD License`）**无法归一为 SPDX id** ⇒ **判失败**。
+- 散文式标识**无法归一为 SPDX id** ⇒ **判失败**；**唯一具名例外**（B21F1 · 宪法 v1.17.0）：
+  **仅** `protobuf` + 精确字符串 `3-Clause BSD License` → `BSD-3-Clause`
+  （依据其 `LICENSE` 文件；**不是**通用对照表，不放宽白名单，其它散文标识仍失败）。
 
 **反向用例（强制）**：造一份**假元数据**（`License-Expression: AGPL-3.0-or-later`）⇒ G23 MUST 失败并指名。
 
@@ -269,7 +278,7 @@
 **判定**（AST 扫描 · `src/freegraph/**`）：MUST NOT 出现下列网络客户端的 import 或使用：
 
 `socket` · `ssl` · `http` · `http.client` · `urllib.request` · `urllib3` · `requests` · `httpx` ·
-`aiohttp` · `websockets` · `ftplib` · `smtplib` · `telnetlib` · `xmlrpc` · `asyncio.open_connection`
+`aiohttp` · `websockets` · `grpc` · `ftplib` · `smtplib` · `telnetlib` · `xmlrpc` · `asyncio.open_connection`
 
 **判定口径（2026-11-07 分析轮补入）**：本扫描 MUST 以 **import 形式**判定
 （`import X` / `from X import ...` / 属性链调用）⇒ 清单内的**纯 stdlib 常量用法**
@@ -279,7 +288,8 @@ MUST NOT 因此放宽清单本身。
 
 **唯一例外**（FR-009 ① · FR-018 ① 的「已写死的、具名例外」）：**可选的 OTLP exporter 模块** ——
 它是**用户显式启用**才生效的合法出站方。例外 MUST 以**显式名单**表达（模块路径逐个列出），
-MUST NOT 放宽扫描域本身。**当前该例外名单为空**（OTLP exporter 属 B21F1）。
+MUST NOT 放宽扫描域本身。**例外名单（B21F1 起）**：
+`freegraph.observability._otlp_transport`（仅此一个模块；默认路径仍零出站）。
 
 **反向用例（强制）**：在临时副本的 `src/freegraph/_probe.py` 写 `import socket` ⇒ G26 MUST 失败并指名。
 
@@ -546,11 +556,11 @@ MUST NOT 让「空断言 / 极窄观测面」被误读为「零出站已被证�
 
 **改动**（**判据句零改动**）：
 
-1. `CONSTITUTION_DEPENDENCY_WHITELIST`：4 个占位包名 → **四个 extra 的真实闭包确切包名集合**
+1. `CONSTITUTION_DEPENDENCY_WHITELIST`：4 个占位包名 → **四个 v2.0 extras + v1.0 `[otlp]` 的真实闭包确切包名集合**
    （有限 · 逐个列名 · **无通配符 · 无前缀匹配**）
-   —— **⚠️ v1.0（裁定 26 · 宪法 v1.7.0）**：v1.0 **不声明任何 extra** ⇒ 本条在 v1.0 是
-   **空断言**；这 12 个包名是 **v2.0 的目标闭包**（v2.0 落地时本条**自动变实质**
-   ⇒ 门禁实现零改动）；
+   —— **⚠️ v1.0（裁定 26 · 宪法 v1.17.0）**：v1.0 的发行元数据**除 `[otlp]` 具名例外外**
+   不声明 extra；这 19 个包名是 **四个 v2.0 extras + v1.0 `[otlp]` 的目标闭包** ⇒ 本条
+   **自 B21F1 起为实质断言**（不再空断言）；门禁实现零改动；
 2. extras 变体枚举：从「无差别剥离 / 保留 extras marker」→ **只枚举 freegraph 自身的 extras 变体**
    （传递依赖按其**基础依赖**展开）。
 
@@ -562,7 +572,7 @@ MUST NOT 让「空断言 / 极窄观测面」被误读为「零出站已被证�
 > `email-validator` / `furo` / `objgraph` / `opentelemetry-configuration` / `psutil` / `setuptools` / `sphinx` / `tzdata`）；
 > 而「许可证断言」实为 **`pytest.skip`**（这 8 个包**均未安装** ⇒ `_license_of()` 返回 `None` ⇒ 落入 G3 既有的
 > `missing` 分支）⇒ **不构成变红原因**（这也正是新门禁 **G23**「fail-on-missing」不可省略的理由）。
-> **修正后的枚举语义（②）实测**：extras 闭包**恰为**上述 12 个包名 ⇒ 与 ① 逐一命中、子集断言**绿**。
+> **修正后的枚举语义（②）实测**：extras 闭包**恰为**上述 19 个包名 ⇒ 与 ① 逐一命中、子集断言**绿**。
 
 ---
 

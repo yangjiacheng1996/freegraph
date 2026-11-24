@@ -9,7 +9,8 @@
    **空门禁 ⇒ 违宪** ⇒ **两者皆不可接受**；
 2. **许可证据先**取作用域根下的元数据、**后**回落**已安装**元数据；
 3. 四级有序证据链取标识 ⇒ SPDX 表达式**逐叶子**判定 ⇒ **每个叶子**都须
-   ∈ {MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, PSF-2.0}；
+   ∈ {MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, PSF-2.0}；**唯一具名归一**
+   （B21F1 / 宪法 v1.17.0）：仅 `protobuf` 的 `3-Clause BSD License` → `BSD-3-Clause`；
 4. **取不到许可证明 ⇒ 失败并指名**（FR-006 ② · **MUST NOT** skip）；
 5. 命中禁用清单（Elastic-2.0 / AGPL / SSPL / BUSL / GPL-2 / GPL-3 / MPL-2.0 /
    LGPL）⇒ 失败并**点名**；ELv2 点名名单 ⇒ 即使许可证合规也**必须**被拒。
@@ -111,6 +112,7 @@ def evaluate(root: Path, project: Path | None = None) -> list[_gatekit.Violation
             )
             continue
         source, identifier = evidence
+        identifier = _gatekit.normalize_prose_license(package, identifier)
         try:
             leaves = _gatekit.spdx_leaves(identifier)
         except _gatekit.SpdxParseError as exc:

@@ -329,6 +329,7 @@ class TestB18F1PublicFace:
 
         assert set(observability.__all__) == {
             "FileTraceStore",
+            "OtlpExporter",
             "SpanProducer",
             "SqliteTraceStore",
             "TraceRecord",

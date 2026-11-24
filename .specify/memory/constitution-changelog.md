@@ -940,3 +940,27 @@
   `checkpoint_id` 仍按 C23 写入 trace 记录，但 v1 查询过滤器不包含它。
 - **模板同批同步**：`harness/prompts/init_constitution.md` 的 C27 查询维度行已逐字同步；
   再次执行 `/speckit.constitution` **不会抹掉**本次订正。
+
+## v1.17.0（2026-11-24）｜MINOR —— **B21F1 的 `[otlp]` v1.0 具名例外**（**判据零放宽**）
+
+- **变更了什么**（由 **B21F1** analyse 轮 + 发起者 2026-11-24 选择 A 触发）：
+  1. 在 v1.7.0「v1.0 的 `pyproject.toml` MUST NOT 含 `[project.optional-dependencies]`」
+     下增设**唯一具名例外**：v1.0 允许且仅允许 `[otlp]` 一个 extra 进入发行元数据；
+  2. 例外条件：① `[otlp]` 只含官方 OTLP gRPC 协议实现 + OTel API/SDK（不含元包 /
+     HTTP exporter / `requests` / `certifi`）；② 基础安装 `dependencies = []` 不变、
+     `[otlp]` 默认关闭；③ 闭包逐包在原则 IX 白名单内，`protobuf` 的散文标识经
+     **仅此一包 / 仅此一字符串**的权威 SPDX 归一为 `BSD-3-Clause`；④ 其余四个 extra
+     仍归 v2.0；⑤ 不得解释为通用「v1.0 可有 extra」豁免；
+  3. **页脚版本行** **1.16.1 → 1.17.0**；生效副本头部注释追加同条摘要；
+     `harness/prompts/init_constitution.md` 的同节正文需同批同步。
+- **为什么**：B21F1 是宪法原则 IV 的 MUST（以 OTLP 等标准协议输出）的落地；spec/plan/tasks
+  需要一个 v1.0 可安装的 `[otlp]` extra。为避免「含 exporter」与「白名单严格」不可兼得，
+  本例外采用 gRPC-only + 仅 `protobuf` 的 SPDX 归一，**不放宽**许可证白名单。
+- **受影响的原则与特性**：原则 I–XII 的判据、许可证白名单、零依赖 / 零出站 / 零环境变量
+  **一字未改**；**不新增**门禁编号；受影响特性：**B21F1**（触发源）、**B3F1**（extras /
+  G3 / G23 / G26 取证对象）、**B24F1**（发行元数据）、**B25F1**（双跑验收）。
+- **迁移方案**：v1.0 仍只有 `[otlp]` 一个 extra；其余四个 extra 仍归 v2.0；
+  基础安装闭包仍为空集；既有特性无需迁移。**MUST NOT** 因本例外把其它 extra 放进 v1.0。
+- **历史表述**：v1.7.0 的「v1.0 无 extras」保留为历史事实；**现状以 v1.17.0 为准**。
+- **模板同批同步**：`harness/prompts/init_constitution.md` 的 v1.7.0 段需加入同款具名例外；
+  再次执行 `/speckit.constitution` **不会抹掉**本次修订。

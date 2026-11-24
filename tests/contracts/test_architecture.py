@@ -98,6 +98,7 @@ FORBIDDEN_MODULES = frozenset(
         "urllib",
         "requests",
         "httpx",
+        "grpc",
         "subprocess",
         "langchain",
         "langchain_core",
@@ -111,6 +112,16 @@ FORBIDDEN_MODULES = frozenset(
 
 #: G4 禁止的环境变量读取 API。
 FORBIDDEN_ENV_ATTRS = frozenset({"environ", "environb", "getenv"})
+
+#: B21F1 的**具名例外**：3 个 OTLP 模块允许 import `opentelemetry` / `grpc`。
+OTLP_EXCEPTED_FILES = frozenset(
+    {
+        "_otlp_mapping.py",
+        "_otlp_transport.py",
+        "_otlp_exporter.py",
+    }
+)
+OTLP_ALLOWED_THIRD_PARTY = frozenset({"opentelemetry", "grpc"})
 
 #: 本 feature 新建的源文件（原则 X 的署名头适用范围，含 ``tests/``）。
 SIGNED_SOURCE_FILES = (
@@ -142,6 +153,10 @@ SIGNED_SOURCE_FILES = (
     "src/freegraph/observability/_payloads.py",
     "src/freegraph/observability/_query.py",
     "src/freegraph/observability/_sqlite_store.py",
+    # B21F1 新增源文件（宪法原则 X / G5）
+    "src/freegraph/observability/_otlp_mapping.py",
+    "src/freegraph/observability/_otlp_transport.py",
+    "src/freegraph/observability/_otlp_exporter.py",
 )
 
 
@@ -244,6 +259,8 @@ def _check_third_party_target(
         return []
     if root in ALLOWED_THIRD_PARTY:
         return []
+    if path.name in OTLP_EXCEPTED_FILES and root in OTLP_ALLOWED_THIRD_PARTY:
+        return []
     return [f"{path.name}:{lineno}: 第三方 import: {module}"]
 
 
@@ -316,14 +333,19 @@ def scan_forbidden_usage(dirs: Sequence[Path]) -> list[str]:
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    if alias.name.split(".")[0] in FORBIDDEN_MODULES:
+                    root = alias.name.split(".")[0]
+                    if root in FORBIDDEN_MODULES and not (
+                        path.name == "_otlp_transport.py" and root == "grpc"
+                    ):
                         violations.append(
                             f"{path.name}:{node.lineno}: 禁止的模块: {alias.name}"
                         )
             elif isinstance(node, ast.ImportFrom):
                 module = node.module or ""
                 root = module.split(".")[0]
-                if root in FORBIDDEN_MODULES:
+                if root in FORBIDDEN_MODULES and not (
+                    path.name == "_otlp_transport.py" and root == "grpc"
+                ):
                     violations.append(
                         f"{path.name}:{node.lineno}: 禁止的模块: {module}"
                     )
@@ -849,9 +871,9 @@ class TestPublicSymbolSurface:
 #:
 #: **⚠️ 适用版本（2026-11-08 · 宪法 v1.7.0 修订）**：v1.0 的发行元数据**零依赖包名**
 #: ⇒ `pyproject.toml` **不含** `[project.optional-dependencies]` ⇒ **v1.0 的 extras
-#: 闭包为空集** ⇒ 本条在 v1.0 是**空断言**；下表 12 个包名是 **v2.0 的目标闭包**
-#: （v2.0 的声明落在 `specs/b3f1-scaffold-ci-gates/contracts/extras-v2.toml`）⇒
-#: **v2.0 落地时本条自动变实质断言**（闭包必须**逐一命中**这 12 个名字），
+#: 闭包为空集** ⇒ 下表是 **四个 v2.0 extras + v1.0 `[otlp]` 的目标闭包**
+#: （声明落在 `specs/b3f1-scaffold-ci-gates/contracts/extras-v2.toml`）⇒
+#: **自 B21F1 起本条为实质断言**（闭包必须**逐一命中**这 19 个名字），
 #: **门禁实现零改动**。
 #:
 #: **⚠️ 版本敏感性**：extras 的版本约束是**开区间**（`pydantic>=2.0`）⇒ 上游**新增一个
@@ -863,17 +885,30 @@ class TestPublicSymbolSurface:
 
 CONSTITUTION_DEPENDENCY_WHITELIST = {
     "annotated-types",
+    "googleapis-common-protos",
     "greenlet",
+    "grpcio",
     "opentelemetry-api",
+    "opentelemetry-exporter-otlp-common",
+    "opentelemetry-exporter-otlp-proto-common",
+    "opentelemetry-exporter-otlp-proto-grpc",
+    "opentelemetry-proto",
     "opentelemetry-sdk",
     "opentelemetry-semantic-conventions",
     "ormsgpack",
     "playwright",
+    "protobuf",
     "pydantic",
     "pydantic-core",
     "pyee",
     "typing-extensions",
     "typing-inspection",
+}
+
+#: B21F1 / 宪法 v1.17.0：**仅** `protobuf` 的散文标识归一（依据其 LICENSE 文件）。
+#: MUST NOT 扩展为通用对照表（与 G23 的具名归一逐字一致）。
+PROSE_LICENSE_NORMALIZATION = {
+    "protobuf": {"3-Clause BSD License": "BSD-3-Clause"},
 }
 
 #: 许可证白名单（宪法质量门禁第 2 条）。
@@ -894,7 +929,15 @@ def _split_requires(specs: list[str] | None) -> list[tuple[str, bool]]:
     out: list[tuple[str, bool]] = []
     for spec in specs or []:
         head, _, marker = spec.partition(";")
-        name = head.split("[")[0].split(">")[0].split("<")[0].split("=")[0].strip()
+        name = (
+            head.split("[")[0]
+            .split(">")[0]
+            .split("<")[0]
+            .split("=")[0]
+            .split("~")[0]
+            .split("!")[0]
+            .strip()
+        )
         out.append((name, "extra ==" in marker))
     return out
 
@@ -941,7 +984,11 @@ def _license_of(pkg: str) -> str | None:
     for key in ("License-Expression", "License"):
         value = meta.get(key)
         if value and value.strip() and value.strip().upper() != "UNKNOWN":
-            return value.strip()
+            identifier = value.strip()
+            normalized = PROSE_LICENSE_NORMALIZATION.get(
+                pkg.lower().replace("_", "-"), {}
+            ).get(identifier)
+            return normalized or identifier
     return None
 
 
@@ -2029,6 +2076,8 @@ class TestB18F1LayeringAndLaziness:
                 if root in sys.stdlib_module_names:
                     continue
                 if module.startswith("freegraph.contracts"):
+                    continue
+                if path.name in OTLP_EXCEPTED_FILES and root in OTLP_ALLOWED_THIRD_PARTY:
                     continue
                 violations.append(f"{path.name}: {module}")
         assert violations == [], violations

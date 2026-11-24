@@ -86,6 +86,13 @@ C25 从 active 契约清单移除，**编号保留不复用**；active 清单 = 
 （用户不可设置 / 覆盖）⇒ ⇒ **判据零放宽**（`run_id` 仍由运行时生成 · 用户不可覆盖 ·
 与 `TraceSink` 共享同一 id 的三条不变）· **不新增**门禁编号 · **不放宽**任何既有判据。
 历史表述见 `harness/proposals/立项书.md` §5.3.1；**现状以本宪法为准**。
+**2026-11-24 修订为 1.17.0（MINOR）**：**B21F1 的 `[otlp]` v1.0 具名例外**——v1.7.0 的
+「v1.0 的 `pyproject.toml` MUST NOT 含 `[project.optional-dependencies]`」增设**唯一具名例外**：
+v1.0 **允许且仅允许** `[otlp]` 一个 extra 进入发行元数据；其余四个 extra 仍归 v2.0；
+`[otlp]` 只含官方 OTLP gRPC 协议实现 + OTel SDK，基础安装仍 `dependencies = []`、
+默认关闭、闭包全在原则 IX 白名单内；`protobuf` 的散文标识经**仅此一包**的权威 SPDX 归一为
+`BSD-3-Clause`（不放宽白名单）。**判据零放宽**：许可证白名单 / 零依赖 / 零出站 /
+零环境变量一字未改；本例外 **MUST NOT** 被解释为通用「v1.0 可有 extra」豁免。
 -->
 
 # freegraph Constitution
@@ -677,6 +684,21 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
   > （候选：`playwright`（白名单下唯一实测可行 · 需另装浏览器二进制）·
   > 自研最小 SVG→PNG 渲染器（纯标准库 · 永久零依赖）· 继续只出占位 PNG）。
   >
+  > **2026-11-24 修订（v1.17.0 · MINOR）—— B21F1 的 `[otlp]` v1.0 具名例外**：
+  > v1.7.0 的「v1.0 的 `pyproject.toml` MUST NOT 含 `[project.optional-dependencies]`」
+  > 增设**唯一具名例外**：v1.0 **允许且仅允许** `[otlp]` 一个 optional extra 进入发行元数据
+  > （B21F1 · OTLP 导出）。该例外成立的全部条件（每条 MUST 成立）：
+  > ① `[otlp]` 只含官方 OTLP gRPC 协议实现 + `opentelemetry-api` / `opentelemetry-sdk`；
+  > **MUST NOT** 含 `opentelemetry-exporter-otlp` 元包 / HTTP exporter / `requests` / `certifi`；
+  > ② 基础安装 `dependencies = []` 仍为空集；`[otlp]` 默认关闭、不装即不可用；
+  > ③ `[otlp]` 闭包逐包 ∈ 原则 IX 的许可证白名单；`protobuf` 的散文标识
+  > `3-Clause BSD License` 经**仅此一包 / 仅此一字符串**的权威 SPDX 归一为
+  > `BSD-3-Clause`（依据其 LICENSE 文件），**MUST NOT** 放宽白名单或引入通用对照表；
+  > ④ 其余四个 extra（`[pydantic]` / `[checkpoint]` / `[otel]` / `[png]`）**仍归 v2.0**，
+  > **MUST NOT** 因本例外进入 v1.0；
+  > ⑤ 本例外**仅**适用于 B21F1 的 `[otlp]`；**MUST NOT** 被解释为「v1.0 可有 extra」的通用豁免。
+  > ⇒ 正式追认文字 + 确认人 + 日期落 `harness/verification/B21F1/manual-verification.md`。
+  >
   > **2026-11-05 修订**：原为「`typing-extensions`（唯一建议的**必装**运行时依赖）」，
   > 现改为**必装依赖为空**——`typing-extensions` 已从基础安装剥离（2026-11-05 决议）。
   > 基础安装的依赖闭包 **MUST 为空集**（由 G3 门禁断言）。
@@ -949,4 +971,4 @@ proposal → spec → tasks → 实现 → (人工验证) → 验收
   这正是它被拆出来的目的：原宪法中本段占 **47%** 的篇幅却对「当前该怎么做」零增益）；
   ⇒ ⇒ 本文件（生效副本）**只保留规范性正文 + 版本行**，**不含**历史条目。
 
-**Version**: 1.16.1 | **Ratified**: 2026-11-05（发起者批准；首次批准即定版为 1.0.0） | **Last Amended**: 2026-11-21
+**Version**: 1.17.0 | **Ratified**: 2026-11-05（发起者批准；首次批准即定版为 1.0.0） | **Last Amended**: 2026-11-24

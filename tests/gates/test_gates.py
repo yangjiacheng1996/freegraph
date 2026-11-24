@@ -725,42 +725,52 @@ def test_g22_isolated_env_negative_case(isolated_copy: Path) -> None:
 
 
 def test_scaffold_base_install_closure_is_empty(repo_root: Path) -> None:
-    """**基础安装**的依赖闭包 MUST 为空集。
+    """**基础安装**的依赖闭包 MUST 为空集（宪法 v1.7.0 / v1.17.0）。
 
-    v1.0（宪法 v1.7.0）：``Requires-Dist`` **整个为空** ⇒ 连 ``extra ==`` 标记的
-    条目也没有 ⇒ 比「无 marker 的条目数 == 0」**更强**。
+    v1.0 唯一允许的 ``Requires-Dist`` 是 ``extra == "otlp"`` 的具名例外；
+    **无 marker 的基础依赖必须为空**。
     """
     import importlib.metadata as metadata
 
     requires = metadata.requires("freegraph") or []
-    assert requires == [], f"基础安装拉起了 {requires}"
+    non_extra = [item for item in requires if "extra ==" not in item]
+    assert non_extra == [], f"基础安装拉起了 {non_extra}"
 
 
-def test_scaffold_v1_metadata_has_no_dependency_package(
+def test_scaffold_v1_metadata_only_has_otlp_extra(
     repo_root: Path,
 ) -> None:
-    """**v1.0 的发行元数据 MUST NOT 出现任何依赖包名**（宪法 v1.7.0）。
+    """**v1.0 的发行元数据只允许 `[otlp]` 具名例外**（宪法 v1.17.0）。
 
-    判据 = ``Requires-Dist`` **整个为空**（v1.0 不含任何 extra ⇒ 连
-    ``extra ==`` 标记的条目也没有 ⇒ 比「无 marker 的条目数 == 0」**更强**）。
+    判据：每条 ``Requires-Dist`` 都带 ``extra == "otlp"`` marker；
+    无 marker 的基础依赖为空集。
     """
     import importlib.metadata as metadata
 
-    requires = metadata.requires("freegraph")
-    assert not requires, f"v1.0 的发行元数据仍带依赖声明：{requires}"
+    requires = metadata.requires("freegraph") or []
+    for item in requires:
+        _head, _sep, marker = item.partition(";")
+        assert "extra ==" in marker and "otlp" in marker, (
+            f"v1.0 的发行元数据出现非 otlp 依赖声明：{item}"
+        )
 
 
-def test_scaffold_v1_pyproject_declares_no_extra(repo_root: Path) -> None:
-    """v1.0 的 ``pyproject.toml`` **MUST NOT** 含 ``[project.optional-dependencies]``。"""
+def test_scaffold_v1_pyproject_declares_only_otlp_extra(repo_root: Path) -> None:
+    """v1.0 的 ``pyproject.toml`` **只允许** `[otlp]` 一个 extra（宪法 v1.17.0）。"""
     import tomllib
 
     data = tomllib.loads(
         (repo_root / "pyproject.toml").read_text(encoding="utf-8")
     )
-    assert "optional-dependencies" not in data.get("project", {}), (
-        "v1.0 的发行元数据 MUST NOT 声明任何 extra（宪法 v1.7.0）"
-    )
-    assert data["project"]["dependencies"] == [], data["project"]["dependencies"]
+    project = data.get("project", {})
+    assert project["dependencies"] == [], project["dependencies"]
+    extras = project.get("optional-dependencies", {})
+    assert set(extras) == {"otlp"}, extras
+    assert extras["otlp"] == [
+        "opentelemetry-api>=1.20",
+        "opentelemetry-sdk>=1.20",
+        "opentelemetry-exporter-otlp-proto-grpc>=1.20",
+    ], extras["otlp"]
 
 
 def test_v2_extras_manifest_is_frozen_and_compliant(
@@ -786,13 +796,22 @@ def test_v2_extras_manifest_is_frozen_and_compliant(
     assert manifest.is_file(), "v2.0 清单缺失（v1.0 的发行元数据零依赖 ⇒ 门禁对清单取证）"
     data = tomllib.loads(manifest.read_text(encoding="utf-8"))
     extras = data["project"]["optional-dependencies"]
-    assert set(extras) == {"pydantic", "checkpoint", "otel", "png"}, extras
+    assert set(extras) == {"pydantic", "checkpoint", "otel", "png", "otlp"}, extras
     assert extras["otel"] == [
         "opentelemetry-api>=1.20",
         "opentelemetry-sdk>=1.20",
     ], "〔otel〕MUST 恰为 api + sdk（MUST NOT 含任何 exporter · 裁定 21）"
+    assert extras["otlp"] == [
+        "opentelemetry-api>=1.20",
+        "opentelemetry-sdk>=1.20",
+        "opentelemetry-exporter-otlp-proto-grpc>=1.20",
+    ], "〔otlp〕MUST 恰为 gRPC 协议实现 + OTel SDK（宪法 v1.17.0）"
+    for requirement in extras["otlp"]:
+        name = requirement.split(">=")[0]
+        assert name != "opentelemetry-exporter-otlp"
+        assert name != "opentelemetry-exporter-otlp-proto-http"
+        assert name not in {"requests", "certifi"}
     assert extras["png"] == ["playwright>=1.40"], "〔png〕的后端 = playwright（宪法 v1.5.0）"
-    assert "opentelemetry-exporter-otlp" not in manifest.read_text(encoding="utf-8")
 
 
 def test_g21_and_g23_judge_the_v2_manifest(

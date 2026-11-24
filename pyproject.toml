@@ -42,11 +42,12 @@ classifiers = [
 # （由 tests/contracts/test_architecture.py 的 G3 门禁断言）。
 dependencies = []
 
-# **v1.0 的依赖面 = 零**（宪法 v1.7.0 · 发起者 2026-11-08 决定）。
+# **v1.0 的依赖面 = 零（除 `[otlp]` 具名例外）**（宪法 v1.7.0 / v1.17.0）。
 #
 # 「freegraph v1.0 不希望看到依赖包，所有依赖包放到 v2.0」⇒
-# v1.0 的**发行元数据 MUST NOT 出现任何依赖包名** ⇒ 本文件**不含**
-# `[project.optional-dependencies]`。
+# v1.0 的**发行元数据 MUST NOT 出现任何依赖包名**；**唯一具名例外**是
+# B21F1 的 `[otlp]`（宪法 v1.17.0 · 2026-11-24）——只此一个 extra 进入
+# v1.0 发行元数据，其余四个 extra 仍归 v2.0。
 #
 # **v2.0 的四个可选 extra**（`[pydantic]` / `[checkpoint]` / `[otel]` / `[png]`）
 # 声明在 **`specs/b3f1-scaffold-ci-gates/contracts/extras-v2.toml`**
@@ -56,6 +57,16 @@ dependencies = []
 #
 # **四个 extra 均非内核的必要条件**（实测：内核与契约层对这四个包**零引用**，
 # 契约层只用标准库）⇒ 移走它们**不阻断**任何 v1.0 内核里程碑。
+
+[project.optional-dependencies]
+# B21F1 · OTLP gRPC 导出（**v1.0 唯一具名例外** · 宪法 v1.17.0）。
+# 只含官方 gRPC 协议实现 + OTel SDK；MUST NOT 含元包 / HTTP exporter /
+# `requests` / `certifi`。基础安装 `dependencies = []` 不变。
+otlp = [
+    "opentelemetry-api>=1.20",
+    "opentelemetry-sdk>=1.20",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.20",
+]
 
 [project.urls]
 Homepage = "https://github.com/yangjiacheng1996/freegraph"
@@ -110,11 +121,11 @@ addopts = "-ra"
 xfail_strict = true
 # 平台专属用例的过滤依据（tasks T001 · 契约 ci-matrix §1）。
 #   linux_only    —— 需 Linux 隔离环境 / 网络命名空间（G22 · G28 一族）；
-#   full_install —— 需装齐四个 extras 的完整安装环境（**当前无使用者**·预留）。
+#   full_install —— 需装齐 extras（含 otlp）的完整安装环境。
 # 非 Linux 作业的 pytest 步骤用 `-m "not linux_only and not full_install"` 排除。
 markers = [
     "linux_only: 需 Linux 隔离环境 / 网络命名空间",
-    "full_install: 需装齐四个 extras 的完整安装环境",
+    "full_install: 需装齐 extras（含 otlp）的完整安装环境",
 ]
 
 [tool.hatch.build.targets.wheel]

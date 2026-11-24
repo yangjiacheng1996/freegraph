@@ -209,7 +209,12 @@ def test_d206_exception_still_ends_span_and_reraises() -> None:
 
 
 def test_d207_dependency_closure_stricter() -> None:
-    assert importlib.metadata.requires("freegraph") is None
+    requires = importlib.metadata.requires("freegraph") or []
+    non_extra = [item for item in requires if "extra ==" not in item]
+    assert non_extra == []
+    for item in requires:
+        _head, _sep, marker = item.partition(";")
+        assert "extra ==" in marker and "otlp" in marker, item
     upstream_requires = importlib.metadata.requires("langchain-core") or []
     assert any("langsmith" in requirement for requirement in upstream_requires)
 

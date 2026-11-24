@@ -396,7 +396,9 @@ def test_only_the_differential_group_may_declare_an_upstream_package() -> None:
 
     assert sorted(offenders) == [UPSTREAM_ALLOWED_GROUP]
     assert len(upstream_entries) == 1
-    assert importlib.metadata.requires("freegraph") in (None, [])
+    requires = importlib.metadata.requires("freegraph") or []
+    non_extra = [item for item in requires if "extra ==" not in item]
+    assert non_extra == [], non_extra
 
 
 def test_ci_workflow_never_installs_langgraph() -> None:
