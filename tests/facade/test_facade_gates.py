@@ -12,7 +12,7 @@ G15     门面导出面**两处相等**（``__all__`` **且** 公开名集合）
 G16     **API 快照**逐字节比对 + **可复现** + 更新入口**默认不生效**      FR-010/FR-011/SC-005
 G17     门面**依赖卫生**（两档：内部 L4/L5 + 第三方 / 零环境变量 / 零 I/O）FR-014/SC-009
 G18     门面的**模块加载面**（不横依赖 L4/L5 + 顶层包惰性）              FR-013/FR-014/SC-007
-G19     兼容矩阵**覆盖门面 7 个符号**                                    FR-012/SC-012
+G19     兼容矩阵**覆盖门面清单符号**（manifest 驱动）                    FR-012/SC-012
 G20     本 feature **新建源文件**的**署名头**                            FR-017/SC-014
 ======  ==============================================================  ==========================
 
@@ -34,14 +34,17 @@ from pathlib import Path
 import pytest
 
 from ._gatesupport import (
+    COMPAT_RELPATH,
     CONTRACT_API_MANIFEST,
     CONTRACT_MANIFEST_ANCHOR,
+    DEGREE_RANK,
     FACADE_MANIFEST,
     FACADE_MODULES,
     SIGNED_SOURCE_FILES,
     SNAPSHOT_PATH,
     compare_snapshot,
     compat_matrix_rows,
+    degree_rank,
     diff_line_count,
     env_and_io_violations,
     facade_body_violations,
@@ -56,7 +59,7 @@ from ._gatesupport import (
 )
 from ._snapshot_tools import render_api_snapshot
 
-#: 门面导出的 7 个符号中，**本 feature 补入兼容矩阵**的 5 个。
+#: 门面导出的清单中，**本 feature 补入兼容矩阵**的 5 个。
 MATRIX_NEW_ROWS = {"StateGraph", "START", "END", "Send", "interrupt"}
 
 #: 5 个新增行的「等价程度」逐符号取值（research D-17 · quickstart §8）。
@@ -78,6 +81,38 @@ MATRIX_NEW_SOURCES = {
     "Send": "langgraph/types.py:704",
     "interrupt": "langgraph/types.py:851",
 }
+
+#: B24F1 的**定向例外**：仅允许 Command 行为等价 → 部分等价。
+MATRIX_ROWS_UPDATABLE_BY_B24F1 = frozenset({"Command"})
+
+
+def _degree_downgrade_violations(
+    previous: dict[str, str], current: dict[str, str], whitelist: set[str]
+) -> list[tuple[str, str, str]]:
+    """返回白名单行中**不合法的等价程度变化**。
+
+    * ``Command``：仅允许 ``行为等价 → 部分等价``；
+    * 其它白名单行：``current >= previous``。
+    """
+    violations: list[tuple[str, str, str]] = []
+    for name in sorted(whitelist):
+        if name not in previous:
+            continue
+        if name not in current:
+            violations.append((name, previous[name], "<missing>"))
+            continue
+        prev_deg = degree_rank(previous[name])
+        curr_deg = degree_rank(current[name])
+        if name in MATRIX_ROWS_UPDATABLE_BY_B24F1:
+            if (prev_deg, curr_deg) != (DEGREE_RANK["行为等价"], DEGREE_RANK["部分等价"]):
+                violations.append((name, previous[name], current[name]))
+        elif curr_deg < prev_deg:
+            violations.append((name, previous[name], current[name]))
+    return violations
+
+
+def _read_compat(repo_root: Path) -> str:
+    return (repo_root / COMPAT_RELPATH).read_text(encoding="utf-8")
 
 
 @pytest.fixture(scope="module")
@@ -400,19 +435,19 @@ class TestFacadeModuleLoadingSurface:
 
 
 class TestCompatMatrixCoversTheFacade:
-    """门禁 **G19** —— 兼容矩阵覆盖门面的 7 个符号。
+    """门禁 **G19** —— 兼容矩阵覆盖门面清单符号（manifest 驱动）。
 
-    除门面的 7 个符号外，本门禁还承担**整表**的口径判定（矩阵的符号集合
-    == 契约层 18 个 ∪ 门面层 7 个）——既有门禁 **G8** 的范围**只是**契约层
-    的 18 个符号（见 ``contracts/architecture-gates.md`` §3 的「分工不重叠」）。
+    除门面清单外，本门禁还承担**整表**的口径判定（矩阵的符号集合
+    == 契约层清单 ∪ 门面层清单）——既有门禁 **G8** 的范围**只是**契约层
+    清单（见 ``contracts/architecture-gates.md`` §3 的「分工不重叠」）。
     """
 
     def test_matrix_covers_every_facade_symbol(
         self, repo_root: Path, manifest_symbols: set[str]
     ) -> None:
-        """门面 7 个符号 MUST 在矩阵里**各恰有一行**（多 / 少都失败）。"""
-        readme = (repo_root / "README.md").read_text(encoding="utf-8")
-        names = [name for name, _ in compat_matrix_rows(readme)]
+        """门面清单符号 MUST 在矩阵里**各恰有一行**（多 / 少都失败）。"""
+        text = _read_compat(repo_root)
+        names = [name for name, _ in compat_matrix_rows(text)]
         counts = Counter(names)
         missing = sorted(name for name in manifest_symbols if counts[name] == 0)
         assert not missing, f"兼容矩阵缺门面层符号：{missing}"
@@ -424,24 +459,24 @@ class TestCompatMatrixCoversTheFacade:
     def test_matrix_covers_exactly_the_two_layers(
         self, repo_root: Path, manifest_symbols: set[str]
     ) -> None:
-        """**整表**口径 —— 矩阵的符号集合 == 契约层 18 个 ∪ 门面层 7 个。
+        """**整表**口径 —— 矩阵的符号集合 == 契约层清单 ∪ 门面层清单。
 
         （抓「清单外符号」——既有门禁 G8 的范围**只是**契约层，故这条判据
         落在本门禁。）
         """
-        readme = (repo_root / "README.md").read_text(encoding="utf-8")
+        text = _read_compat(repo_root)
         contract = parse_manifest_symbols(
             repo_root / CONTRACT_API_MANIFEST, anchor=CONTRACT_MANIFEST_ANCHOR
         )
-        names = {name for name, _ in compat_matrix_rows(readme)}
+        names = {name for name, _ in compat_matrix_rows(text)}
         assert names == contract | manifest_symbols, names ^ (contract | manifest_symbols)
 
     def test_new_rows_declare_equivalence_and_source(
         self, repo_root: Path
     ) -> None:
         """新增 5 行 MUST 逐符号标注**等价程度**并附**上游来源行号**。"""
-        readme = (repo_root / "README.md").read_text(encoding="utf-8")
-        rows = dict(compat_matrix_rows(readme))
+        text = _read_compat(repo_root)
+        rows = dict(compat_matrix_rows(text))
         for name, equivalence in MATRIX_NEW_EQUIVALENCE.items():
             assert name in rows, f"兼容矩阵缺 {name} 行"
             cells = rows[name]
@@ -512,93 +547,97 @@ class TestCompatMatrixCoversTheFacade:
     MATRIX_ROWS_UPDATABLE_BY_B23F1 = frozenset({"Graph"})
 
     def test_existing_contract_rows_are_unchanged(self, repo_root: Path) -> None:
-        """**既有 18 行逐字未改** —— 与 git 中���**上一版**逐字节比对。
+        """**既有契约层行逐字未改** —— 与 git 中**上一版**逐字节比对。
 
-        取 ``git show HEAD:README.md`` 的兼容矩阵章节里**契约层的 18 行**
-        （首列符号 ∈ 契约层清单），与当前 README 的对应行**逐字节**比对。
-
-        无 git / 无历史版本时 **skip**（不判失败）——「逐字未改」是**交付纪律**，
-        其可判定形式依赖版本历史。
+        current 侧 = ``COMPAT.md``；baseline 侧按序取：
+        ① ``HEAD:COMPAT.md``（存在且含机读段行）；
+        ② 否则 ``HEAD:README.md``（迁移前旧矩阵）；
+        ③ 两者都无矩阵行 ⇒ ``pytest.skip``。
         """
         contract = parse_manifest_symbols(
             repo_root / CONTRACT_API_MANIFEST, anchor=CONTRACT_MANIFEST_ANCHOR
         )
         current = {
             name: " | ".join(cells)
-            for name, cells in compat_matrix_rows(
-                (repo_root / "README.md").read_text(encoding="utf-8")
+            for name, cells in compat_matrix_rows(_read_compat(repo_root))
+            if name in contract
+        }
+        previous: dict[str, str] = {}
+        source = ""
+        for ref in (f"HEAD:{COMPAT_RELPATH}", "HEAD:README.md"):
+            proc = subprocess.run(
+                ["git", "show", ref],
+                cwd=str(repo_root),
+                capture_output=True,
+                text=True,
+                timeout=120,
             )
-            if name in contract
-        }
-        proc = subprocess.run(
-            ["git", "show", "HEAD:README.md"],
-            cwd=str(repo_root),
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-        if proc.returncode != 0:
+            if proc.returncode != 0:
+                continue
+            try:
+                rows = compat_matrix_rows(proc.stdout)
+            except AssertionError:
+                continue
+            candidate = {
+                name: " | ".join(cells) for name, cells in rows if name in contract
+            }
+            if candidate:
+                previous = candidate
+                source = ref
+                break
+        if not previous:
             pytest.skip("无 git 历史版本可比对——「逐字未改」判据不可执行")
-        previous = {
-            name: " | ".join(cells)
-            for name, cells in compat_matrix_rows(proc.stdout)
-            if name in contract
-        }
-        assert previous, "git 历史版本里没有契约层的矩阵行"
-        changed = sorted(
-            name
-            for name in previous
-            if name not in self.MATRIX_ROWS_UPDATABLE_BY_B9F1
-            and name not in self.MATRIX_ROWS_UPDATABLE_BY_B11F1
-            and name not in self.MATRIX_ROWS_UPDATABLE_BY_B12F1
-            and name not in self.MATRIX_ROWS_UPDATABLE_BY_B7F3
-            and name not in self.MATRIX_ROWS_UPDATABLE_BY_B22F1
-            and name not in self.MATRIX_ROWS_UPDATABLE_BY_B23F1
-            and previous[name] != current.get(name)
-        )
-        assert not changed, f"既有契约层矩阵行被改动：{changed}"
 
-        # ⚠️ **白名单行**（B9F1 · 裁定 21 / B12F1 · 上游对齐 P3）：
-        # **只**放行「差异说明」列的措辞更新 ⇒ **等价程度（第三列）MUST NOT 变差**
-        # （「不支持」→「部分等价」→「行为等价」为**向好**，允许；**降级**一律拒绝）。
-        # ⚠️ 2026-11-12（B12F1）：B9F1 白名单原为「等价程度 MUST NOT **变**」⇒ B12F1 把
-        # `Command` 对齐上游（**部分等价 → 行为等价**）⇒ 收敛为「MUST NOT **变差**」
-        # （**登记项 · 需追认**；门禁仍能抓住「静默漂移」与「降级」）。
-        _DEGREE_RANK = {"不支持": 0, "部分等价": 1, "行为等价": 2}
-
-        def _degree(cell: str) -> int:
-            """「等价程度」单元 → 等级（**去** markdown 强调与括号后缀）。"""
-            plain = cell.replace("*", "").strip()
-            for label, rank in _DEGREE_RANK.items():
-                if plain.startswith(label):
-                    return rank
-            raise AssertionError(f"未知的「等价程度」取值：{cell!r}")
-        for name in (
+        whitelist = (
             self.MATRIX_ROWS_UPDATABLE_BY_B9F1
             | self.MATRIX_ROWS_UPDATABLE_BY_B11F1
             | self.MATRIX_ROWS_UPDATABLE_BY_B12F1
             | self.MATRIX_ROWS_UPDATABLE_BY_B7F3
             | self.MATRIX_ROWS_UPDATABLE_BY_B22F1
             | self.MATRIX_ROWS_UPDATABLE_BY_B23F1
-        ):
-            if name not in previous:
-                # 该行属**门面**面（不在「契约层」集合内）⇒ 不由本判据守
-                continue
-            prev_cells = [c.strip() for c in previous[name].split(" | ")]
-            curr_cells = [c.strip() for c in current.get(name, "").split(" | ")]
-            assert _degree(curr_cells[2]) >= _degree(prev_cells[2]), (
-                f"白名单行 {name} 的「等价程度」变差了："
-                f"{prev_cells[2]!r} → {curr_cells[2]!r}"
-            )
+        )
+        changed = sorted(
+            name
+            for name in previous
+            if name not in whitelist and previous[name] != current.get(name)
+        )
+        assert not changed, (
+            f"既有契约层矩阵行被改动（baseline = {source}）：{changed}"
+        )
+
+        previous_degree = {
+            name: previous[name].split(" | ")[2].strip() for name in previous
+        }
+        current_degree = {
+            name: current[name].split(" | ")[2].strip()
+            for name in current
+            if len(current[name].split(" | ")) >= 3
+        }
+        violations = _degree_downgrade_violations(
+            previous_degree, current_degree, whitelist
+        )
+        assert not violations, f"白名单行等价程度非法变化：{violations}"
+
+    def test_selfcheck_rejects_send_and_command_downgrades(self) -> None:
+        """**负向自检** —— Send 任意降级、Command 非定向降级都必须报出。"""
+        assert _degree_downgrade_violations(
+            {"Send": "行为等价"}, {"Send": "不支持"}, {"Send"}
+        )
+        assert _degree_downgrade_violations(
+            {"Command": "部分等价"}, {"Command": "不支持"}, {"Command"}
+        )
+        assert _degree_downgrade_violations(
+            {"Command": "行为等价"}, {"Command": "部分等价"}, {"Command"}
+        ) == []
 
     def test_selfcheck_detects_a_missing_row(
         self, repo_root: Path, manifest_symbols: set[str]
     ) -> None:
         """**自检** —— 删掉一行 ⇒ 覆盖检查**确实报出**。"""
-        readme = (repo_root / "README.md").read_text(encoding="utf-8")
+        text = _read_compat(repo_root)
         stripped = "\n".join(
             line
-            for line in readme.splitlines()
+            for line in text.splitlines()
             if not line.strip().startswith("| `Send` |")
         )
         names = {name for name, _ in compat_matrix_rows(stripped)}

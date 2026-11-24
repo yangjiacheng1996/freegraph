@@ -250,39 +250,41 @@ def evaluate(root: Path, baseline_ref: str) -> list[_gatekit.Violation]:
 
 
 def check_compat(root: Path) -> int:
-    """``--check-compat`` 模式 —— ``COMPAT.md`` 的**分层判定**。
+    """``--check-compat`` 模式 —— ``COMPAT.md`` 的**权威源判定**。
 
-    **不存在** ⇒ 输出「**未落地**」且**退出码 0**（非阻断 · MUST NOT 静默跳过）；
-    **存在** ⇒ **严格比对**：有不一致 ⇒ 退出码非 0（并指名**行 / 符号**）；
-    一致 ⇒ 退出码 0。
+    ``COMPAT.md`` 不存在 ⇒ 输出「未落地」且退出 0（非阻断）。
+    存在 ⇒ 校验：机读段覆盖契约 ∪ 门面清单、``Command`` = 部分等价、
+    affiliation 在机读段内、README 只含指针且无完整矩阵。
     """
     compat_path = root / "COMPAT.md"
     if not compat_path.is_file():
         print(
             "[G29] COMPAT.md：**未落地**（非阻断）——"
-            "终版兼容矩阵归后续 feature；已入库的 README「API 兼容矩阵」章节"
-            "由既有门禁 G8 / G19 严格比对（只接线 · 判据零改动）"
+            "已入库的 README「API 兼容矩阵」章节由既有门禁 G8 / G19 严格比对"
+            "（只接线 · 判据零改动）"
         )
         return 0
     violations = _compare_compat(root, compat_path)
     if not violations:
-        print("[G29] COMPAT.md：与 README「API 兼容矩阵」**一致**（严格比对通过）")
+        print(
+            "[G29] COMPAT.md：覆盖契约 ∪ 门面清单 + Command = 部分等价 + "
+            "README 仅指针（严格判定通过）"
+        )
         return 0
     for violation in violations:
         print(f"  违规条目: {violation.entry}")
         print(f"  规则编号: {violation.rule}")
         print(f"  细节    : {violation.detail}")
         print(f"  修复指引: {violation.fix}")
-    print(f"[G29] COMPAT.md 严格比对失败：{len(violations)} 处不一致")
+    print(f"[G29] COMPAT.md 严格判定失败：{len(violations)} 处不一致")
     return 1
 
 
 def _compare_compat(root: Path, compat_path: Path) -> list[_gatekit.Violation]:
-    """比对 ``COMPAT.md`` 与 README 的兼容矩阵 ⇒ 违规清单。
+    """校验 ``COMPAT.md`` 为唯一权威 + README 仅指针。
 
     **判据来源 = 既有门禁 G8 / G19 的取行实现**
-    （`tests/facade/_gatesupport.py` 的 `compat_matrix_rows`）⇒
-    MUST **引用**其判据来源、MUST NOT **重复实现**（裁定 8 第三条理由）。
+    （`tests/facade/_gatesupport.py`）⇒ MUST **引用**、MUST NOT 重复实现。
     """
     violations: list[_gatekit.Violation] = []
     support = _load_facade_gate_support(root)
@@ -295,54 +297,108 @@ def _compare_compat(root: Path, compat_path: Path) -> list[_gatekit.Violation]:
                 fix="恢复 tests/facade/_gatesupport.py（MUST NOT 在本门禁里重复实现矩阵取行）",
             )
         ]
-    readme = (root / "README.md").read_text(encoding="utf-8")
+    compat_text = compat_path.read_text(encoding="utf-8")
     try:
-        expected = dict(
-            (symbol, cells) for symbol, cells in support.compat_matrix_rows(readme)
+        rows = support.compat_matrix_rows(compat_text)
+        section = support.compat_matrix_section(compat_text)
+        contract = support.parse_manifest_symbols(
+            support.CONTRACT_API_MANIFEST, anchor=support.CONTRACT_MANIFEST_ANCHOR
         )
-        actual = dict(
-            (symbol, cells) for symbol, cells in support.compat_matrix_rows(
-                compat_path.read_text(encoding="utf-8")
-            )
+        facade = support.parse_manifest_symbols(
+            support.FACADE_MANIFEST, anchor=support.FACADE_MANIFEST_ANCHOR
         )
+        expected = contract | facade
     except AssertionError as exc:
         return [
             _gatekit.Violation(
                 entry=_gatekit.relative_to_root(compat_path, root),
                 rule="G29-04",
-                detail=f"取行失败：{exc}",
-                fix="让 COMPAT.md 具备「## API 兼容矩阵」章节（与 README 同构）",
+                detail=f"取行 / 清单解析失败：{exc}",
+                fix="让 COMPAT.md 具备「## API 兼容矩阵」章节并保持清单可解析",
             )
         ]
-    for symbol in sorted(set(expected) | set(actual)):
-        if symbol not in actual:
+
+    names = [name for name, _ in rows]
+    duplicates = sorted({name for name in names if names.count(name) > 1})
+    if duplicates:
+        violations.append(
+            _gatekit.Violation(
+                entry="COMPAT.md · API 兼容矩阵",
+                rule="G29-04",
+                detail=f"存在重复符号：{duplicates}",
+                fix="每个符号恰保留一行",
+            )
+        )
+    missing = sorted(expected - set(names))
+    if missing:
+        violations.append(
+            _gatekit.Violation(
+                entry="COMPAT.md · API 兼容矩阵",
+                rule="G29-04",
+                detail=f"缺少契约 / 门面符号：{missing}",
+                fix="补齐两层清单的全部符号",
+            )
+        )
+    extra = sorted(set(names) - expected)
+    if extra:
+        violations.append(
+            _gatekit.Violation(
+                entry="COMPAT.md · API 兼容矩阵",
+                rule="G29-04",
+                detail=f"出现清单外符号：{extra}",
+                fix="删除清单外符号（下游行放独立章节）",
+            )
+        )
+    command_rows = [cells for name, cells in rows if name == "Command"]
+    if not command_rows or len(command_rows[0]) < 3 or command_rows[0][2] != "部分等价":
+        violations.append(
+            _gatekit.Violation(
+                entry="COMPAT.md · Command",
+                rule="G29-04",
+                detail="Command 行的等价程度 MUST 为「部分等价」",
+                fix="把 Command 第三列恢复为部分等价（B24F1 定向纠漂移）",
+            )
+        )
+    if "不构成 affiliation" not in section:
+        violations.append(
+            _gatekit.Violation(
+                entry="COMPAT.md · API 兼容矩阵",
+                rule="G29-04",
+                detail="机读段缺少「不构成 affiliation」声明",
+                fix="在机读段内补 affiliation 声明",
+            )
+        )
+
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    try:
+        readme_section = support.compat_matrix_section(readme)
+        readme_rows = support.compat_matrix_rows(readme)
+    except AssertionError as exc:
+        violations.append(
+            _gatekit.Violation(
+                entry="README.md · API 兼容矩阵",
+                rule="G29-04",
+                detail=f"README 指针章节不可解析：{exc}",
+                fix="保留「## API 兼容矩阵」指针章节",
+            )
+        )
+    else:
+        if "https://github.com/yangjiacheng1996/freegraph/blob/main/COMPAT.md" not in readme_section:
             violations.append(
                 _gatekit.Violation(
-                    entry=f"COMPAT.md · 符号 {symbol}",
+                    entry="README.md · API 兼容矩阵",
                     rule="G29-04",
-                    detail="COMPAT.md 缺少该符号的兼容矩阵行",
-                    fix="补齐该行（README 的兼容矩阵是已入库的权威）",
+                    detail="README 缺少指向 COMPAT.md 的绝对 GitHub URL",
+                    fix="补绝对链接：https://github.com/yangjiacheng1996/freegraph/blob/main/COMPAT.md",
                 )
             )
-        elif symbol not in expected:
+        if readme_rows:
             violations.append(
                 _gatekit.Violation(
-                    entry=f"COMPAT.md · 符号 {symbol}",
+                    entry="README.md · API 兼容矩阵",
                     rule="G29-04",
-                    detail="COMPAT.md 出现了 README 兼容矩阵里没有的符号",
-                    fix="删除该行或先在 README 的兼容矩阵中登记该符号",
-                )
-            )
-        elif expected[symbol] != actual[symbol]:
-            violations.append(
-                _gatekit.Violation(
-                    entry=f"COMPAT.md · 符号 {symbol}",
-                    rule="G29-04",
-                    detail=(
-                        f"单元格不一致：README = {expected[symbol]} · "
-                        f"COMPAT.md = {actual[symbol]}"
-                    ),
-                    fix="让 COMPAT.md 与 README 的兼容矩阵逐格一致",
+                    detail=f"README 仍含完整矩阵行（{len(readme_rows)} 行）",
+                    fix="把完整矩阵迁入 COMPAT.md，README 只留指针",
                 )
             )
     return violations

@@ -13,7 +13,7 @@ G3      依赖闭包**为空**（基础安装零第三方依赖）              
 G4      **零**环境变量读取 + **零**出站（范围含夹具目录）           FR-011
 G5      每个新源文件带署名头且 docstring 为首个语句                FR-015/SC-009
 G6      ``py.typed`` 存在且为空（PEP 561）                         FR-011
-G7      公开符号面**恰为 20 个**（清单驱动 · 清单来自 public-api.md §0） FR-012/SC-001/SC-017
+G7      公开符号面**清单（manifest 驱动）**（清单来自 public-api.md §0） FR-012/SC-001/SC-017
 G8      文档合规门禁（兼容矩阵逐符号覆盖 + ``THIRD_PARTY_NOTICES``） FR-013/SC-020/SC-021
 G9      **运行时环境基线**：typing 构件上限 = 3.11                  FR-011
 G10     协议**纯抽象**（方法体只有 ``...``）                        FR-007/SC-008
@@ -25,7 +25,7 @@ G13     **纯数据纪律**（数据类不得含对象引用字段）           
 G1–G6 / G9 继承自 **B1F1**（``specs/b1f1-contracts-core/contracts/architecture-gates.md``），
 G7 / G8 由本 feature **修改**（8 → 20 · 改为清单驱动），G10–G13 为**新增**。
 ⚠️ **2026-11-13 订正（X1 / R-10）**：本行的「18」是**交付时点记述**（B2F1 交付时确为 18）
-⇒ 当前权威 = ``public-api.md`` §0 的清单（**恰好 20 个** · 上游对齐批次 P3 扩面）
+⇒ 当前权威 = ``public-api.md`` §0 的清单（**manifest 驱动** · 上游对齐批次 P3 扩面）
 ⇒ **断言零改动**（清单驱动 ⇒ 期望值从清单解析 ⇒ **不硬编码个数**）。
 
 「已加载模块清单」类断言 MUST 在**子进程**中执行——测试进程自身已被
@@ -55,7 +55,7 @@ SIGNATURE_HEADER = (
     "https://github.com/yangjiacheng1996/freegraph"
 )
 
-#: 契约层的公开符号面（清单驱动 · **当前 20 个**）——**唯一权威**是
+#: 契约层的公开符号面（**manifest 驱动**）——**唯一权威**是
 #: ``specs/b2f1-contracts-protocols/contracts/public-api.md`` §0。
 #:
 #: **期望值一律从 §0 解析**（:func:`parse_public_api_symbols`），MUST NOT 硬编码
@@ -788,9 +788,9 @@ class TestPublicSymbolSurface:
         }
 
     def test_all_equals_public_symbols(self, repo_root: Path) -> None:
-        """**集合相等段** —— ``__all__`` MUST **集合等于** §0 解析出的 20 个符号。
+        """**集合相等段** —— ``__all__`` MUST **集合等于** §0 解析出的清单。
 
-        （20 个符号全部导出后启用——抓「漏导出」。集合断言才能抓住
+        （清单符号全部导出后启用——抓「漏导出」。集合断言才能抓住
         「偷偷多导出一个」。）
         """
         import freegraph.contracts as contracts
@@ -803,7 +803,7 @@ class TestPublicSymbolSurface:
         )
 
     def test_all_is_a_subset_of_the_manifest(self, repo_root: Path) -> None:
-        """**子集段**（始终启用）——``__all__`` ⊆ §0 解析出的 20 个。
+        """**子集段**（始终启用）——``__all__`` ⊆ §0 解析出的清单。
 
         抓住「偷偷多导出一个」；构造期 ``__all__`` 尚未齐全时恒成立。
         """
@@ -1238,10 +1238,7 @@ class TestRuntimeBaseline:
 
 # ── G8 · 文档合规门禁 ──────────────────────────────────────────────────
 
-#: README「API 兼容矩阵」章节的定位正则。
-#:
-#: 该章节是 README 的**最后一个** ``##`` 章节，其后没有下一个 ``##``——
-#: 用 ``^## `` 收尾会**匹配失败**，故用 ``(?=^## |\Z)``。
+#: 兼容矩阵「## API 兼容矩阵」章节的定位正则（唯一权威源 = ``COMPAT.md``）。
 COMPAT_MATRIX_PATTERN = re.compile(
     r"^## API 兼容矩阵\s*$(.*?)(?=^## |\Z)", re.S | re.M
 )
@@ -1251,9 +1248,9 @@ INDEPENDENCE_STATEMENT = "独立实现、非 LangChain Inc. 产品"
 
 
 def _compat_matrix_section(readme: str) -> str:
-    """取出 README「## API 兼容矩阵」章节的正文（**不扫全文**）。"""
+    """取出兼容矩阵「## API 兼容矩阵」章节的正文（**不扫全文**）。"""
     match = COMPAT_MATRIX_PATTERN.search(readme)
-    assert match, "README.md 缺少「## API 兼容矩阵」章节"
+    assert match, "兼容矩阵缺少「## API 兼容矩阵」章节"
     return match.group(1)
 
 
@@ -1275,6 +1272,11 @@ def _compat_matrix_rows(readme: str) -> list[tuple[str, list[str]]]:
             continue
         rows.append((match.group(1), cells))
     return rows
+
+
+def _compat_text(repo_root: Path) -> str:
+    """读取唯一权威兼容矩阵 ``COMPAT.md``（B24F1 起）。"""
+    return (repo_root / "COMPAT.md").read_text(encoding="utf-8")
 
 
 def _notices_dependency_table_rows(notices: str) -> list[str]:
@@ -1308,10 +1310,17 @@ class TestDocumentationCompliance:
         assert (repo_root / "THIRD_PARTY_NOTICES").is_file()
 
     def test_readme_has_compat_matrix_section(self, repo_root: Path) -> None:
-        """README MUST 有「## API 兼容矩阵」章节。"""
+        """README MUST 有「## API 兼容矩阵」章节，但只作**指针**。"""
         readme = (repo_root / "README.md").read_text(encoding="utf-8")
         match = COMPAT_MATRIX_PATTERN.search(readme)
         assert match, "README.md 缺少「## API 兼容矩阵」章节"
+        assert (
+            "https://github.com/yangjiacheng1996/freegraph/blob/main/COMPAT.md"
+            in match.group(1)
+        ), "README 的兼容矩阵章节 MUST 含 COMPAT.md 的绝对 GitHub URL"
+        assert _compat_matrix_rows(readme) == [], (
+            "README MUST NOT 保留完整兼容矩阵（唯一权威在 COMPAT.md）"
+        )
 
     def test_compat_matrix_rows_are_within_the_manifest(
         self, repo_root: Path
@@ -1321,33 +1330,30 @@ class TestDocumentationCompliance:
         （抓「重复 / 超量」。矩阵**整体无重复行**是更一般的判据，一并断言。）
 
         **口径修订（2026-11-07 · B2F2）**：兼容矩阵自 **B2F2** 起**同时**承载
-        **契约层 20 个**与**门面层 7 个**符号 ⇒「矩阵首列符号集合 **==** 契约层
-        20 个」这一**整表**判据**不再成立**。本门禁的判定因此**按层收敛到
-        契约层**——B2F2 的门禁契约声明本门禁的范围**正是**「契约层 20 个符号」
-        （门面层 7 个符号的覆盖由门禁 **G19** 判，两者的**分工不重叠**）；
+        **契约层清单**与**门面层清单**符号 ⇒ 既有「整表符号集合 == 契约层清单」
+        判据**不再成立**。本门禁的判定因此**按层收敛到契约层**——
+        B2F2 的门禁契约声明本门禁的范围**正是**「契约层清单」
+        （门面层清单的覆盖由门禁 **G19** 判，两者的**分工不重叠**）；
         整表的「无清单外符号」由 **G19** 一并判。
         **契约层的任何一条判据都未被削弱**——「不多」（本段）与「不少」
         （集合相等段）两条全部保留。
         """
-        readme = (repo_root / "README.md").read_text(encoding="utf-8")
+        text = _compat_text(repo_root)
         existing, new = parse_public_api_symbols(repo_root / PUBLIC_API_MANIFEST)
         allowed = set(existing) | set(new)
-        rows = _compat_matrix_rows(readme)
+        rows = _compat_matrix_rows(text)
         names = [name for name, _ in rows]
         assert len(names) == len(set(names)), f"矩阵存在重复行：{names}"
         counts = Counter(names)
         over = sorted(name for name in allowed if counts[name] > 1)
         assert not over, f"契约层符号在矩阵中出现多行：{over}"
 
-    def test_compat_matrix_rows_have_three_columns(self, repo_root: Path) -> None:
-        """每行 MUST 含「对应上游符号 / 等价程度 / 差异说明」三列。
-
-        （矩阵**保持 4 列**——既有 8 行逐字不动 ⇒ 不可为来源单开一列。）
-        """
-        readme = (repo_root / "README.md").read_text(encoding="utf-8")
-        for name, cells in _compat_matrix_rows(readme):
-            assert len(cells) >= 4, (
-                f"矩阵行 {name} 的列数不足 4（期望：符号 / 上游 / 等价程度 / 差异说明），"
+    def test_compat_matrix_rows_have_four_columns(self, repo_root: Path) -> None:
+        """每行 MUST **恰为 4 列**（符号 / 上游 / 等价程度 / 差异说明）。"""
+        text = _compat_text(repo_root)
+        for name, cells in _compat_matrix_rows(text):
+            assert len(cells) == 4, (
+                f"矩阵行 {name} 的列数不是 4（期望：符号 / 上游 / 等价程度 / 差异说明），"
                 f"实得 {len(cells)}"
             )
 
@@ -1361,10 +1367,10 @@ class TestDocumentationCompliance:
 
         （既有 8 行按 FR-017 **逐字不动** ⇒ 不要求行内来源行号。）
         """
-        readme = (repo_root / "README.md").read_text(encoding="utf-8")
+        text = _compat_text(repo_root)
         _, new = parse_public_api_symbols(repo_root / PUBLIC_API_MANIFEST)
         new_set = set(new)
-        for name, cells in _compat_matrix_rows(readme):
+        for name, cells in _compat_matrix_rows(text):
             if name not in new_set:
                 continue
             row = " | ".join(cells)
@@ -1384,19 +1390,19 @@ class TestDocumentationCompliance:
         （README 已补入本层 10 行 ⇒ 该段自此启用；抓「漏写」。）
 
         **口径修订（2026-11-07 · B2F2）**：矩阵自 **B2F2** 起同时承载**门面层**
-        的 7 个符号 ⇒ 整表集合相等判据改为**按层**判定（契约层符号**齐备**
+        的门面层清单 ⇒ 整表集合相等判据改为**按层**判定（契约层符号**齐备**
         + 整表符号集合由门禁 **G19** 判）。
         """
-        readme = (repo_root / "README.md").read_text(encoding="utf-8")
+        text = _compat_text(repo_root)
         existing, new = parse_public_api_symbols(repo_root / PUBLIC_API_MANIFEST)
-        rows = [name for name, _ in _compat_matrix_rows(readme)]
+        rows = [name for name, _ in _compat_matrix_rows(text)]
         missing = sorted((set(existing) | set(new)) - set(rows))
         assert not missing, f"矩阵缺契约层符号：{missing}"
 
     def test_compat_matrix_declares_no_affiliation(self, repo_root: Path) -> None:
         """矩阵章节 MUST 含「不构成 affiliation」字样（宪法原则 IX）。"""
-        readme = (repo_root / "README.md").read_text(encoding="utf-8")
-        assert "不构成 affiliation" in _compat_matrix_section(readme)
+        text = _compat_text(repo_root)
+        assert "不构成 affiliation" in _compat_matrix_section(text)
 
     def test_readme_contains_independence_statement(self, repo_root: Path) -> None:
         """README **全文** MUST 含「独立实现、非 LangChain Inc. 产品」。

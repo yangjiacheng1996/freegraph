@@ -137,6 +137,11 @@ packages = ["src/freegraph"]
 # 读者学习全部原理，但绝不能进入 PyPI 发行包（否则会被别人 import 引入）。
 # only-include 已限定范围，exclude 再兜一层；最终由 harness/scripts/check_dist_purity.py
 # 在发布流水线里断言（见 .github/workflows/publish.yml）。
+[tool.hatch.build.targets.sdist.hooks.custom]
+# hatchling 会强制把根 .gitignore 加入 sdist（VCS 忽略文件），exclude 无法拦截；
+# 该钩子只在 sdist 目标上移除它，满足 Release Gate 的「sdist 不含 .gitignore」。
+path = "harness/build_hooks/sdist_prune.py"
+
 [tool.hatch.build.targets.sdist]
 only-include = ["src/freegraph", "README.md", "LICENSE"]
 exclude = [
@@ -148,6 +153,10 @@ exclude = [
     "/specs",
     "/dist",
     "/tests",
+    "/COMPAT.md",
+    "/THIRD_PARTY_NOTICES",
+    ".gitignore",
+    "**/.gitignore",
     "**/node_modules",
     "**/__pycache__",
 ]

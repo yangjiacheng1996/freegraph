@@ -78,10 +78,30 @@ FORBIDDEN_ENV_ATTRS = frozenset({"environ", "environb", "getenv"})
 #: 出站 / 外部进程模块（门禁 G17 ④）。
 FORBIDDEN_IO_MODULES = frozenset({"socket", "urllib", "http", "subprocess"})
 
-#: README「API 兼容矩阵」章节的定位正则（门禁 G19 的取行范围）。
+#: 兼容矩阵的**唯一权威文件**（B24F1 起；README 只保留指针）。
+COMPAT_RELPATH = "COMPAT.md"
+
+#: 「等价程度」等级（门禁 G19 的单调检查）。
+DEGREE_RANK = {"不支持": 0, "部分等价": 1, "行为等价": 2}
+
+#: 兼容矩阵 `## API 兼容矩阵` 章节的定位正则（G8 / G19 / G29 的取行范围）。
 COMPAT_MATRIX_PATTERN = re.compile(
     r"^## API 兼容矩阵\s*$(.*?)(?=^## |\Z)", re.S | re.M
 )
+
+
+def read_compat_text(repo_root: Path) -> str:
+    """读取仓库根的 ``COMPAT.md``（唯一权威矩阵）。"""
+    return (repo_root / COMPAT_RELPATH).read_text(encoding="utf-8")
+
+
+def degree_rank(cell: str) -> int:
+    """把「等价程度」单元格归一为等级（去 markdown 强调与括号后缀）。"""
+    plain = cell.replace("*", "").strip()
+    for label, rank in DEGREE_RANK.items():
+        if plain.startswith(label):
+            return rank
+    raise AssertionError(f"未知的「等价程度」取值：{cell!r}")
 
 #: 仓库根与源码树（本文件的路径基准）。
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -512,9 +532,9 @@ def diff_line_count(expected: str, actual: str) -> int:
 
 
 def compat_matrix_section(readme: str) -> str:
-    """取出 README「## API 兼容矩阵」章节的正文（**不扫全文**）。"""
+    """取出兼容矩阵「## API 兼容矩阵」章节的正文（**不扫全文**）。"""
     match = COMPAT_MATRIX_PATTERN.search(readme)
-    assert match, "README.md 缺少「## API 兼容矩阵」章节"
+    assert match, "兼容矩阵缺少「## API 兼容矩阵」章节"
     return match.group(1)
 
 

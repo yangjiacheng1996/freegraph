@@ -1,6 +1,6 @@
 # freegraph
 
-> **⚠️ 状态：v0.0.x 是「占位版」（name-reservation placeholder），内核尚未实现。**
+> **⚠️ 状态：当前 `0.0.x` 是历史「占位版」（name-reservation placeholder）序列。**
 > **v0.0.2 起**：每个源文件带署名头（Copyright + MIT + 项目地址）——MIT 允许文件被单独
 > 复制，而复制不会带走 `LICENSE`，因此署名必须随每个文件流动。
 > **v0.0.2 已发布**（2026-11-05）：发行产物纯度门禁在真实发布链路上首次执行并通过——
@@ -8,20 +8,14 @@
 > **v0.0.3 起**：基础安装**零第三方运行时依赖**（原唯一的 `typing-extensions` 已剥离），
 > 最低 Python 版本 **3.11**。
 >
-> 本次发布**只为在 PyPI 上锁定 `freegraph` 这个发行名**（发行名 = 导入名）。
-> 目前 `import freegraph` 只会返回一个版本号，**没有任何图运行时能力**——
-> 请勿用于生产，也不要把它当作 LangGraph 的可用替代品。
->
-> 实现路线见仓库内 `harness/proposals/立项书.md`（31 个 feature / 93 人日 / v1.0）。
-
-**English:** FreeGraph is a fully account-free, drop-in replacement for LangGraph,
-faithfully replicating its API while maintaining LangChain compatibility — build and
-run graph-based AI workflows without LangSmith or external account dependencies.
+> 当前仓库已交付 v1 的图运行时能力（Graph API、状态 / 持久化 / 时间旅行、可观测与 OTLP 导出、
+> PNG 占位渲染）；发行包仍将在 v1.0 收口时一次性离开 `0.0.x`。实现路线见仓库内
+> `harness/proposals/立项书.md`（32 个 feature / 96 人日 / v1.0）。
 
 > **独立实现声明**：freegraph 为**独立实现、非 LangChain Inc. 产品**——
 > 与 LangChain / LangGraph / LangSmith 无从属、授权或合作关系。
 > 文中出现的相关名称仅为描述 **API 兼容目标**（同名 API 便于迁移），
-> 不暗示任何 affiliation；逐符号的等价程度见下文「**API 兼容矩阵**」章节。
+> 不暗示任何 affiliation；逐符号的等价程度见仓库根 **`COMPAT.md`**（唯一权威矩阵）。
 
 三条对外承诺（v1.0 交付时兑现）：
 
@@ -97,7 +91,7 @@ uv run --no-project --python .venv python harness/scripts/gates/gate_G21_depende
 
 ## OTLP 导出（B21F1 · 可选 `[otlp]`）
 
-把 freegraph 自有的 `Span` 以**标准 OTLP** 导出到用户**显式提供**的端点 / 导出器；
+安装：`pip install "freegraph[otlp]"`。把 freegraph 自有的 `Span` 以**标准 OTLP** 导出到用户**显式提供**的端点 / 导出器；
 默认关闭、无默认端点、不读环境变量、导出失败不阻断图执行。
 
 ```python
@@ -121,107 +115,59 @@ exporter = OtlpExporter(exporter=OTLPSpanExporter(endpoint="http://127.0.0.1:431
 **能力分工 / 重叠说明**：freegraph 负责**本地运行时诊断**（图视图、状态快照、
 checkpoint / time-travel、交互式调试）；OpenLIT / Langfuse / Phoenix 负责**外部 trace
 浏览 / 分析 / 评测 / Prompt 管理**——重叠是**分层互补**，不是替代关系。
-**三示例并列、无默认推荐后端**。
+**三示例并列、无默认推荐**。
 
 **已知失效风险**：OpenLIT 旧路径 `openlit.io/docs` **404**，现行文档为
 `https://docs.openlit.io/latest/overview`（as-of 2026-11-24，仓库 README 可作回退）；
 OTel 后端 API / 版本变更可能使示例失效；HTTP exporter 是**用户侧依赖**（其闭包含
 `certifi`（MPL-2.0），不进 freegraph 的 `[otlp]`）；Phoenix 为 Elastic-2.0 ⇒ **只连不嵌**。
 
-## API 兼容矩阵
+## 能力 → freegraph 处置
 
-> **兼容意图为互操作，不构成 affiliation** —— freegraph 与 LangChain / LangGraph / LangSmith
-> **无从属、授权或合作关系**，亦未使用其商标、logo、品牌色或官方文案。
-> 本表逐符号标注 freegraph 与上游的等价程度，是**活文档**（随每个 feature 新增的公开面更新，
-> 由 B24F1 补全与定稿）。
->
-> **「公开面」的判定口径**（2026-11-08 · B4F1 分析轮澄清 · **2026-11-13 订正**）：**公开面 = 契约层 **20** 个符号
-> + 门面 `freegraph/graph.py` 的 **8** 个符号** ⇒ **内核子包**（如 `freegraph.runtime` 的
-> `parse_state_schema` / `ChannelSpec` / `SchemaSpec` / `InvalidSchemaError`）属 **L2 内部 API**
-> （用户可 import，但**不承诺稳定**）⇒ **不进本表**（相关 feature 的兼容矩阵**零新增行**）。
+> 下表**逐字复刻**立项书 §3.2 的定稿表体（as-of **2026-11-01**，以官方定价页为准）；
+> 随每次范围变更更新。
 
-| freegraph 符号 | 对应上游符号 | 等价程度 | 差异说明 |
-|---|---|---|---|
-| `StateDict` | （LangGraph 1.2.19 无同名公开符号） | 行为等价 | 与 `dict[str, Any]` 完全等价；上游把同一形状内联为 `dict[str, Any]`，未单列类型名 |
-| `Command` | `langgraph.types.Command` | 行为等价 | **B22F1 起泛型化**（`Command[N]`；字段 / 构造 / `PARENT` / 运行期语义不变，仅用于图渲染推断）；四个语义位 `goto` / `update` / `resume` / `graph` **同名同义**（**上游同款** · 2026-11-12 上游对齐 P3 · 上游 `langgraph/types.py:821-824`）；**无构造期校验**（上游同款 · `Command()` 合法）；`goto` 目标**可以是节点名或 `Send`**（上游同款 · B11F1）；**运行期语义已落地**（B9F1 · `goto` 落到**边触发源**空间 · `update` 与普通返回值**共用同一条合并路径**）；节点亦可返回**命令列表**（上游同款）；**`update` 接受 list/tuple of 2-tuples**（上游同款 · 上游 `langgraph/types.py:836-840`）；**节点返回 `None` ⇒ 无写入**（上游同款 · 上游 `langgraph/graph/state.py:1459-1460`） |
-| `StateSnapshot` | `langgraph.types.StateSnapshot` | 行为等价 | **8** 个字段**同名同序**（**上游同款** · 2026-11-12 上游对齐 P3 · 上游 `langgraph/types.py:683-701`）；`created_at` / `metadata` **可空**（上游同款）；`tasks` / `interrupts` 的元素类型 = `PregelTask` / `Interrupt`（上游同款）；`config` / `parent_config` 的类型是 freegraph 自有的 `RunConfig`，不是 `RunnableConfig` |
-| `RunConfig` | `langchain_core.runnables.RunnableConfig` | 行为等价 | **9** 个键**同名同义**（**上游同款** · 2026-11-12 上游对齐 P3 · 上游 `langchain_core/runnables/config.py:80-124`）：`tags` / `metadata` / `max_concurrency` / `recursion_limit` / `run_name` / `run_id` / `configurable` **齐备**；`thread_id` **顶层**保留（上游放在 `configurable` 内 ⇒ 由 `resolved_thread_id()` **两种写法都解析**）；**不含** `callbacks`（上游的类型在 `langchain_core` ⇒ 照抄即引入依赖 ⇒ 回调走 freegraph 自有的 `TraceSink`）；`context` 是**独立通道**（契约 C21），**不塞进 `configurable`** |
-| `FreegraphError` | （无对应） | 不支持 | freegraph 自创的统一基类——上游三个错误分属 `Exception` / `RecursionError` / `GraphBubbleUp` 三棵互不相干的继承树，无法只捕获一个基类兜住全部内核错误 |
-| `InvalidUpdateError` | `langgraph.errors.InvalidUpdateError` | 部分等价 | 同名、同触发条件；freegraph 额外暴露 `.invalid_keys`（上游只有消息字符串） |
-| `GraphRecursionError` | `langgraph.errors.GraphRecursionError` | 部分等价 | 同名、同触发条件；freegraph 额外暴露 `.recursion_limit` / `.current_step`（上游只有消息字符串） |
-| `GraphInterrupt` | `langgraph.errors.GraphInterrupt` | 行为等价 | 同名、同触发条件；`.payload` 是**中断序列**（**上游同款** · 2026-11-12 上游对齐 P3 · 上游 `langgraph/errors.py:102-107`），异常实参 `args[0]` 即该序列（上游同款）；元素为 `Interrupt`（带 `.value` / `.id` · 契约 C17）；两者均可被 `except Exception` 捕获 |
-| `Interrupt` | `langgraph.types.Interrupt` | 行为等价 | **上游同款**（2026-11-12 上游对齐 P3 · 上游 `langgraph/types.py:575-620`）：`.value` / `.id` **同名同义** ⇒ 契约 C17 的「元素须带 `.value` 与 `.id`」有了**类型载体**；`.id` 的**自动生成**归 **B10F1**（上游按 checkpoint 命名空间派生） |
-| `PregelTask` | `langgraph.types.PregelTask` | 行为等价 | **上游同款**（2026-11-12 上游对齐 P3 · 上游 `langgraph/types.py:637-646`）：七字段**同名同义**（`id` / `name` / `path` / `error` / `interrupts` / `state` / `result`）⇒ 快照的 `tasks` 元素类型与上游**一致** |
-| `StreamWriter` | `langgraph.types.StreamWriter` | 行为等价 | **上游同款**（B8F2）：`Callable[[Any], None]` 类型别名（上游 `langgraph/types.py:138`）；由 `get_stream_writer()` 取得 · 无流时 no-op · 节点签名声明 `writer` 时按关键字注入 |
-| `NodeFunc` | 无上游对应（自由设计） | 不支持 | 契约条目 **C5 / C6**（节点函数签名 / 节点返回值合并）——上游以普通 `dict` 调用节点函数，**无同名协议类**；返回**形态**已冻结（部分状态字典 / 命令原语 / **命令列表** / **`Send` / `list[Send]` / `tuple[Send, ...]`** / 空值），逐 key 归约语义**已落地**（B4F1 / B5F1）——**`Command` 的运行期语义已落地**（B9F1 · **命令列表**形态与上游 `ToolNode` 自身即用的形态同款） |
-| `Checkpointer` | `langgraph.checkpoint.base.BaseCheckpointSaver` | 行为等价 | **八**方法的**方法名与参数名**逐字对齐（**上游同款** · 2026-11-12 上游对齐 P3 · 由六增八：新增 `delete_for_runs` / `copy_thread` —— 二者在**上游是必须实现**的 ⇒ **上游形状的 saver 直接满足本协议**）；freegraph **纯抽象、无默认实现**，上游是带实现的基类；**未含**上游的**异步变体**（v1 无 async）；**返回类型与载荷形状已由 B14F1 的 `MemorySaver` 落地**；上游来源 `langgraph/checkpoint/base/__init__.py:239`（`get_tuple`）/ `:253`（`list`）/ `:277`（`put`）/ `:300`（`put_writes`）/ `:320`（`delete_thread`）/ `:331`（`delete_for_runs`）/ `:350`（`copy_thread`）/ `:692`（`get_next_version`） |
-| `TraceSink` | 无上游对应（自由设计） | 不支持 | 契约条目 **C23 / C24**（可观测挂钩 / 当前 span 上下文）——上游**无 span 推送协议**，其 `callbacks` / `tracers` 是**非同名**物 |
-| `Store` | `langgraph.store.base.BaseStore` | 行为等价 | 六方法与**参数名**逐字镜像上游（`search` 的 `namespace_prefix` 是位置参数、`list_namespaces` 的 `prefix` 是关键字参数——上游的这个命名分歧**照抄不统一**）；**命名空间类型收紧为 `tuple[str, ...]`**（**上游同款** · 2026-11-12 上游对齐 P3 · 上游 `langgraph/store/base/__init__.py:311` 的 `NamespacePath`）⇒ **上游形状的 store 直接满足本协议**；**未含**上游的**异步变体**（v1 无 async）；`batch` 操作表示挂起 v2；上游来源 `langgraph/store/base/__init__.py:733`（`batch`）/ `:756`（`get`）/ `:779`（`search`）/ `:856`（`put`）/ `:937`（`delete`）/ `:946`（`list_namespaces`） |
-| `CompiledGraph` | `langgraph.pregel.Pregel` | 部分等价 | 六方法的**返回类别**与**参数名（占位名）**已对齐（`invoke` → 完整状态字典 / `stream` → `dict[str, Any]` 事件迭代器 / `get_state` 查不到返回空值）；**`stream` 已交付**（B8F2 · 七种 mode · 四键信封 · `custom` 轮末批量 X-6）· **`get_state` / `get_state_history` 已交付**（B15F1 · 上游 **next-tasks** 语义 · 历史按 `checkpoint_id` 倒序 · `checkpoints` 档已接线）· **`update_state` / 时间旅行已交付**（B16F1 · `update_state` 返回 `RunConfig` · `invoke(None, snapshot.config)` 重放 · 分叉不污染原历史）；上游来源 `langgraph/pregel/main.py:3783`（`invoke`）/ `:2655`（`stream`）/ `:845`（`get_graph`）/ `:1392`（`get_state`）/ `:1480`（`get_state_history`）/ `:2515`（`update_state`） |
-| `Graph` | `langchain_core.runnables.graph.Graph` | 部分等价 | **同名但自有实现**——不复用、不复制上游代码；freegraph 的节点 / 边集合是**不可变元组**（上游是 `dict[str, Node]` / `list[Edge]`）；**B22F1 起**提供 `draw_mermaid()`（纯本地、零出站）；**B23F1 起**提供 `draw_mermaid_png()`（v1 固定示意图标占位 PNG，零出站、离线不阻断）；上游来源 `langchain_core/runnables/graph.py:255` |
-| `Node` | `langchain_core.runnables.graph.Node` | 部分等价 | **同名但自有实现**；freegraph 的 `name` 缺省**归一为 `id`**、`metadata` 是纯映射（上游 `Node.data` 装的是可调用对象 / pydantic 对象）；上游来源 `langchain_core/runnables/graph.py:95` |
-| `Edge` | `langchain_core.runnables.graph.Edge` | 部分等价 | **同名但自有实现**；freegraph 多一个 `conditional` 位并显式**不可哈希**（上游是 `NamedTuple`，可哈希）；上游来源 `langchain_core/runnables/graph.py:65` |
-| `Span` | 无上游对应（自由设计） | 不支持 | 契约条目 **C23 / C24**（可观测挂钩 / 当前 span 上下文）· 数据格式 **DF4**——11 字段、必带 `thread_id` / `run_id` / `node` / `checkpoint_id`；上游的近似物是 LangSmith 的 `RunTree`（**非同名**物） |
-| `TraceQuery` | 无上游对应（自由设计） | 不支持 | 契约条目 **C27**（本地 trace 存储与查询）——5 字段全可空、可组合，全空 = 取全部；freegraph 自有的本地 trace 查询契约 |
-| `StateGraph` | `langgraph.graph.StateGraph` | 行为等价 | **参数名与关键字逐字对齐上游**（**上游同款** · 2026-11-12 上游对齐 P3）：构造 `state_schema` / `context_schema` / `input_schema` / `output_schema` · `add_node(node, action=None, *, defer=False, metadata=None, destinations=None)`（含**单 callable** 形态 `add_node(fn)`）· `add_edge(start_key, end_key)` · `add_conditional_edges(source, path, path_map=None)` · `compile(checkpointer=None, *, cache, store, interrupt_before, interrupt_after, debug, name, transformers)` · 另补上游同款的 `add_sequence` / `set_entry_point` / `set_conditional_entry_point` / `set_finish_point` / `validate` / `set_node_defaults` 六个方法· **构建器已交付（B6F1）；`compile` 已交付（B7F2）；`invoke` 已交付（B7F3）；**条件边路由求值已交付（B8F1）** —— 路由函数在源节点任务**成功落回**后被求值（**fresh 读**：看到「当前值 + 本节点本次写入」）、`path_map` 支持 **list / dict / `None`** 三形态、返回 `END` 终止整张图、返回序列 ⇒ 多目标同轮并行、返回 `Send` ⇒ 复用 **B11F1** 的 fan-out 构造器；上游来源 `langgraph/graph/state.py:131`（类本体）/ `:216-224`（构造）/ `:667-682`（`add_node`）/ `:928`（`add_edge`）/ `:982-989`（`add_conditional_edges`）/ `:1032-1077`（`add_sequence`）/ `:1079` · `:1092` · `:1116` · `:1129-1175` · `:272-335` / `:1177-1188`（`compile`） |
-| `START` | `langgraph.constants.START` | 行为等价 | 值与语义均一致（`'__start__'`）；上游来源 `langgraph/constants.py:30`（核实环境 `langgraph 1.2.11`） |
-| `END` | `langgraph.constants.END` | 行为等价 | 值与语义均一致（`'__end__'`）；上游来源 `langgraph/constants.py:28`（核实环境 `langgraph 1.2.11`） |
-| `Send` | `langgraph.types.Send` | 部分等价 | 形状等价（`node` / `arg`）；**freegraph 侧不可变**（上游可变）；**fan-out 行为已落地**（B11F1 · `Command.goto` 可装 `Send` · 类型定义在 L1）；上游来源 `langgraph/types.py:704`（核实环境 `langgraph 1.2.11`） |
-| `get_stream_writer` | `langgraph.config.get_stream_writer` | 行为等价 | **上游同名函数**（B8F2）：返回当前 `StreamWriter`；无流时为 no-op；上游来源 `langgraph/config.py:126` |
-| `interrupt` | `langgraph.types.interrupt` | 部分等价 | 形状等价（`value`，**位置或关键字**皆可）；**中断 / 恢复行为已落地**（B10F1）—— 节点内首次调用抛 `GraphInterrupt`（载荷 = **1-元组**）· 恢复时**返回** resume 值（**从节点起点重跑** · **不**保存局部变量）· **恢复 MUST 挂 checkpointer**（未挂 ⇒ `InterruptError`，**不**静默降级）；⚠️ **失败信号**的**类型**与上游不同（上游内置 `RuntimeError` ⇒ freegraph `InterruptError` · 属内核异常族 · **消息要点**逐字同款）⇒ **`.id` 的摘要算法**不同（上游 `xxh3_128` ⇒ freegraph 标准库 `blake2b-128` · **同长 32 位十六进制** ⇒ **零第三方依赖**）；上游来源 `langgraph/types.py:851`（核实环境 `langgraph 1.2.11`） |
+| 能力 | Developer $0 | Plus $39/seat/月 | Enterprise | freegraph v1 |
+|---|---|---|---|---|
+| Tracing / Monitoring / Evals / Datasets / Annotation Queue / Prompt Hub / Studio | ✅ | ✅ | ✅ | ❌ 不做（评测平台范畴） |
+| 本地图结构可视化（mermaid） | ✅（OSS 自带） | ✅ | ✅ | ✅ 做（零出站） |
+| 本地 trace 记录 / thread / trajectory | ✅（须账号） | ✅ | ✅ | ✅ 做（本地存储） |
+| 状态快照 + checkpoint 历史 + time-travel | ✅（须账号 + 云） | ✅ | ✅ | ✅ 做 |
+| 交互式图运行时 IDE（node/edge 可交互图视图 + 运行时事件流联动） | ✅（须账号 + 云） | ✅ | ✅ | ❌ **不做（v2）**：完整 IDE 属 B26，本轮未排 feature |
+| 本地图运行时诊断**能力层**（mermaid 图视图 + trace 查询 + 回放 API，不含任何前端 UI 代码） | ✅（须账号 + 云） | ✅ | ✅ | ✅ 做（v1 三件套，能力层优先） |
+| Deployment 托管与扩缩 / Engine / Insights / Tuned Evaluators / Bulk export | ❌ | 部分 | ✅ | ❌ 永不做 |
+| Fleet / Sandboxes / LLM Gateway（免费但必出站） | ✅ | ✅ | ✅ | ❌ 永不做 |
 
-> ⚠️ **B8F1 的公开面增量 == 0 行**（2026-11-18）—— 条件边路由求值落在 **L2 内部**
-> （新增 `src/freegraph/runtime/_routing.py` = **私有模块**，**不进** `freegraph.runtime.__all__`）
-> ⇒ ⇒ **契约层仍 21 个符号 · 门面仍 7 个符号 · `freegraph.runtime` 仍 23 个符号 ·
-> `vars(compiled)` 仍 11 键** ⇒ ⇒ ⇒ **本表零新增行**（**兼容矩阵零新增行** ⇒ 门禁 **G8 / G19** 恒绿）
-> ⇒ ⇒ ⇒ `THIRD_PARTY_NOTICES` **零新增**（**零新增依赖** ⇒ **零新增许可证**）。
->
-> ⚠️ **B22F1 的公开面增量 == 0 行**（2026-11-20）—— `Command` 泛型化 / `add_node(destinations=)` /
-> `Graph.draw_mermaid()` / `Edge.condition=None` 均**不新增顶层符号**；契约层仍 **22** · 门面仍 **8** ·
-> `freegraph.runtime` 仍 **23** · `vars(compiled)` 仍 **11** 键；`get_graph()` / `draw_mermaid()` 已交付。
->
-> ⚠️ **B23F1 的公开面增量 == 0 行**（2026-11-20）—— `Graph.draw_mermaid_png()` 是 **`Graph` 的实例方法**
-> ⇒ 不新增顶层符号；契约层仍 **22** · 门面仍 **8** · `freegraph.runtime` 仍 **23** ·
-> `vars(compiled)` 仍 **11** 键；无新增依赖 / extras；v1 只交付**固定示意图标占位 PNG**
-> （64×64 · 3 方框 + 2 连线 · 零出站 · 离线不阻断）。
->
-> ⚠️ **B8F2 的公开面增量 == 2 行**（2026-11-20）—— 契约层 `StreamWriter` +
-> 门面 `get_stream_writer` ⇒ 契约层 **22** · 门面 **8** · `freegraph.runtime` 仍 **23**
-> · `vars(compiled)` 仍 **11** 键；`stream()` 已交付（七种 mode · 四键信封 ·
-> `custom` 轮末批量 X-6）；`THIRD_PARTY_NOTICES` 仍零新增。
+## 运行期语义与已知边界
 
 > ⚠️ **`invoke()` 的返回值是「只读快照」· 不要原样回喂给下一次 `invoke`**（B7F3）——
-> `invoke()` 返回**完整状态**：键集 == **schema 全部 key**（按 schema 声明顺序），
-> **从未被写**的**覆盖型（无归约器）** key 以 `None` 补齐（**归约型** key 保留其
-> **类型空值**，如 `[]`）。⚠️ **回喂**会把补齐的 `None` **真的写进**通道 ⇒ 节点里
-> `state.get("llm_calls", 0) + 1` 会 **`TypeError`** ⇒ ⇒ 请只把返回值当**结果**读取
-> （要续跑就把**自己写的初始状态**重新传进去）。
->
+> `invoke()` 返回**完整状态**：键集 == schema 全部 key（按 schema 声明顺序），
+> 从未被写的覆盖型（无归约器）key 以 `None` 补齐。回喂会把补齐的 `None`
+> 真的写进通道 ⇒ 节点里 `state.get("llm_calls", 0) + 1` 会 **`TypeError`**。
+
 > **v1 的 `store=` 边界**：`compile(store=...)` 仍被接受（API 兼容），但
 > **v1 不支持 `Store`**——该参数只被记录并发出 1 条 warning，不会生效。
 > **checkpointer 的行为已由 B14F1 的 `MemorySaver` 落地**：`compile(checkpointer=...)`
 > 在编译期校验类型，挂载真实 saver 后可按 `thread_id` 持久化 / 恢复。
 > **B15F1 增补**：新增 `SqliteSaver`（磁盘 · 默认推荐）与
-> `compiled.get_state(config)` / `compiled.get_state_history(config)`（`config` 接受
-> `RunConfig` / 普通映射 / `None`；`None` 解析后缺 `thread_id` ⇒ `ValueError`）；
-> `stream(stream_mode="checkpoints")` 在挂 saver 且 `thread_id` 非空时为本次运行每次成功
-> `put` 产出一条 `StateSnapshot` 事件，未挂 saver ⇒ 0 条。
+> `compiled.get_state(config)` / `compiled.get_state_history(config)`；`update_state` 与
+> **时间旅行已交付**（B16F1 · `update_state` 返回 `RunConfig` · `invoke(None, snapshot.config)` 重放）。
 
-**证据来源**（截至 2026-11-05，按 LangGraph 1.2.19 / langchain-core 1.7.6 源码核实）：
-`langgraph/types.py:711`（`StateSnapshot`）· `:738`（`Send`）· `:833`（`Command`）·
-`langgraph/errors.py:51`（`GraphBubbleUp`）· `:68`（`GraphRecursionError`）· `:91`（`InvalidUpdateError`）· `:103`（`GraphInterrupt`）·
-`langchain_core/runnables/config.py:57`（`RunnableConfig`）。
-另见 `harness/reports/Q8-图运行时最小契约.md` §3.4 与 `harness/proposals/立项书.md` §5.3。
+## API 兼容矩阵
 
-**本层（契约层协议面 · B2F1）来源**（截至 2026-11-06，按 **langgraph 1.2.11** / **langchain-core 1.6.3** 源码核实）：
-`langgraph/checkpoint/base/__init__.py:239`（`get_tuple`）· `:253`（`list`）· `:277`（`put`）· `:300`（`put_writes`）· `:320`（`delete_thread`）· `:692`（`get_next_version`）·
-`langgraph/store/base/__init__.py:733`（`batch`）· `:756`（`get`）· `:779`（`search`）· `:856`（`put`）· `:937`（`delete`）· `:946`（`list_namespaces`）·
-`langgraph/pregel/main.py:3783`（`invoke`）· `:2655`（`stream`）· `:845`（`get_graph`）· `:1392`（`get_state`）· `:1480`（`get_state_history`）· `:2515`（`update_state`）·
-`langchain_core/runnables/graph.py:255`（`Graph`）· `:95`（`Node`）· `:65`（`Edge`）。
+> **唯一权威**的逐符号 / 逐项兼容矩阵位于仓库根
+> [`COMPAT.md`](https://github.com/yangjiacheng1996/freegraph/blob/main/COMPAT.md)。
+> README **只保留**本指针与「能力 → freegraph 处置」表，**不维护第二份完整矩阵**。
+>
+> **兼容意图为互操作，不构成 affiliation** —— freegraph 与 LangChain / LangGraph / LangSmith
+> **无从属、授权或合作关系**，亦未使用其商标、logo、品牌色或官方文案。
 
-> **行号以各自标注的版本为准** —— **表内新增行**（B2F1 的 10 个 + B2F2 的 5 个符号）的上游行号以
-> **langgraph 1.2.11** / **langchain-core 1.6.3** 为准，与既有 8 行的
-> **LangGraph 1.2.19** / **langchain-core 1.7.6** **版本不同**；两套行号各自有效，
-> **不可混用**。
+## English
+
+- **Independent implementation**: FreeGraph is an independent implementation and is **not a LangChain Inc. product**; it is not affiliated with, authorized by, or partnered with LangChain, LangGraph, or LangSmith.
+- **Three promises**: zero account (including zero license key), zero egress from FreeGraph itself, and zero third-party runtime dependencies for the base install.
+- **Install**: `pip install freegraph` installs no third-party runtime dependency; `pip install "freegraph[otlp]"` optionally adds the OTLP gRPC exporter.
+- **Capabilities**: the v1 capability layer covers the Graph API, state snapshots / checkpoint history / time travel, local trace query, and offline graph visualization. The full Studio IDE is out of scope for v1.
+- **Per-symbol compatibility**: see [`COMPAT.md`](https://github.com/yangjiacheng1996/freegraph/blob/main/COMPAT.md) for the authoritative behavior-equivalence matrix.
 
 License: MIT

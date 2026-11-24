@@ -566,12 +566,26 @@ def test_g29_reports_environment_not_ready(isolated_copy: Path) -> None:
     assert "ENV_NOT_READY" in output, f"输出未标出环境未就绪：\n{output}"
 
 
-def test_g29_check_compat_reports_not_landed(repo_root: Path) -> None:
+def test_g29_check_compat_reports_not_landed(isolated_copy: Path) -> None:
     """G29 · ``--check-compat``：``COMPAT.md`` 不存在 ⇒ 报告「未落地」且**退出码 0**。"""
-    result = run_gate("gate_G29_contract_carrier.py", "--check-compat", cwd=repo_root)
+    result = run_gate(
+        "gate_G29_contract_carrier.py",
+        "--check-compat",
+        "--root",
+        str(isolated_copy),
+        cwd=isolated_copy,
+    )
     output = result.stdout + result.stderr
     assert result.returncode == 0, f"「未落地」不应阻断：\n{output}"
     assert "未落地" in output, f"输出未报告「未落地」：\n{output}"
+
+
+def test_g29_check_compat_strict_passes_when_compat_exists(repo_root: Path) -> None:
+    """G29 · COMPAT.md 存在 ⇒ 覆盖两层 + Command = 部分等价 + README 仅指针。"""
+    result = run_gate("gate_G29_contract_carrier.py", "--check-compat", cwd=repo_root)
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "严格判定通过" in output, output
 
 
 # ── G30 · 署名头 + 第三方品牌资产（反向用例 · SC-009 之一）───────────────

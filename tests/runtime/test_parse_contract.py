@@ -514,16 +514,16 @@ def test_new_source_files_carry_signature_header_and_leading_docstring() -> None
 
 
 def test_compat_matrix_has_no_new_row_for_this_feature() -> None:
-    """T055 · SC-015：兼容矩阵**零新增行**（行数不变 ⇒ 双向防漂移）。
+    """T055 / T043 · SC-015：兼容矩阵**零新增行**（双向防漂移）。
 
-    矩阵的 freegraph 符号集合 MUST 恒等于「契约层 20 个 + 门面 7 个」
-    ⇒ 本 feature（L2 内部 API）**不新增**任何行。
+    唯一权威矩阵是 ``COMPAT.md``；其 freegraph 符号集合 MUST 恒等于
+    「契约层清单 ∪ 门面层清单」（manifest 驱动，当前 22 ∪ 8 = 27）。
     """
-    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    compat = (REPO_ROOT / "COMPAT.md").read_text(encoding="utf-8")
     section = re.search(
-        r"^## API 兼容矩阵\s*$(.*?)(?=^## |\Z)", readme, re.S | re.M
+        r"^## API 兼容矩阵\s*$(.*?)(?=^## |\Z)", compat, re.S | re.M
     )
-    assert section, "README.md 缺少「## API 兼容矩阵」章节"
+    assert section, "COMPAT.md 缺少「## API 兼容矩阵」章节"
 
     names = {
         match.group(1)
@@ -536,7 +536,7 @@ def test_compat_matrix_has_no_new_row_for_this_feature() -> None:
     )
 
     assert names == expected, (
-        f"兼容矩阵的符号集合与「契约层 18 + 门面 7」不一致："
+        f"兼容矩阵的符号集合与「契约层 22 ∪ 门面层 8」不一致："
         f"多出 {sorted(names - expected)} · 缺少 {sorted(expected - names)}"
     )
 

@@ -3,48 +3,31 @@
 
 """发行产物纯度门禁：断言 ``dist/`` 里只有**包代码与必要元数据**。
 
-为什么需要它
-------------
-本仓库把**全部项目内容**放在 GitHub 上供读者学习——
-
-    harness/    调研报告、提示词、立项书、验收脚本集
-    .specify/   宪法、spec 模板、speckit 脚本
-    .opencode/  speckit 命令定义
-
-但这些是**开发辅助材料**，不属于发行包：装到别人机器上、被人 ``import``
-是不该发生的事。因此「GitHub 上看全部原理」与「PyPI 上的包是干净的」
-必须同时成立。
-
-打包配置里的 ``only-include`` 已经做到了这一点，但那是**配置**——有人加一行
-``include`` 就会悄悄把整个仓库发上 PyPI。本脚本把它变成**门禁**：
-发布流水线在 ``uv publish`` 之前先跑本脚本，不通过就不发。
-
 用法
 ----
     python harness/scripts/check_dist_purity.py [dist 目录]     # 退出码 0 = 干净
+
+退出码：0 = 干净 · 1 = 有违规 · 2 = 目录 / 产物不存在。
+
+本脚本 **只使用标准库**（发布流水线用系统 ``python3`` 直接执行）；
+MUST NOT import ``packaging``。
 """
 
 from __future__ import annotations
 
+import re
 import sys
 import tarfile
 import zipfile
+from email.parser import Parser
 from pathlib import Path
 
 # ── wheel 里允许出现的东西 ───────────────────────────────────────────────────
-#   freegraph/                 ← 包代码（唯一允许的代码）
-#   freegraph-*.dist-info/     ← 标准元数据（由构建工具生成）
 WHEEL_CODE_PREFIX = "freegraph/"
-WHEEL_METADATA_RE = "freegraph-*.dist-info/"
+WHEEL_METADATA_RE = re.compile(r"^freegraph-[^/]+\.dist-info/")
 
 # ── sdist 里允许出现的东西 ───────────────────────────────────────────────────
-#   src/freegraph/  包代码
-#   README.md       包的 long_description
-#   LICENSE         许可证（METADATA 的 License-File 指向它）
-#   pyproject.toml  从 sdist 重建 wheel 所需
-#   PKG-INFO        标准元数据
-#   .gitignore      hatchling 默认附带，无害
-SDIST_ALLOWED_FILES = {"README.md", "LICENSE", "pyproject.toml", "PKG-INFO", ".gitignore"}
+SDIST_ALLOWED_FILES = {"README.md", "LICENSE", "pyproject.toml", "PKG-INFO"}
 SDIST_CODE_PREFIX = "src/freegraph/"
 
 # ── 绝对不允许出现在任何产物里的目录 ─────────────────────────────────────────
@@ -62,9 +45,85 @@ FORBIDDEN_DIRS = (
     "__pycache__/",
 )
 
-# ── sdist 里必须存在的文件（防止「空包」通过门禁）────────────────────────────
-SDIST_REQUIRED = ("src/freegraph/__init__.py", "README.md", "LICENSE", "PKG-INFO")
+# ── 必需文件（防止「空包」通过门禁）─────────────────────────────────────────
+SDIST_REQUIRED = (
+    "src/freegraph/__init__.py",
+    "README.md",
+    "LICENSE",
+    "pyproject.toml",
+    "PKG-INFO",
+)
 WHEEL_REQUIRED = ("freegraph/__init__.py", "freegraph/py.typed")
+
+# ── 额外归档产物（不得静默忽略）─────────────────────────────────────────────
+EXTRA_ARCHIVE_SUFFIXES = (".zip", ".tar", ".tgz", ".tbz2", ".tar.bz2", ".tar.xz")
+
+# ── [otlp] 精确禁用包名（PEP 503 规范化后比较）──────────────────────────────
+FORBIDDEN_OTLP = {
+    "certifi",
+    "requests",
+    "opentelemetry-exporter-otlp",
+    "opentelemetry-exporter-otlp-proto-http",
+}
+
+
+def _normalize_name(name: str) -> str:
+    """PEP 503 包名规范化。"""
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def _requirement_name(spec: str) -> str:
+    """从 ``Requires-Dist`` 行取包名（不做完整 requirement 解析）。"""
+    match = re.match(r"\s*([A-Za-z0-9][A-Za-z0-9._-]*)", spec)
+    if not match:
+        raise ValueError(f"无法解析 Requires-Dist：{spec!r}")
+    return _normalize_name(match.group(1))
+
+
+def _extra_marker(spec: str) -> str | None:
+    """返回 marker 中的 ``extra == "..."`` 值；没有则 ``None``。"""
+    _, sep, marker = spec.partition(";")
+    if not sep:
+        return None
+    match = re.search(r'\bextra\s*==\s*["\']([^"\']+)["\']', marker, re.I)
+    return _normalize_name(match.group(1)) if match else None
+
+
+def _check_metadata(text: str) -> list[str]:
+    """检查 wheel ``METADATA`` 的 extras / 基础依赖 / [otlp] 闭包。"""
+    problems: list[str] = []
+    meta = Parser().parsestr(text)
+
+    extras = {_normalize_name(item) for item in (meta.get_all("Provides-Extra") or [])}
+    illegal_extras = sorted(extras - {"otlp"})
+    if illegal_extras:
+        problems.append(f"METADATA 含非法 Provides-Extra：{illegal_extras}")
+
+    base_requires: list[str] = []
+    otlp_requires: list[str] = []
+    for spec in meta.get_all("Requires-Dist") or []:
+        marker_extra = _extra_marker(spec)
+        if marker_extra is None:
+            if "extra" in spec.partition(";")[2].lower():
+                problems.append(f"无法识别的 extra marker：{spec}")
+            else:
+                base_requires.append(spec)
+        elif marker_extra == "otlp":
+            otlp_requires.append(spec)
+        else:
+            problems.append(f"METADATA 含非法 extra marker：{spec}")
+
+    if base_requires:
+        problems.append(f"基础 Requires-Dist 非空：{base_requires}")
+    for spec in otlp_requires:
+        try:
+            name = _requirement_name(spec)
+        except ValueError as exc:
+            problems.append(str(exc))
+            continue
+        if name in FORBIDDEN_OTLP:
+            problems.append(f"[otlp] 含禁用包：{name}")
+    return problems
 
 
 def _forbidden_hits(paths: list[str]) -> list[str]:
@@ -84,13 +143,23 @@ def check_wheel(path: Path) -> list[str]:
         names = [n for n in zf.namelist() if not n.endswith("/")]
 
     for name in names:
-        ok = name.startswith(WHEEL_CODE_PREFIX) or name.startswith("freegraph-")
+        ok = name.startswith(WHEEL_CODE_PREFIX) or bool(WHEEL_METADATA_RE.match(name))
         if not ok:
             problems.append(f"wheel 含有非包内容：{name}")
 
     for req in WHEEL_REQUIRED:
         if req not in names:
             problems.append(f"wheel 缺少必需文件：{req}")
+
+    metadata_names = [
+        name for name in names if WHEEL_METADATA_RE.match(name) and name.endswith("/METADATA")
+    ]
+    if not metadata_names:
+        problems.append("wheel 缺少 freegraph-*.dist-info/METADATA")
+    else:
+        with zipfile.ZipFile(path) as zf:
+            text = zf.read(metadata_names[0]).decode("utf-8")
+        problems.extend(_check_metadata(text))
 
     for hit in _forbidden_hits(names):
         problems.append(f"wheel 含有禁止目录内容：{hit}")
@@ -108,7 +177,7 @@ def check_sdist(path: Path) -> list[str]:
         parts = Path(m.name).parts
         if len(parts) < 2:
             continue
-        names.append("/".join(parts[1:]))  # 去掉 sdist 顶层目录名
+        names.append("/".join(parts[1:]))
 
     for name in names:
         if name.startswith(SDIST_CODE_PREFIX):
@@ -124,6 +193,23 @@ def check_sdist(path: Path) -> list[str]:
     for hit in _forbidden_hits(names):
         problems.append(f"sdist 含有禁止目录内容：{hit}")
 
+    return problems
+
+
+def _extra_archive_problems(dist: Path) -> list[str]:
+    """``dist/`` 内任何归档类非 ``.whl`` / ``.tar.gz`` 文件 ⇒ 违规。
+
+    ``uv build`` 自动生成的 ``dist/.gitignore`` 是构建目录标记 ⇒ 显式豁免。
+    """
+    problems: list[str] = []
+    for path in sorted(dist.iterdir()):
+        if not path.is_file():
+            continue
+        name = path.name
+        if name in {".gitignore"} or name.endswith((".whl", ".tar.gz")):
+            continue
+        if name.endswith(EXTRA_ARCHIVE_SUFFIXES):
+            problems.append(f"dist 含额外归档产物：{name}")
     return problems
 
 
@@ -151,6 +237,11 @@ def main(argv: list[str]) -> int:
             all_problems.extend(f"{art.name}: {p}" for p in problems)
         else:
             print(f"[纯度门禁] ✅ {art.name}（{kind}）——仅含包代码与必要元数据")
+
+    extra_problems = _extra_archive_problems(dist)
+    for p in extra_problems:
+        print(f"[纯度门禁] ❌ {p}")
+    all_problems.extend(extra_problems)
 
     if all_problems:
         print(
