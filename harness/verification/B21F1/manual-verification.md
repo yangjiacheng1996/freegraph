@@ -104,6 +104,9 @@ B21F1 acceptance: PASS
   G27「框架出站 = 0 · 用户出站 = 2（记录在案，不判失败）」）。
 - `harness/demo/target.py` 与冻结契约文件 diff 为空（§1.1）。
 - T041：`spec.md` §6 的 G23 `protobuf` 具名归一与 B19F1 import 例外两行**已存在**，无漂移。
+- **GitHub Actions CI**：**7/7 作业全绿**（run `45365129113` · `head_sha = 45b50b6` ·
+  ubuntu 3.11/3.14 + ubuntu-arm64 3.11 + macOS 3.11/3.14 + Windows 3.11/3.14；
+  Linux 档的 G22 / G27 / G28 均真跑通过；G28 已登记 2 条 B21F1 回环 gRPC 排除项）。
 
 ## 4. 结论
 
