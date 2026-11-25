@@ -110,8 +110,8 @@ jobs:
       #       跑通固定脚本 ⇒ 全量档安装；其余档不装（相关用例 importorskip ⇒ skip）。
       #
       #       ⚠️ **MUST 与 differential 组在同一次 `uv pip install` 中解析**：
-      #          acceptance 组的传递依赖可能把 `langgraph` 升到新版；分两步安装会
-      #          破坏 `differential` 的 `langgraph==1.2.11` 钉版（实测 CI 升到 1.2.24）。
+      #          acceptance 组的传递依赖可能把**上游**升到新版；分两步安装会
+      #          破坏 `differential` 的**上游钉版**（实测 CI 升到 1.2.24）。
       - name: Install differential + acceptance groups
         if: matrix.runner == 'ubuntu-24.04' && (matrix.python == '3.11' || matrix.python == '3.14')
         run: uv pip install --python .venv --group differential --group acceptance
