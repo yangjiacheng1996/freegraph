@@ -52,7 +52,10 @@ jobs:
 
     steps:
       # 1 ── 取源码（**钉版本**）
+      #     `fetch-depth: 0` ⇒ 完整历史 ⇒ B25F1 的「基线 ref diff」可判定。
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       # 2 ── Python（版本**钉死**到矩阵档位）
       - uses: actions/setup-python@v5
@@ -106,6 +109,13 @@ jobs:
         if: matrix.runner == 'ubuntu-24.04' && (matrix.python == '3.11' || matrix.python == '3.14')
         run: uv pip install --python .venv --group differential
 
+      # 5.7 ── **B25F1 双跑验收的依赖组**（PEP 735 · 测试侧 · 不进发行包）
+      #       `target.py` 自带 `langchain.*` 与 `IPython.display`；fake 轮必须原样
+      #       跑通固定脚本 ⇒ 全量档安装；其余档不装（相关用例 importorskip ⇒ skip）。
+      - name: Install acceptance dependency group
+        if: matrix.runner == 'ubuntu-24.04' && (matrix.python == '3.11' || matrix.python == '3.14')
+        run: uv pip install --python .venv --group acceptance
+
       # 6 ── **全量测试套件**（含架构门禁的测试 G1–G20 ⇒ 最低档 3.11 是
       #      「typing 构件上限 = 3.11」的**主判定** · FR-015 ①）
       #      既有门禁 G9（typing 构件上限静态断言）**随本步在 7/7 作业执行**
@@ -114,6 +124,13 @@ jobs:
         # `--junitxml` ⇒ 产出一份**机器可读**的测试报告（存成 artifact）⇒
         # 失败时**不必**翻日志即可定位到具体的失败用例（诊断通道）。
         run: uv run --no-project --python .venv python -m pytest tests/ -ra ${{ matrix.pytest_args }} --junitxml=pytest-report.xml
+
+      # 6.5 ── **B25F1 一键验收**（A1/A3/A4/A5 + DEP；CI 不跑真实模型轮）
+      #      只安装 acceptance 组的全量档执行；其余档不执行（相关用例 skip）。
+      - name: B25F1 acceptance (fake CI)
+        if: matrix.runner == 'ubuntu-24.04' && (matrix.python == '3.11' || matrix.python == '3.14')
+        run: uv run --no-project --python .venv python harness/verification/B25F1/acceptance.py --skip-real
+
       - name: Upload pytest report
         # `if: always()` ⇒ **失败时也上传** ⇒ 失败报告永远拿得到。
         if: always()

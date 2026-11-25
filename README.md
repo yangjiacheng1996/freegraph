@@ -25,6 +25,44 @@
 | **零出站** | freegraph **自身**不主动发起任何出站连接，且**不阻断用户代码**出网 |
 | **零第三方运行时依赖** | 基础安装**不装任何第三方包**——`pip install freegraph` 后 site-packages 里只有 freegraph 自己 |
 
+## 快速上手
+
+```bash
+# 基础安装（零第三方运行时依赖）
+pip install freegraph
+
+# 可选：OTLP gRPC 导出（v1.0 唯一具名 extra）
+pip install "freegraph[otlp]"
+```
+
+最小图：
+
+```python
+from freegraph.graph import END, START, StateGraph
+
+def add_one(state: dict) -> dict:
+    return {"value": state.get("value", 0) + 1}
+
+graph = StateGraph({"value": int})
+graph.add_node("add_one", add_one)
+graph.add_edge(START, "add_one")
+graph.add_edge("add_one", END)
+print(graph.compile().invoke({"value": 0}))
+```
+
+验收入口（开发 / 人工验收用，不需要 `pip install` 进运行时）：
+
+```bash
+# fake 轮（CI 可自动化；需要测试侧 acceptance 组：langchain + IPython）
+python harness/verification/B25F1/fake_round.py
+
+# 真实模型轮（人工；凭据由环境显式配置，优先官方直连）
+python harness/verification/B25F1/real_round.py --record /tmp/b25f1-real.md
+```
+
+> `harness/demo/` 的四组零依赖验收脚本与 `diagnostics.py` 见
+> [`harness/demo/README.md`](https://github.com/yangjiacheng1996/freegraph/blob/main/harness/demo/README.md)。
+
 **设计与实现原理全部公开**：仓库
 [`yangjiacheng1996/freegraph`](https://github.com/yangjiacheng1996/freegraph) 含有
 

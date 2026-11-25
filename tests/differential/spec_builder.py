@@ -42,6 +42,7 @@ __all__ = [
     "GraphSpec",
     "GraphSpecError",
     "build_graph_spec",
+    "build_model_graph_spec",
     "build_schema_typed",
     "check_node_output",
     "validate_graph_spec",
@@ -210,6 +211,56 @@ def build_graph_spec(
         )
 
     return replace(spec, schema_typed=schema_typed)
+
+
+def build_model_graph_spec(
+    *,
+    name: str,
+    schema: Mapping[str, tuple[Any, Callable[..., Any] | None]],
+    nodes: Sequence[tuple[str, Callable[[dict], dict]]],
+    initial_input: Mapping[str, Any],
+    model_factory: Any,
+    conditional_edges: Sequence[Any] = (),
+) -> GraphSpec:
+    """构造**模型形状**的图规格（B25F1 · FR-018 / SC-006）。
+
+    与 :func:`build_graph_spec` 的区别只有 ``model_factory``：
+
+    * **本入口要求非空**（空 ⇒ :class:`GraphSpecError`）；
+    * 既有 :func:`build_graph_spec` 的「纯本地规格 ``model_factory`` 非空 ⇒
+      显式失败」语义**保持不变**（B5F2 FR-036 / 裁定 26）。
+
+    实现方式：先以 ``model_factory=None`` 走**既有** :func:`validate_graph_spec`
+    （其余校验逐条不变），通过后再用 :func:`dataclasses.replace` 回填
+    ``model_factory`` ⇒ **不放宽**旧校验函数。
+    """
+    if _hook_is_empty(model_factory):
+        raise GraphSpecError(
+            "build_model_graph_spec 的 model_factory MUST 非空"
+            "（模型形状规格必须显式注入工厂）"
+        )
+
+    spec = GraphSpec(
+        name=name,
+        schema=dict(schema),
+        nodes=tuple(nodes),
+        initial_input=dict(initial_input),
+        conditional_edges=tuple(conditional_edges),
+        model_factory=None,
+    )
+    validate_graph_spec(spec)
+
+    schema_typed = build_schema_typed(spec)
+    parse_state_schema(schema_typed)
+
+    unknown = sorted(set(spec.initial_input) - set(spec.schema))
+    if unknown:
+        raise GraphSpecError(
+            f"初始输入含 schema 之外的 key：{unknown} —— MUST 显式失败"
+            "（MUST NOT 静默丢弃）"
+        )
+
+    return replace(spec, model_factory=model_factory, schema_typed=schema_typed)
 
 
 def check_node_output(

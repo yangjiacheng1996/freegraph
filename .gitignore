@@ -240,3 +240,7 @@ Thumbs.db
 # ⚠️ `harness/demo/tmp.py` 曾带**硬编码 API key** ⇒ ⇒ ⇒ 一律**不入库**。
 harness/demo/tmp.py
 langgraph.json
+
+# B25F1 · local provider verification scripts (contain credentials) — MUST NOT commit
+harness/verification/B25F1/verify_deepseek.py
+harness/verification/B25F1/verify_minimax.py

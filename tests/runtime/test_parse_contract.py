@@ -47,8 +47,6 @@ UPSTREAM_PACKAGE_NAMES = (
     "typing-extensions",
 )
 
-#: **唯一**允许声明上游包名的依赖组（PEP 735 · **测试侧**）⇒ 其它组 MUST 零上游。
-UPSTREAM_ALLOWED_GROUP = "differential"
 
 #: 署名头（**逐字** · 宪法原则 X · 门禁 G30 的判定基准）。
 SIGNATURE_HEADER = (
@@ -370,20 +368,21 @@ def test_dependency_declarations_contain_no_upstream_package() -> None:
 def test_only_the_differential_group_may_declare_an_upstream_package() -> None:
     """**登记项 R-3** · FR-037 · SC-031 ②③：**正向枚举**。
 
-    * ``[dependency-groups]`` 里**含上游包名**的组 == **恰好 1 个**
-      且为 ``differential``（**其余组 MUST 零上游**）；
-    * ``differential`` 组的内容 MUST == **恰好 1 个**上游包声明；
-    * 该组 MUST **NOT** 进 ``Requires-Dist``（判据 **A5**）⇒
+    * ``[dependency-groups]`` 里**含上游包名**的组只允许**测试侧**两组：
+      ``differential``（上游 ``langgraph``）与 ``acceptance``（脚本自带
+      ``langchain``；B25F1 H-10 / FR-001 · 只是跑固定脚本的测试侧依赖）；
+      **其余组（尤其 ``dev``）MUST 零上游**；
+    * 两组 MUST **NOT** 进 ``Requires-Dist``（判据 **A5**）⇒
       **发行元数据整体为空**。
 
     ⇒ **覆盖面被拆分而非削减**：发行面断言**逐字保留** + **新增**一条
-    「上游只许出现在 ``differential`` 组」的正向约束（**红线总量不减**）。
+    「上游只许出现在测试侧依赖组」的正向约束（**红线总量不减**）。
     """
     data = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     groups = data.get("dependency-groups", {})
 
     offenders: list[str] = []
-    upstream_entries: list[str] = []
+    upstream_by_group: dict[str, list[str]] = {}
     for group_name, entries in groups.items():
         hits = [
             entry
@@ -392,10 +391,14 @@ def test_only_the_differential_group_may_declare_an_upstream_package() -> None:
         ]
         if hits:
             offenders.append(group_name)
-            upstream_entries.extend(hits)
+            upstream_by_group[group_name] = hits
 
-    assert sorted(offenders) == [UPSTREAM_ALLOWED_GROUP]
-    assert len(upstream_entries) == 1
+    assert sorted(offenders) == ["acceptance", "differential"]
+    assert len(upstream_by_group["differential"]) == 1
+    assert "langgraph" in upstream_by_group["differential"][0].lower()
+    assert len(upstream_by_group["acceptance"]) == 1
+    assert "langchain" in upstream_by_group["acceptance"][0].lower()
+    assert "langgraph" not in " ".join(upstream_by_group["acceptance"]).lower()
     requires = importlib.metadata.requires("freegraph") or []
     non_extra = [item for item in requires if "extra ==" not in item]
     assert non_extra == [], non_extra
@@ -414,9 +417,9 @@ def test_the_ci_installs_the_upstream_only_through_the_differential_group() -> N
     """**登记项 R-3** · FR-037 · SC-031 ④：**可判定形式**（裁定 32 ③）。
 
     ① ``ci.yml`` 中出现的**全部** ``--group <X>`` 的 ``X`` MUST ∈
-    {``dev``, ``differential``}；
-    ② 上游**只许**经 ``--group differential`` 安装 ⇒ MUST **NOT** 出现在
-    **发行依赖声明**与**基础安装步骤**（``--group dev``）中。
+    {``dev``, ``differential``, ``acceptance``}；
+    ② 上游**只许**经测试侧组（``--group differential`` / ``--group acceptance``）
+    安装 ⇒ MUST **NOT** 出现在**发行依赖声明**与**基础安装步骤**（``--group dev``）中。
 
     ⚠️ 与原断言的**相容性**：① ② MUST 在「``ci.yml`` 文本中 ``langgraph``
     字样 == **0**」的**前提下**成立 ⇒ 新增步骤的**标题 / 注释**亦不得出现该
@@ -428,7 +431,7 @@ def test_the_ci_installs_the_upstream_only_through_the_differential_group() -> N
 
     groups = sorted(set(re.findall(r"--group[= ]+([A-Za-z0-9._-]+)", workflow)))
     assert groups
-    assert set(groups) <= {"dev", "differential"}
+    assert set(groups) <= {"dev", "differential", "acceptance"}
 
     data = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     dev_entries = data.get("dependency-groups", {}).get("dev", [])

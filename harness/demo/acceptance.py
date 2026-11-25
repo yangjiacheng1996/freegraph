@@ -71,7 +71,11 @@ SUITES: list[tuple[str, str, str]] = [
     ("core", "graph_core.py", "图运行时内核（C1–C24 / B4F1–B13F1）"),
     ("agent", "agent_loop.py", "Agent 工具循环（零依赖等价物 / C4·C7·C8·C11·C16·C17）"),
     ("viz", "visualization.py", "图导出与可视化（C12–C15·C26 / B8F2·B22F1·B23F1）"),
+    ("diagnostics", "diagnostics.py", "可诊断性（trace / checkpoint / 时间旅行 / B25F1）"),
 ]
+
+#: target fake 验收步（**旁路** · 不计入四组 verdict；A1 由 B25F1 acceptance 判定）。
+TARGET_FAKE = Path(__file__).resolve().parents[1] / "verification" / "B25F1" / "fake_round.py"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -136,10 +140,13 @@ def finish(title: str) -> int:
 # 零出站夹具：只观测、不阻断、按调用栈归因（对应 §9.2 的方法表）
 # ─────────────────────────────────────────────────────────────────────────────
 class EgressProbe:
-    """socket 监测夹具（只观测不阻断）。
+    """socket 监测夹具（只观测不阻断 · **G27 归因口径**）。
 
     * 包装 `socket.socket.connect` / `socket.create_connection`，记录目标与调用栈后**放行**；
-    * 归因：调用栈中出现 `freegraph/` 包路径 → 「框架出站」，否则 → 「用户出站」。
+    * 归因：从栈顶跳过全部标准库帧，**第一个非标准库帧**的模块在 `freegraph` 包内
+      → 「框架出站」，否则 → 「用户出站」（G27 / 裁定 19）。
+    * **MUST NOT** 用「文件路径里含 ``freegraph/``」当判据 —— 仓库目录本身就叫
+      ``freegraph``，用户脚本会被误判。
     """
 
     def __init__(self) -> None:
@@ -149,8 +156,24 @@ class EgressProbe:
         self._orig_create = socket.create_connection
 
     @staticmethod
-    def _classify(stack: str) -> str:
-        return "framework" if "freegraph" in stack else "user"
+    def _modules() -> list[str]:
+        """采集调用方模块名（跳过本函数与 socket 包装器自身）。"""
+        modules: list[str] = []
+        frame = sys._getframe(2)
+        while frame is not None:
+            modules.append(frame.f_globals.get("__name__", ""))
+            frame = frame.f_back
+        return modules
+
+    @staticmethod
+    def _classify(modules: list[str]) -> str:
+        for module in modules:
+            root = module.split(".")[0] if module else ""
+            if root and root in sys.stdlib_module_names:
+                continue
+            is_framework = module == "freegraph" or module.startswith("freegraph.")
+            return "framework" if is_framework else "user"
+        return "user"
 
     @staticmethod
     def _target(addr: object) -> str:
@@ -163,13 +186,13 @@ class EgressProbe:
 
         def connect(self_sock, address):  # type: ignore[no-untyped-def]
             stack = "".join(traceback.format_stack())
-            bucket = probe.framework if probe._classify(stack) == "framework" else probe.user
+            bucket = probe.framework if probe._classify(probe._modules()) == "framework" else probe.user
             bucket.append((probe._target(address), stack))
             return probe._orig_connect(self_sock, address)
 
         def create_connection(address, *args, **kwargs):  # type: ignore[no-untyped-def]
             stack = "".join(traceback.format_stack())
-            bucket = probe.framework if probe._classify(stack) == "framework" else probe.user
+            bucket = probe.framework if probe._classify(probe._modules()) == "framework" else probe.user
             bucket.append((probe._target(address), stack))
             return probe._orig_create(address, *args, **kwargs)
 
@@ -262,23 +285,50 @@ def case_zero_egress() -> None:
 def run_suite(script: str) -> tuple[int, str, float]:
     path = HERE / script
     started = time.monotonic()
+    # 子进程 env **剔除**全部 LANGSMITH_*（FR-021 · 干净环境）。
+    env = {key: value for key, value in os.environ.items() if not key.startswith("LANGSMITH_")}
+    env["PYTHONUTF8"] = "1"
+    env["PYTHONIOENCODING"] = "utf-8"
     proc = subprocess.run(
         [sys.executable, str(path)],
         capture_output=True,
         text=True,
         cwd=str(HERE.parent.parent),
+        env=env,
+    )
+    return proc.returncode, (proc.stdout or "") + (proc.stderr or ""), time.monotonic() - started
+
+
+def run_target_fake() -> tuple[int, str, float]:
+    """运行 target fake **旁路步骤**（结果不进入四组 verdict）。"""
+    started = time.monotonic()
+    env = {key: value for key, value in os.environ.items() if not key.startswith("LANGSMITH_")}
+    env["PYTHONUTF8"] = "1"
+    env["PYTHONIOENCODING"] = "utf-8"
+    proc = subprocess.run(
+        [sys.executable, str(TARGET_FAKE)],
+        capture_output=True,
+        text=True,
+        cwd=str(HERE.parent.parent),
+        env=env,
+        timeout=300,
     )
     return proc.returncode, (proc.stdout or "") + (proc.stderr or ""), time.monotonic() - started
 
 
 def collect_env() -> dict:
     env_vars = sorted(k for k in os.environ if k.startswith(("LANG", "PYPI", "TWINE", "UV_")))
+    langsmith = sorted(k for k in os.environ if k.startswith("LANGSMITH_"))
     return {
         "os": f"{platform.system()} {platform.release()} ({platform.machine()})",
         "python": sys.version.split()[0],
         "executable": sys.executable,
         "cwd": os.getcwd(),
         "env_vars": ", ".join(f"`{k}`" for k in env_vars) if env_vars else "（无 LANG*/PYPI*/TWINE*/UV_* 环境变量）",
+        "langsmith_count": len(langsmith),
+        "langsmith_clearing": "子进程 env 逐项剔除全部 `LANGSMITH_*`"
+        if not langsmith
+        else f"检测到 {len(langsmith)} 个 `LANGSMITH_*`（{', '.join(langsmith)}）—— 子进程仍逐项剔除",
         "freegraph": str(getattr(freegraph, "__version__", "?")),
     }
 
@@ -300,15 +350,19 @@ def build_record(results: list[dict], env: dict, verdict: str) -> str:
     out.append(f"| 解释器 | `{env['executable']}` |")
     out.append(f"| 工作目录 | `{env['cwd']}` |")
     out.append(f"| 相关环境变量清理 | {env['env_vars']} |")
-    out.append("| 依赖 | 本脚本与三组脚本：**仅 freegraph + Python 标准库**（无第三方依赖）；`target.py`：脚本自带 `langchain.*` |")
-    out.append("| 网络 | 零出站断言要求**无网 / 断网**环境亦可通过 |")
+    out.append(f"| `LANGSMITH_*` 清空 | {env['langsmith_clearing']} |")
+    out.append("| 依赖 | 四组脚本：**仅 freegraph + Python 标准库**（无第三方依赖）；`target.py`：脚本自带 `langchain.*` |")
+    out.append("| 网络 | 零出站断言要求**无网 / 断网**环境亦可通过；用户出站逐条记录、不判失败、不设目标白名单 |")
     out.append("")
     out.append("## 2. 验收步骤与结果")
     out.append("")
     out.append("| # | 步骤 | 脚本 | 覆盖范围 | 结果 | 耗时 |")
     out.append("|---|---|---|---|---|---|")
     for i, r in enumerate(results, 1):
-        status = {0: "✅ PASS", 2: "⚠️ 环境未就绪"}.get(r["rc"], "❌ FAIL")
+        if r.get("bypass"):
+            status = "➖ 旁路（不计入四组）"
+        else:
+            status = {0: "✅ PASS", 2: "⚠️ 环境未就绪"}.get(r["rc"], "❌ FAIL")
         out.append(
             f"| {i} | {r['title']} | `{r['script']}` | {r['scope']} | {status} | {r['elapsed']:.1f}s |"
         )
@@ -318,7 +372,25 @@ def build_record(results: list[dict], env: dict, verdict: str) -> str:
     out.append("| 轮次 | 模型 | 环境 | 结果 | 证据 |")
     out.append("|---|---|---|---|---|")
     out.append("| CI 轮 | fake（猴补 `init_chat_model` 注入，见立项书 §9.2） | 验收环境 + socket 监测夹具 | ⬜ 待填 | ⬜ 待填 |")
-    out.append("| 人工轮 | 真实模型 `claude-sonnet-4-6` | 干净环境（拦截列表允许「模型厂商端点」一条） | ⬜ 待填 | ⬜ 待填 |")
+    out.append("| 人工轮 · 段 1 | 真实模型（环境显式配置；优先官方直连） | 干净环境；记录实际接入路径 | ⬜ 待填 | ⬜ 待填 |")
+    out.append("| 人工轮 · 段 2 | 真实模型（同一接入） | 专用探针：trace / OTLP / checkpoint / 时间旅行 | ⬜ 待填 | ⬜ 待填 |")
+    out.append("")
+    out.append("> 用户出站（模型厂商端点 / 用户启用的 OTLP 端点）**逐条记录、不判失败、不设目标白名单**；")
+    out.append("> 仅「框架出站 = 0」是断言。接入路径 MUST 写明「官方直连 / 兼容网关」，网关不得写成官方直连。")
+    out.append("")
+    out.append("### 2.2 target fake 旁路步骤（A1 · 不计入四组）")
+    out.append("")
+    target_results = [r for r in results if r.get("bypass")]
+    if not target_results:
+        out.append("⬜ 未运行 target fake 旁路步骤（`--suite` 未包含 target）")
+    else:
+        for r in target_results:
+            out.append(f"- 退出码：`{r['rc']}`（旁路 · 不计入四组）")
+            out.append("- 实际输出：")
+            out.append("")
+            out.append("```text")
+            out.append(r["output"].rstrip() or "（无输出）")
+            out.append("```")
     out.append("")
     out.append("## 3. 实际输出")
     out.append("")
@@ -337,16 +409,35 @@ def build_record(results: list[dict], env: dict, verdict: str) -> str:
     out.append("")
     out.append("⬜ 待填")
     out.append("")
+    out.append("## 附件")
+    out.append("")
+    out.append("### 附件 1 · 依赖断言轮输出")
+    out.append("")
+    out.append("⬜ 待填（`Requires-Dist` / `pip freeze` / 运行时 `sys.modules` 反向断言）")
+    out.append("")
+    out.append("### 附件 2 · 框架出站 = 0 监测记录")
+    out.append("")
+    out.append("⬜ 待填（框架出站条目为空；用户出站逐条记录）")
+    out.append("")
+    out.append("### 附件 3 · 反向断言结果")
+    out.append("")
+    out.append("⬜ 待填（运行时无 `langchain` / `langchain_core`）")
+    out.append("")
     return "\n".join(out)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="freegraph 人工验收编排器")
-    parser.add_argument("--suite", default="all", help="要执行的组（core,agent,viz）；默认 all")
+    parser.add_argument(
+        "--suite",
+        default="all",
+        help="要执行的组（core,agent,viz,diagnostics,target）；默认 all",
+    )
     parser.add_argument("--record", help="把人工验收记录写到该路径")
     args = parser.parse_args()
 
-    want = {s.strip() for s in args.suite.split(",")} if args.suite != "all" else {s[0] for s in SUITES}
+    all_names = {item[0] for item in SUITES} | {"target"}
+    want = {s.strip() for s in args.suite.split(",")} if args.suite != "all" else all_names
 
     print("══ acceptance · freegraph 人工验收 ══")
     env = collect_env()
@@ -382,8 +473,29 @@ def main() -> int:
             print(f"  {line}")
         print(f"  → {script} 退出码 {rc}（{elapsed:.1f}s）\n")
 
+    # ── target fake **旁路步骤**：结果记录，但**不进入**四组 verdict ──
+    if "target" in want and TARGET_FAKE.is_file():
+        print("── target fake 旁路步骤（不计入四组）──")
+        rc, output, elapsed = run_target_fake()
+        results.append(
+            {
+                "name": "target",
+                "script": "harness/verification/B25F1/fake_round.py",
+                "scope": "fixed script fake round（A1 · 旁路）",
+                "title": "target-fake",
+                "rc": rc,
+                "output": output,
+                "elapsed": elapsed,
+                "bypass": True,
+            }
+        )
+        for line in [ln for ln in output.splitlines() if ln.strip()][-2:]:
+            print(f"  {line}")
+        print(f"  → target fake 退出码 {rc}（旁路 · 不计入四组）\n")
+
     own_rc = finish("acceptance（自身检查）")
-    script_rcs = [r["rc"] for r in results]
+    suite_results = [r for r in results if not r.get("bypass")]
+    script_rcs = [r["rc"] for r in suite_results]
     if script_rcs and all(rc == 0 for rc in script_rcs):
         script_verdict = "PASS"
     elif script_rcs and all(rc == 2 for rc in script_rcs):

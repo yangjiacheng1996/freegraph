@@ -5,7 +5,7 @@
 | 脚本 | 性质 | 依赖 | 改它需要谁批准 |
 |---|---|---|---|
 | `target.py` | **只读基准**（LangGraph Quickstart 的机械替换版） | 自带 `langchain.*` | 不可改（宪法原则 III：只换包名、不改脚本） |
-| 其余 4 个 | **可演进的验收脚本** | **只 import `freegraph` + 标准库** | 随内核演进，每次 v1 交付前必须全绿 |
+| 其余 5 个 | **可演进的验收脚本** | **只 import `freegraph` + 标准库**（`acceptance.py` 例外：会调起 target fake 旁路） | 随内核演进，每次 v1 交付前必须全绿 |
 
 ## 为什么要拆成「前置 + 后置」
 
@@ -25,12 +25,13 @@
 | `graph_core.py` | **图运行时内核**（前置用例） | C1–C24（**C20 = `Store` 契约已冻结、v1 不实现**——B17 已砍；C25 已正式作废） | B4F1–B13F1、M1+M2 |
 | `agent_loop.py` | **Agent 工具循环**——`target.py` 的零依赖等价物 | C4·C7·C8·C11·C16·C17 | B7F3·B8F1·B8F2·B9F1·B10F1 |
 | `visualization.py` | **图导出与可视化**（mermaid / PNG / 流式） | C12–C15·C26 | B8F2·B22F1·B23F1 |
-| `acceptance.py` | **人工验收编排器**（自身也 import 并执行 freegraph）：前置自检 + 最小图可执行 + **零出站断言** + 串跑上述三组 + 生成《人工验收记录》 | —— | B25F1 |
+| `diagnostics.py` | **可诊断性验收**（trace / checkpoint / 时间旅行） | C23 / C27 等 | B25F1（M3 形态已锁定） |
+| `acceptance.py` | **人工验收编排器**（自身也 import 并执行 freegraph）：前置自检 + 最小图可执行 + **零出站断言** + 串跑四组 + target fake **旁路**（不计入四组）+ 生成《人工验收记录》 | —— | B25F1 |
 
 执行顺序（**内核在前、兼容在后**）：
 
 ```
-acceptance(自检+零出站) → graph_core → agent_loop → visualization → target.py
+acceptance(自检+零出站) → graph_core → agent_loop → visualization → diagnostics → target(fake · 旁路)
 ```
 
 ## 怎么跑
@@ -38,7 +39,8 @@ acceptance(自检+零出站) → graph_core → agent_loop → visualization →
 ```bash
 python harness/demo/acceptance.py                      # 全部（推荐入口）
 python harness/demo/graph_core.py                      # 单组
-python harness/demo/acceptance.py --suite core,viz     # 只跑指定组
+python harness/demo/acceptance.py --suite core,viz,diagnostics  # 只跑指定组
+python harness/demo/acceptance.py --suite target               # 只跑 target fake 旁路
 python harness/demo/acceptance.py --record harness/verification/freegraph/manual-verification.md
 ```
 
@@ -104,10 +106,10 @@ python harness/demo/acceptance.py --record harness/verification/freegraph/manual
 **故意不抽公共模块**——这样每个脚本都能**单文件独立运行**，且
 「只 import `freegraph` 和标准库」这条约束是**字面成立**的（可被静态扫描直接证明）。
 
-## 尚缺的验收脚本：可诊断性（M3）
+## 可诊断性脚本（M3 · 已由 B25F1 交付）
 
-**trace / checkpointer / time-travel** 的验收脚本**暂不在本目录**——
-它们依赖的 API 形态章程尚未锁定：
+**trace / checkpointer / time-travel** 的验收脚本 `diagnostics.py` 已交付，
+并纳入 `acceptance.py` 编排（缺失判失败，不得跳过）。其 API 形态锁定记录：
 
 | 待锁定的形态 | 依据 |
 |---|---|
@@ -122,8 +124,9 @@ python harness/demo/acceptance.py --record harness/verification/freegraph/manual
 章程已锁形态的（M1/M2）现在就写；章程未锁形态的（M3）**随定义它的 feature 一起写**，
 否则就是在赌接口长什么样，赌错了要重写一千行。
 
-到 M3 开工时（§5.2 的 B14F1–B20F2），按同样方式补一份 `diagnostics.py`，
-届时那四个形态已在各 feature 的 spec 里锁定，脚本照写即可。
+`diagnostics.py` 已按上述锁定形态落地（B25F1），只 import `freegraph` + 标准库；
+覆盖 trace（JSONL / SQLite + `query()` 过滤）/ checkpoint（`MemorySaver` / `SqliteSaver` +
+历史）/ 时间旅行（重放 / 分叉 / 中断组合）。
 
 ## 与 target.py 的关系
 
@@ -131,5 +134,8 @@ python harness/demo/acceptance.py --record harness/verification/freegraph/manual
 tool-calling 循环，**应当给出逐字段一致的最终状态**（`messages` 长度、
 `llm_calls` 计数、工具结果）。两者不一致 = 有 bug。
 
-`target.py` 的双跑（CI fake 注入 / 人工真实模型）由立项书 §9.2 驱动，
-`acceptance.py` 不代跑它，只在生成的验收记录里留出位置。
+`target.py` 的双跑（CI fake 注入 / 人工真实模型）由立项书 §9.2 驱动：
+`acceptance.py` 以**旁路步骤**运行 `harness/verification/B25F1/fake_round.py`
+（结果记录但**不计入四组 verdict**）；A1 的正式判定由
+`harness/verification/B25F1/acceptance.py` 承担。真实模型轮由
+`harness/verification/B25F1/real_round.py` 人工执行。

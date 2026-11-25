@@ -835,9 +835,12 @@ def _check_a10_signature() -> tuple[bool, str]:
     """**A10** · **零改动清单**（只读基准与 B5F2 的差分夹具 / 冻结断言 ③）。"""
     import subprocess as sp
 
+    # B25F1 H-10（2026-11-25）：`spec_builder.py` **只增** `build_model_graph_spec`
+    # （模型形状入口）；`build_graph_spec` 的纯本地 `model_factory` 非空拒绝语义
+    # 由 `test_differential.py` 的既有测试保护 ⇒ 本清单不再把 `spec_builder.py`
+    # 当「零改动」文件，但 `test_differential.py` 仍必须零改动。
     files = [
         "harness/demo/target.py",
-        "tests/differential/spec_builder.py",
         "tests/differential/test_differential.py",
     ]
     changed: list[str] = []

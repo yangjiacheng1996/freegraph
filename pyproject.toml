@@ -111,6 +111,21 @@ differential = [
     "langgraph==1.2.11",
 ]
 
+# **B25F1 双跑验收**的依赖组（PEP 735 · **不进发行包**）。
+#
+# 用途：`harness/demo/target.py` 自身依赖 `langchain.*` 与 `IPython.display`；
+# fake 轮必须**原样**跑通该脚本 ⇒ 测试 / 验收侧需要这两个包。
+#
+# 纪律：
+#   1. **不是 extra** ⇒ 不进 `Requires-Dist` ⇒ 基础安装闭包仍为空集；
+#   2. **不进发行包** —— hatchling 不把 dependency-groups 写进元数据；
+#   3. **仅测试侧** —— MUST NOT 进 `[project].dependencies` / `[project.optional-dependencies]`；
+#   4. **缺席即 skip** —— 未装该组的环境里，相关用例 `importorskip` ⇒ skip（非失败）。
+acceptance = [
+    "langchain>=1.0,<2",
+    "IPython>=8",
+]
+
 [tool.pytest.ini_options]
 # 收集范围**钉死**在 `tests/` ⇒ 裁定 16 的「核心用例 = 全量测试套件」有确定含义
 # （harness/ 下的脚本与门禁**不是**测试用例；tests/ 下的三个目录各自是一层门禁）。

@@ -549,3 +549,31 @@ class B19RunIdBindingCounter:
         monkeypatch.setattr(stream_context, "bind_run_ids", wrapper)
         monkeypatch.setattr(superstep, "bind_run_ids", wrapper)
         monkeypatch.setattr(stategraph, "bind_run_ids", wrapper)
+
+
+# ── B25F1 · fake 模型注入（**非 autouse** · 仅 B25F1 用例显式请求）─────────────
+@pytest.fixture
+def install_fake_init_chat_model(monkeypatch: pytest.MonkeyPatch):
+    """在 `target.py` 导入前猴补 `langchain.chat_models.init_chat_model`。
+
+    * 缺 `langchain` / `IPython` ⇒ `pytest.importorskip`（skip，非失败）；
+    * **非 autouse** ⇒ 不影响其它测试；
+    * 通过 `monkeypatch` 自动恢复，避免污染后续用例。
+    """
+    pytest.importorskip("langchain")
+    pytest.importorskip("IPython")
+    b25f1_dir = REPO_ROOT / "harness" / "verification" / "B25F1"
+    if str(b25f1_dir) not in sys.path:
+        sys.path.insert(0, str(b25f1_dir))
+    import fake_model  # noqa: WPS433 - 测试侧动态导入
+
+    import langchain.chat_models as chat_models
+
+    fake = fake_model.FakeModel()
+    monkeypatch.setattr(
+        chat_models,
+        "init_chat_model",
+        lambda *args, **kwargs: fake,
+        raising=False,
+    )
+    return fake
