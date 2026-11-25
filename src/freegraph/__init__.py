@@ -2,8 +2,9 @@
 
 """freegraph — 图运行内核（Graph Runtime Kernel）。
 
-**v0.0.x 是「占位版」（name-reservation placeholder）**：这几次发布只为在 PyPI 上
-锁定 ``freegraph`` 这个发行名（发行名 = 导入名），内核功能尚未实现。
+**v0.0.x 是「占位版」（name-reservation placeholder）序列**：主要用于在 PyPI 上
+锁定 ``freegraph`` 这个发行名（发行名 = 导入名）；**自 v0.0.4 起**，发行包已包含
+v1 的图运行时能力（B1F1–B25F1 已交付，含图 API / 持久化 / 可观测 / 可视化）。
 
 **v0.0.2 起**：每个源文件都携带署名头（Copyright + MIT + 项目地址）——
 MIT 允许文件被单独复制，而复制不会带走 ``LICENSE``，因此署名必须随每个文件流动。
@@ -30,11 +31,11 @@ MIT 允许文件被单独复制，而复制不会带走 ``LICENSE``，因此署�
 也让「``import freegraph`` 到底加载了什么」变得不可判定。
 架构门禁 G1 以子进程的 ``sys.modules`` 快照断言这条契约。
 
-实现进度见 ``harness/proposals/立项书.md``（31 个 feature / 93 人日 / v1.0）。
+实现进度见 ``harness/proposals/立项书.md``（32 个 feature / 96 人日 / v1.0）。
 """
 
 from __future__ import annotations
 
 __all__ = ["__version__"]
 
-__version__ = "0.0.3"
+__version__ = "0.0.4"
