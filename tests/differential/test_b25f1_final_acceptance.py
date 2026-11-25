@@ -7,9 +7,11 @@ from __future__ import annotations
 import hashlib
 import os
 import runpy
+import struct
 import subprocess
 import sys
 import tempfile
+import zlib
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +25,26 @@ _SHA_FILE = _REPO_ROOT / "tests" / "runtime" / "data" / "b25f1_target_py.sha256"
 for _path in (_REPO_ROOT / "src", _B25F1):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
+
+
+def _tiny_png() -> bytes:
+    """1x1 合法 PNG —— 仅用于**离线**替换上游 `draw_mermaid_png()` 的网络渲染。"""
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        return (
+            struct.pack(">I", len(data))
+            + kind
+            + data
+            + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+        )
+
+    header = struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)
+    raw = b"\x00\x00\x00\x00"
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", header)
+        + chunk(b"IDAT", zlib.compress(raw))
+        + chunk(b"IEND", b"")
+    )
 
 
 def _projection(state: dict[str, Any]) -> dict[str, Any]:
@@ -57,6 +79,16 @@ def _run_target_copy(monkeypatch: pytest.MonkeyPatch, package: str) -> dict[str,
             "from langgraph.graph import StateGraph, START, END",
         )
         assert "from langgraph.graph import" in text
+        # 上游 `draw_mermaid_png()` 会请求 mermaid.ink；D-01 只比对 agent 状态，
+        # 因此在**离线**下用合法 1x1 PNG 替换该网络渲染（不触碰 target.py）。
+        from langchain_core.runnables.graph import Graph as UpstreamGraph
+
+        monkeypatch.setattr(
+            UpstreamGraph,
+            "draw_mermaid_png",
+            lambda self, *args, **kwargs: _tiny_png(),
+            raising=False,
+        )
     with tempfile.TemporaryDirectory() as raw:
         copy = Path(raw) / "target_copy.py"
         copy.write_text(text, encoding="utf-8")
